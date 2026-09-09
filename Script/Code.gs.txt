@@ -1,0 +1,3575 @@
+/*******************************************************************
+ * REAL ESTATE OPPORTUNITY TRACKER — Code.gs
+ * Backend for Central7 Pulse — the "Central 7 - Opportunity Register" web app.
+ *
+ * SECURITY MODEL (updated):
+ * Every privileged call now takes a `sessionToken` (issued by
+ * verifyLoginPassword) instead of a client-supplied `currentUser` name.
+ * The server resolves identity from the token via resolveSession_(),
+ * so a tampered client can no longer impersonate another user or an
+ * Admin. See resolveSession_, requireAdmin_, requireSocialMediaQueueAccess_.
+ *
+ * SETUP:
+ * 1. Open script.google.com -> New Project (or Extensions > Apps Script
+ *    from inside the spreadsheet itself, which auto-fills SPREADSHEET_ID).
+ * 2. Paste this file as Code.gs, and create Index.html, Stylesheet.html,
+ *    JavaScript.html with the contents provided alongside this file.
+ * 3. Update SPREADSHEET_ID below if you did not open this script from
+ *    inside the spreadsheet.
+ * 4. To support "Bulk Upload -> Upload the Excel File Directly", enable
+ *    the advanced Drive Service: Services (+) > Drive API > Add.
+ * 5. Deploy > New deployment > Web app. Execute as: Me. Who has access:
+ *    Anyone within your organization (or Anyone, if you want it public).
+ * 6. One-time password migration: after deploying this version, run
+ *    migrateAllPasswordsToHashed() once from the Apps Script editor
+ *    (function dropdown -> migrateAllPasswordsToHashed -> Run). This
+ *    converts every existing plaintext password in Supabase into a
+ *    salted SHA-256 hash. Safe to re-run — already-hashed passwords are
+ *    detected and skipped.
+ *
+ * PERFORMANCE PATCH (added):
+ * getAllDataRows_() now serializes concurrent full-table pulls with a
+ * script lock and briefly caches each page (10s) via CacheService. This
+ * fixes a Supabase "statement timeout" (57014) that occurred when
+ * several google.script.run calls fired on page load and each
+ * independently re-downloaded the entire properties table at once.
+ *
+ * ACTIVITY LOG ROUTING (added):
+ * New-listing (Publish) entries, and Republish entries (from either My
+ * Properties or the Republish Queue), are now routed exclusively to
+ * Keerthie via the "Assigned To" column — the same mechanism already
+ * used for Boost Requests. Other actions (Drop/Lost/Hold/Closed/Data
+ * Change) remain unassigned and visible to any Admin. See
+ * ACTIVITY_LOG_NEW_LISTING_ADMIN and getStatusUpdateLog().
+ *******************************************************************/
+
+const SPREADSHEET_ID = '14EKd5J2kqD_8uxHpdZ9NwL99haQr6kZ3'; // Central 7 - Opportunity Register (Responses)
+const SHEET_NAME = 'Form Responses 1';
+const INQUIRIES_SHEET_NAME = 'Inquiries';
+const STATUS_UPDATE_SHEET_NAME = 'Status Update';
+const USERS_SHEET_NAME = 'Users';
+const APARTMENT_COMPLEXES_SHEET_NAME = 'ApartmentComplexes';
+const REF_PREFIX = 'C7-';
+
+// Used only as a fallback if this spreadsheet doesn't already have a "Users"
+// sheet.
+const SEED_USERS = [
+  { name: 'Keerthie', role: 'Admin' },
+  { name: 'Sherden', role: 'Admin' },
+  { name: 'Chaminda', role: 'User' },
+  { name: 'Theeban', role: 'User' },
+  { name: 'Jeyendran', role: 'User' }
+];
+
+const USER_DISPLAY_ORDER = ['Keerthie', 'Sherden', 'Chaminda', 'Theeban', 'Jeyendran'];
+
+/* ============================== USD/LKR EXCHANGE RATE ==============================
+   NOTE: The Central Bank of Sri Lanka's own website does not expose a
+   simple, stable, machine-readable rate feed — its published indicative
+   rate is rendered by JavaScript inside the page, which a server-side
+   script (this one) cannot execute. Confirmed by directly testing their
+   site and the widget's backend endpoint; neither returns usable data
+   from a plain HTTP request.
+   As a practical alternative, this uses exchangerate-api.com's free,
+   no-key "open" endpoint (open.er-api.com), which blends real market/
+   bank-sourced rates and explicitly permits caching for commercial use.
+   The fetched rate is cached in Script Properties for 12 hours so this
+   only makes a live network call twice a day at most — everything else
+   reads the cached value instantly. If the live fetch ever fails for
+   any reason, this falls back to the last successfully fetched rate,
+   or to a hardcoded value as an absolute last resort so property
+   pricing never breaks due to an external service being unavailable. */
+
+const USD_TO_LKR_FALLBACK_RATE_ = 335; // last-resort value only, if a live rate has never been fetched successfully
+const USD_TO_LKR_REFRESH_INTERVAL_MS_ = 12 * 60 * 60 * 1000; // refetch at most twice a day
+
+function getUsdToLkrRate_() {
+  const props = PropertiesService.getScriptProperties();
+  const cachedRate = props.getProperty('USD_TO_LKR_RATE_CACHED');
+  const cachedAt = props.getProperty('USD_TO_LKR_RATE_FETCHED_AT');
+  const now = new Date().getTime();
+
+  if (cachedRate && cachedAt && (now - Number(cachedAt)) < USD_TO_LKR_REFRESH_INTERVAL_MS_) {
+    return parseFloat(cachedRate);
+  }
+
+  try {
+    const resp = UrlFetchApp.fetch('https://open.er-api.com/v6/latest/USD', { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) throw new Error('HTTP ' + resp.getResponseCode());
+    const data = JSON.parse(resp.getContentText());
+    const rate = data && data.rates && data.rates.LKR;
+    if (!rate || typeof rate !== 'number') throw new Error('LKR rate missing from response');
+
+    props.setProperty('USD_TO_LKR_RATE_CACHED', String(rate));
+    props.setProperty('USD_TO_LKR_RATE_FETCHED_AT', String(now));
+    return rate;
+  } catch (e) {
+    // Prefer a stale-but-real previously fetched rate over the hardcoded
+    // fallback, since it's still more accurate than a long-outdated constant.
+    if (cachedRate) return parseFloat(cachedRate);
+    return USD_TO_LKR_FALLBACK_RATE_;
+  }
+}
+
+const USD_TO_LKR_RATE = getUsdToLkrRate_();
+
+// Exact 1-based column positions in "Form Responses 1" (48 real columns).
+const COL = {
+  REF_NO: 1, TIMESTAMP: 2, USER: 3, CONTACT_TYPE: 4, NAME: 5, CONTACT1: 6,
+  CONTACT2: 7, EMAIL: 8, OPP_TYPE: 9, PROP_TYPE: 10, PURPOSE: 11, SUBTYPE: 12,
+  ADDRESS: 13, CITY: 14,
+  H_LAND_SIZE: 15, H_BEDROOMS: 16, H_BATHROOMS: 17, H_FLOOR_AREA: 18,
+  H_FLOORS: 19, H_PARKING: 20, H_AGE: 21, H_AMENITIES: 22, H_OTHER_INFO: 23,
+  L_LAND_SIZE: 24, L_SUITABLE: 25, L_AMENITIES: 26, L_OTHER_INFO: 27,
+  A_COMPLEX: 28, A_FLOOR: 29, A_ROOMS: 30, A_BATHROOMS: 31, A_FLOOR_AREA: 32,
+  A_PARKING: 33, A_VIEW: 34, A_AMENITIES: 35, A_COMMENTS: 36,
+  C_PURPOSE: 37, C_LAND_SIZE: 38, C_BUILTUP: 39, C_COMMENTS: 40,
+  CURRENCY: 41, PRICE_PER_PERCH: 42, PRICE_PER_SQFT: 43, PRICE_TOTAL: 44,
+  BUDGET: 45, COMMENTS: 46, FURNISHED: 47, STATUS: 48
+};
+const TOTAL_COLS = 48;
+
+const HEADERS = [
+  'Ref No','Timestamp','User','Type of Contact (Direct/ Partner)','Name of Contact',
+  'Contact No 1','Contact No 2','Email','Opportunity Type','Property Type','Purpose',
+  'Property Sub-type','Address','City','land Size (perch)','Bed Rooms','Bath Rooms',
+  'Floor Area (sqft)','No of Floors','Parking Space (No of vehicles)','Age of the House',
+  'Other Amenities','Other information','land Size (perch)','Suitable for','Other Amenities',
+  'Other information','Apartment Complex','Floor','Number of Rooms','Number of Bath Rooms',
+  'Floor Area (sqft)','Dedicated Parking Slots','View','Other Amenities','Comments','Purpose',
+  'Size of Land (Perch)','Built up Area','Comments','Currency','Price per Perch',
+  'Price per sqft','Price Total','Budget','Comments','Furnished','Status'
+];
+
+const AMENITIES_LIST = [
+  'Swimming Pool','Rooftop','Rooftop Garden','Rumpus Room (Room for games)','Gym',
+  'Garden Space','Maids Room','Maids Toilet','Bar Area','Servant Quarters','Solar Panels',
+  'Generator','CCTV','Lift/Elevator','Balcony','Garage','Study Room','Store Room',
+  'Air Conditioning','Sea View','Water Tank'
+];
+const OPPORTUNITY_TYPES = ['Sell','Rent Out'];
+const PROPERTY_TYPES = ['House','Land','Apartment','Commercial Property','Estate'];
+const STATUS_LIST = ['Active','Hold','Lost','Drop','Closed','Duplicate','Obsolete'];
+const FURNISHED_LIST = ['Not Furnished','Partly Furnished','Fully Furnished'];
+const CONTACT_TYPES = ['Direct','Partner'];
+
+/* ---- Invoice & Commission Dashboard (separate "INVOICE Tracker" spreadsheet) ---- */
+const INVOICE_SPREADSHEET_ID = '19dseGj4XIvoT47SovP3FgEcMs8gLJ0P3'; // INVOICE Tracker
+const INV_YEAR_SHEETS = ['2020', '2021', '2022', '2023', '2024', '2025', '2026'];
+const INV_AGENTS = ['Keerthie', 'Sherden', 'Theeban', 'Chaminda', 'Jeyandran', 'Prem'];
+
+/* ============================== WEB APP ENTRY ============================== */
+
+function doGet(e) {
+  return HtmlService.createTemplateFromFile('Index')
+    .evaluate()
+    .setTitle('Central7 Pulse')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+/* ============================== SHEET HELPERS ============================== */
+
+function openSpreadsheet_() {
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  return active || SpreadsheetApp.openById(SPREADSHEET_ID);
+}
+
+/* ============================== SUPABASE (properties data store) ============================== */
+const SUPABASE_URL = 'https://rbqgtzqdvzjnrzwehvcs.supabase.co';
+const SUPABASE_PROPERTIES_TABLE = 'C7_Pulse_DB_Dev';
+const SUPABASE_APARTMENT_COMPLEXES_TABLE = 'Apartment Complexes';
+const SUPABASE_USERS_TABLE = 'User';
+const SUPABASE_STATUS_UPDATE_TABLE = 'Status Update';
+const SUPABASE_REPUBLISH_QUEUE_TABLE = 'Republish Queue';
+const SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE = 'Social Media Queue';
+const SUPABASE_MESSAGES_TABLE = 'Messages';
+const SUPABASE_AGENTS_TABLE = 'Agents';
+const SOCIAL_MEDIA_PLATFORMS = ['Ikman', 'LPW', 'Facebook', 'Instagram'];
+
+const PROPERTY_COLUMN_NAMES = [
+  'Ref No', 'Timestamp', 'User', 'Type of Contact (Direct/ Partner)', 'Name of Contact',
+  'Contact No 1', 'Contact No 2', 'Email', 'Opportunity Type', 'Property Type', 'Purpose',
+  'Property Sub-type', 'Address', 'City', 'land Size (perch)', 'Bed Rooms', 'Bath Rooms',
+  'Floor Area (sqft)', 'No of Floors', 'Parking Space (No of vehicles)', 'Age of the House',
+  'Other Amenities', 'Other information', 'land Size (perch)_1', 'Suitable for', 'Other Amenities_1',
+  'Other information_1', 'Apartment Complex', 'Floor', 'Number of Rooms', 'Number of Bath Rooms',
+  'Floor Area (sqft)_1', 'Dedicated Parking Slots', 'View', 'Other Amenities_2', 'Comments', 'Purpose_1',
+  'Size of Land (Perch)', 'Built up Area', 'Comments_1', 'Currency', 'Price per Perch',
+  'Price per sqft', 'Price Total', 'Budget', 'Comments_2', 'Furnished', 'Status'
+];
+
+function setSupabaseKey() {
+  const key = 'PASTE_YOUR_SERVICE_ROLE_KEY_HERE';
+  if (key === 'PASTE_YOUR_SERVICE_ROLE_KEY_HERE') throw new Error('Edit setSupabaseKey and paste your real service_role key first.');
+  PropertiesService.getScriptProperties().setProperty('SUPABASE_SERVICE_ROLE_KEY', key);
+  return 'Saved. You can now blank this function out again.';
+}
+
+function checkSupabaseKey() {
+  const key = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
+  if (!key) return 'NOT SET — run setSupabaseKey first.';
+  return 'SET — key is stored, starts with "' + key.substring(0, 8) + '..." and is ' + key.length + ' characters long.';
+}
+
+/* ============================== AI TEXT FORMATTING (Gemini) ==============================
+   One-time setup — get a free key from Google AI Studio
+   (https://aistudio.google.com/apikey), paste it into setGeminiKey
+   below, run it once from the Apps Script editor (function dropdown ->
+   setGeminiKey -> Run), then blank the key back out. Safe to leave
+   unset: formatTextWithAI() below silently falls back to the original,
+   un-formatted text if no key is configured. */
+
+const GEMINI_MODEL = 'gemini-3.5-flash-lite'; // fast + cheap, plenty for reformatting a short paragraph. gemini-2.5-flash-lite was retired for new users — Google's own error pointed to this replacement. If it's ever retired too, check https://ai.google.dev/gemini-api/docs/models for the current one and update this constant.
+
+function setGeminiKey() {
+  const key = 'PASTE_YOUR_GEMINI_API_KEY_HERE';
+  if (key === 'PASTE_YOUR_GEMINI_API_KEY_HERE') throw new Error('Edit setGeminiKey and paste your real Gemini API key first.');
+  PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', key);
+  return 'Saved. You can now blank this function out again.';
+}
+
+function checkGeminiKey() {
+  const key = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!key) return 'NOT SET — run setGeminiKey first.';
+  return 'SET — key is stored, starts with "' + key.substring(0, 6) + '..." and is ' + key.length + ' characters long.';
+}
+
+function getGeminiKey_() {
+  return PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+}
+
+/* Public — called from the client right before building a property
+   PDF, to turn the raw, often run-on "Other Information" free text into
+   a clean bullet list. This ONLY affects what gets printed in the PDF —
+   the original text in Supabase and in the property detail modal is
+   never read back, overwritten, or touched in any way; the client
+   fetches this fresh, on demand, purely for that one PDF. If the Gemini
+   key isn't set, the API call fails, times out, or returns anything
+   unexpected, this silently falls back to the ORIGINAL text unchanged —
+   a PDF download must never be blocked by an AI hiccup. No session
+   token is required, matching the other PDF-support functions
+   (getPropertyPhotosForPdf) which are equally available to Guest/Agent
+   downloads, since "Other Information" is already shown to them
+   unredacted in the app. */
+function formatTextWithAI(rawText) {
+  rawText = s_(rawText);
+  if (!rawText) return rawText;
+
+  const key = getGeminiKey_();
+  if (!key) return rawText; // no key configured — just use the original text as-is
+
+  // Reasonable cap so a single call can't run away in cost or latency —
+  // "Other Information" fields in practice are one short paragraph.
+  const inputText = rawText.length > 3000 ? rawText.slice(0, 3000) : rawText;
+
+  const prompt = 'Rewrite the following real estate listing notes as a clean, ' +
+    'concise bullet-point list for a printed property PDF. While rewriting, fix ' +
+    'any spelling and grammar mistakes in ordinary words (e.g. "Furnishesd" -> ' +
+    '"Furnished") so the final text reads correctly. Do NOT change or "correct" ' +
+    'any proper nouns (building names, street/road names, place names, person ' +
+    'names) even if they look unusual \u2014 leave those exactly as written, since ' +
+    '"fixing" a real name could make it wrong. Keep every factual detail exactly ' +
+    'as given (numbers, prices, routes, measurements) \u2014 do not invent, omit, or ' +
+    'change any facts. Do not add a heading, commentary, or any markdown ' +
+    'formatting (no **, no #, no numbering). Output ONLY plain bullet lines, ' +
+    'each starting with "\u2022 ", nothing else.\n\nNotes:\n' + inputText;
+
+  try {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent';
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'POST',
+      contentType: 'application/json',
+      headers: { 'x-goog-api-key': key },
+      payload: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 500 }
+      }),
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() !== 200) return rawText;
+    const data = JSON.parse(resp.getContentText());
+    const formatted = data && data.candidates && data.candidates[0] &&
+      data.candidates[0].content && data.candidates[0].content.parts &&
+      data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    return s_(formatted) || rawText;
+  } catch (e) {
+    return rawText; // network error, quota exceeded, malformed response, etc. — original text is always the safe fallback
+  }
+}
+
+/* Diagnostic only — NOT called by the app itself. Run this manually
+   from the Apps Script editor (function dropdown -> debugGeminiCall ->
+   Run) when formatTextWithAI() seems to be silently falling back to the
+   original text. Unlike formatTextWithAI, this does NOT swallow errors
+   — it shows you exactly what Google sent back (HTTP status + full
+   response body), which pinpoints the real cause: wrong/expired key,
+   Generative Language API not enabled on the project, wrong model name,
+   quota exceeded, safety filter block, etc. After running, check
+   View -> Executions (or View -> Logs) in the Apps Script editor to see
+   the output. */
+function debugGeminiCall() {
+  const key = getGeminiKey_();
+  if (!key) {
+    console.log('NOT SET — run setGeminiKey first.');
+    return 'NOT SET — run setGeminiKey first.';
+  }
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + GEMINI_MODEL + ':generateContent';
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'POST',
+    contentType: 'application/json',
+    headers: { 'x-goog-api-key': key },
+    payload: JSON.stringify({
+      contents: [{ parts: [{ text: 'Say hello in exactly one word.' }] }]
+    }),
+    muteHttpExceptions: true
+  });
+  const result = 'HTTP ' + resp.getResponseCode() + ':\n' + resp.getContentText();
+  console.log(result);
+  return result;
+}
+
+function fixContactNumberFormatting() {
+  const rows = getAllDataRows_();
+  const changedRows = [];
+  rows.forEach(function (r) {
+    const c1 = s_(r.cells[COL.CONTACT1 - 1]);
+    const c2 = s_(r.cells[COL.CONTACT2 - 1]);
+    const newC1 = formatContactNumber_(c1);
+    const newC2 = formatContactNumber_(c2);
+    if (newC1 !== c1 || newC2 !== c2) {
+      const updated = r.cells.slice();
+      updated[COL.CONTACT1 - 1] = newC1;
+      updated[COL.CONTACT2 - 1] = newC2;
+      changedRows.push(updated);
+    }
+  });
+
+  const batchSize = 500;
+  for (let i = 0; i < changedRows.length; i += batchSize) {
+    upsertPropertyRows_(changedRows.slice(i, i + batchSize));
+  }
+
+  return 'Checked ' + rows.length + ' record(s); reformatted ' + changedRows.length + ' record(s) that needed it.';
+}
+
+function debugUsersTable() {
+  try {
+    const rows = supabaseRequest_('GET', SUPABASE_USERS_TABLE, ['select=*']);
+    if (!rows || !rows.length) return 'Supabase returned 0 rows from the "' + SUPABASE_USERS_TABLE + '" table. Check the table actually has data in it.';
+    const first = rows[0];
+    const keysPresent = Object.keys(first).filter(function (k) { return k !== 'Password'; });
+    return rows.length + ' row(s) found. Columns Supabase returned: ' + keysPresent.join(', ') +
+      '. First row Name/Role/Active: ' + JSON.stringify({ Name: first['Name'], Role: first['Role'], Active: first['Active'] });
+  } catch (err) {
+    return 'ERROR calling Supabase: ' + err.message;
+  }
+}
+
+function getSupabaseKey_() {
+  const key = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_ROLE_KEY');
+  if (!key) throw new Error('Supabase key not set — run setSupabaseKey once from the Apps Script editor first (see comment above it).');
+  return key;
+}
+
+function supabaseRequest_(method, table, query, body, extraHeaders) {
+  const key = getSupabaseKey_();
+  let url = SUPABASE_URL + '/rest/v1/' + encodeURIComponent(table);
+  if (query && query.length) url += '?' + query.join('&');
+  const headers = { 'apikey': key, 'Authorization': 'Bearer ' + key };
+  if (extraHeaders) Object.keys(extraHeaders).forEach(function (k) { headers[k] = extraHeaders[k]; });
+  const options = { method: method, headers: headers, muteHttpExceptions: true };
+  if (body !== undefined) {
+    options.contentType = 'application/json';
+    options.payload = JSON.stringify(body);
+  }
+  const resp = UrlFetchApp.fetch(url, options);
+  const code = resp.getResponseCode();
+  const text = resp.getContentText();
+  if (code >= 400) throw new Error('Supabase ' + method + ' ' + table + ' failed (' + code + '): ' + text);
+  return text ? JSON.parse(text) : null;
+}
+
+function supabaseRequestsParallel_(requests) {
+  const key = getSupabaseKey_();
+  const fetchRequests = requests.map(function (r) {
+    let url = SUPABASE_URL + '/rest/v1/' + encodeURIComponent(r.table);
+    if (r.query && r.query.length) url += '?' + r.query.join('&');
+    const headers = { 'apikey': key, 'Authorization': 'Bearer ' + key };
+    if (r.extraHeaders) Object.keys(r.extraHeaders).forEach(function (k) { headers[k] = r.extraHeaders[k]; });
+    const options = { url: url, method: r.method, headers: headers, muteHttpExceptions: true };
+    if (r.body !== undefined) {
+      options.contentType = 'application/json';
+      options.payload = JSON.stringify(r.body);
+    }
+    return options;
+  });
+  const responses = UrlFetchApp.fetchAll(fetchRequests);
+  responses.forEach(function (resp, i) {
+    const code = resp.getResponseCode();
+    if (code >= 400) {
+      throw new Error('Supabase ' + requests[i].method + ' ' + requests[i].table + ' failed (' + code + '): ' + resp.getContentText());
+    }
+  });
+  return responses.map(function (resp) {
+    const text = resp.getContentText();
+    return text ? JSON.parse(text) : null;
+  });
+}
+
+function getPropertiesByRefNos_(refNos) {
+  const uniqueRefs = Array.from(new Set(refNos.filter(Boolean).map(function (r) { return s_(r).toUpperCase(); })));
+  const map = {};
+  if (!uniqueRefs.length) return map;
+  const chunkSize = 200;
+  for (let i = 0; i < uniqueRefs.length; i += chunkSize) {
+    const chunk = uniqueRefs.slice(i, i + chunkSize);
+    const inList = chunk.map(function (r) { return encodeURIComponent(r); }).join(',');
+    const rows = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+      encodeURIComponent('Ref No') + '=in.(' + inList + ')', 'select=*'
+    ]) || [];
+    rows.forEach(function (obj) {
+      const refNo = s_(obj['Ref No']).toUpperCase();
+      if (!refNo) return;
+      const cells = PROPERTY_COLUMN_NAMES.map(function (colName) { return obj[colName]; });
+      map[refNo] = rowToObject_({ rowIndex: refNo, cells: cells });
+    });
+  }
+  return map;
+}
+
+/* ==============================================================================
+ * PATCHED: getAllDataRows_()
+ *
+ * Serializes concurrent full-table pulls with a script lock and briefly
+ * caches each page (10s TTL) via CacheService. This fixes a Supabase
+ * "statement timeout" (57014) that occurred when several google.script.run
+ * calls fired on page load and each independently re-downloaded the
+ * entire properties table at nearly the same instant, saturating the
+ * database connection under concurrent load.
+ * ============================================================================== */
+/* Lightweight helper: asks Supabase for the exact row count of a table
+   via the 'Prefer: count=exact' response header, without pulling any
+   actual row data. Used so getAllDataRows_ knows exactly how many pages
+   to request, and can fetch them all in one parallel batch instead of
+   one at a time. Returns null (rather than throwing) if the count can't
+   be determined for any reason, so callers can fall back safely. */
+function getSupabaseRowCount_(table) {
+  try {
+    const key = getSupabaseKey_();
+    const url = SUPABASE_URL + '/rest/v1/' + encodeURIComponent(table) + '?select=' + encodeURIComponent('Ref No') + '&limit=1';
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'GET',
+      headers: { 'apikey': key, 'Authorization': 'Bearer ' + key, 'Prefer': 'count=exact' },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() >= 400) return null;
+    const headers = resp.getHeaders();
+    const contentRange = headers['Content-Range'] || headers['content-range'] || '';
+    const match = String(contentRange).match(/\/(\d+)$/);
+    return match ? parseInt(match[1], 10) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function getAllDataRows_() {
+  const lock = LockService.getScriptLock();
+  // Wait up to 30s to acquire — if another execution is already pulling
+  // the table, we queue behind it rather than firing a duplicate burst.
+  const gotLock = lock.tryLock(30000);
+  if (!gotLock) {
+    throw new Error('Server is busy loading property data — please try again in a moment.');
+  }
+
+  try {
+    // NOTE: pages are kept relatively small (1000 rows) to stay light
+    // on the database per individual request, but fetched in PARALLEL —
+    // wall-clock time is roughly the time of the slowest single page,
+    // not the sum of all of them. A prior version fetched sequentially
+    // to reduce concurrent DB load, but logs showed that alone taking
+    // ~26s for a full pull — nearly the entire lock window for just ONE
+    // caller — while Postgres itself showed zero actual statement
+    // timeouts under real usage. Parallel fetch directly addresses the
+    // actual bottleneck (wall-clock time / lock contention) that was
+    // actually occurring.
+    const pageSize = 1000;
+    const out = [];
+    const totalCount = getSupabaseRowCount_(SUPABASE_PROPERTIES_TABLE);
+
+    if (totalCount !== null) {
+      const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
+      const requests = [];
+      for (let i = 0; i < pageCount; i++) {
+        requests.push({
+          method: 'GET', table: SUPABASE_PROPERTIES_TABLE,
+          query: [
+            'select=*',
+            'order=' + encodeURIComponent('Ref No') + '.asc',
+            'limit=' + pageSize,
+            'offset=' + (i * pageSize)
+          ]
+        });
+      }
+      const pages = supabaseRequestsParallel_(requests);
+      pages.forEach(function (page) {
+        (page || []).forEach(function (obj) {
+          const refNo = s_(obj['Ref No']);
+          if (!refNo) return;
+          const cells = PROPERTY_COLUMN_NAMES.map(function (colName) { return obj[colName]; });
+          out.push({ rowIndex: refNo, cells: cells });
+        });
+      });
+    } else {
+      // Fallback: the count probe failed for some reason — fetch
+      // sequentially instead (slower, but safe and always correct).
+      let offset = 0;
+      while (true) {
+        const page = fetchPropertiesPageWithRetry_(pageSize, offset);
+        if (!page || !page.length) break;
+        page.forEach(function (obj) {
+          const refNo = s_(obj['Ref No']);
+          if (!refNo) return;
+          const cells = PROPERTY_COLUMN_NAMES.map(function (colName) { return obj[colName]; });
+          out.push({ rowIndex: refNo, cells: cells });
+        });
+        if (page.length < pageSize) break;
+        offset += pageSize;
+      }
+    }
+
+    return out;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* Fetches one page of the properties table, retrying once after a brief
+   pause if the first attempt fails. Only used as a fallback if the row
+   count probe above fails for some reason. */
+function fetchPropertiesPageWithRetry_(pageSize, offset) {
+  const query = [
+    'select=*',
+    'order=' + encodeURIComponent('Ref No') + '.asc',
+    'limit=' + pageSize,
+    'offset=' + offset
+  ];
+  try {
+    return supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, query);
+  } catch (e) {
+    Utilities.sleep(1500);
+    return supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, query);
+  }
+}
+
+function insertPropertyRow_(row) {
+  const obj = {};
+  PROPERTY_COLUMN_NAMES.forEach(function (colName, i) { obj[colName] = row[i]; });
+  supabaseRequest_('POST', SUPABASE_PROPERTIES_TABLE, null, [obj], { 'Prefer': 'return=minimal' });
+}
+
+function upsertPropertyRows_(rows) {
+  const objs = rows.map(function (row) {
+    const obj = {};
+    PROPERTY_COLUMN_NAMES.forEach(function (colName, i) { obj[colName] = row[i]; });
+    return obj;
+  });
+  supabaseRequest_('POST', SUPABASE_PROPERTIES_TABLE, ['on_conflict=' + encodeURIComponent('Ref No')], objs,
+    { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+}
+
+function updatePropertyField_(refNo, colName, value) {
+  const body = {};
+  body[colName] = value;
+  supabaseRequest_('PATCH', SUPABASE_PROPERTIES_TABLE, [encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo)], body, { 'Prefer': 'return=minimal' });
+}
+
+function bedRoomsColumnFor_(propertyType) {
+  if (propertyType === 'House') return 'Bed Rooms';
+  if (propertyType === 'Apartment') return 'Number of Rooms';
+  return null;
+}
+function bathRoomsColumnFor_(propertyType) {
+  if (propertyType === 'House') return 'Bath Rooms';
+  if (propertyType === 'Apartment') return 'Number of Bath Rooms';
+  return null;
+}
+function floorAreaColumnFor_(propertyType) {
+  if (propertyType === 'House') return 'Floor Area (sqft)';
+  if (propertyType === 'Apartment') return 'Floor Area (sqft)_1';
+  if (propertyType === 'Commercial Property') return 'Built up Area';
+  return null;
+}
+function landSizeColumnFor_(propertyType) {
+  if (propertyType === 'House') return 'land Size (perch)';
+  if (propertyType === 'Land') return 'land Size (perch)_1';
+  if (propertyType === 'Commercial Property') return 'Size of Land (Perch)';
+  return null;
+}
+
+/* ============================== SESSIONS (server-side identity) ==============================
+   A privileged call now proves identity with an opaque session token instead
+   of a client-supplied name. Tokens are minted only inside verifyLoginPassword
+   (after the password check succeeds) and stored SERVER-SIDE in CacheService,
+   which the browser cannot read or write directly. Every function that used
+   to trust a `currentUser` string parameter now takes `sessionToken` and
+   calls resolveSession_/requireAdmin_/requireSocialMediaQueueAccess_ to
+   resolve the real, verified identity before doing anything sensitive. */
+
+const SESSION_TTL_SECONDS = 6 * 60 * 60; // CacheService max is 6 hours
+
+function sessionCacheKey_(token) {
+  return 'session_' + token;
+}
+
+/* Creates a new session for `name`, invalidating nothing else (multiple
+   concurrent sessions for the same user are fine — e.g. phone + laptop). */
+function createSession_(name, role) {
+  const token = Utilities.getUuid();
+  CacheService.getScriptCache().put(
+    sessionCacheKey_(token),
+    JSON.stringify({ name: name, role: role, issued: new Date().getTime() }),
+    SESSION_TTL_SECONDS
+  );
+  return token;
+}
+
+/* Resolves a session token into { name, role } — or throws if the token is
+   missing, unknown, or expired. This is the ONLY source of truth for "who
+   is calling this function" anywhere sensitive in this file. Never trust
+   a name/role passed in directly from the client instead of this. */
+function resolveSession_(sessionToken) {
+  const token = s_(sessionToken);
+  if (!token) throw new Error('Not logged in — please log in again.');
+  const raw = CacheService.getScriptCache().get(sessionCacheKey_(token));
+  if (!raw) throw new Error('Your session has expired — please log in again.');
+  const session = JSON.parse(raw);
+  // Agent accounts (third-party self-service sign-ups, see
+  // submitAgentSignup/verifyAgentLogin) are restricted to Search &
+  // Filter only. Every one of those read-only functions
+  // (searchProperties, getPropertyDetails, getPropertyPhotos,
+  // generatePropertyPdf, etc.) takes no sessionToken at all — so ANY
+  // function that requires a session is, by definition, staff-only.
+  // Rejecting Agent sessions here, once, means every existing and
+  // future requireLogin_/requireAdmin_/resolveSession_ caller is
+  // automatically protected without having to individually re-check
+  // the role everywhere.
+  if (session.role === 'Agent') {
+    throw new Error('This action is not available for Agent accounts.');
+  }
+  return session;
+}
+
+/* Sliding expiry: called by any authenticated action so a session doesn't
+   die mid-use; re-writes the same token with a fresh TTL. */
+function touchSession_(sessionToken, session) {
+  CacheService.getScriptCache().put(
+    sessionCacheKey_(sessionToken),
+    JSON.stringify(session),
+    SESSION_TTL_SECONDS
+  );
+}
+
+/* Resolves the session and requires Admin role. Returns the verified name
+   so callers can use it for attribution (Activity Log "User" column, etc.)
+   without ever trusting a client-supplied name again. */
+function requireAdmin_(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  if (session.role !== 'Admin') {
+    throw new Error('Only Admins (Keerthie, Sherden) can do this.');
+  }
+  touchSession_(sessionToken, session);
+  return session.name;
+}
+
+/* Resolves the session for any logged-in (non-Guest) user and returns the
+   verified name — used by actions any authenticated user can take. */
+function requireLogin_(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  return session.name;
+}
+
+function logoutSession(sessionToken) {
+  const token = s_(sessionToken);
+  if (token) CacheService.getScriptCache().remove(sessionCacheKey_(token));
+  return { success: true };
+}
+
+/* Used only by the client's "resume my session after a page refresh"
+   logic (see attemptResume_ in JavaScript.html). The client stores the
+   token in sessionStorage (survives a refresh, cleared when the tab
+   closes) rather than localStorage, so this only ever fires on an
+   actual refresh within the same tab, never on a genuinely fresh visit.
+   This is a DELIBERATE, narrow exception to the rule in resolveSession_
+   that rejects Agent-role tokens: this function only ever answers "is
+   this token still valid, and if so who does it belong to" — it grants
+   no additional capability an Agent's token didn't already carry, it
+   just lets the browser silently restore the UI the person already had
+   before refreshing. Every other authenticated function still goes
+   through resolveSession_ and still rejects Agent tokens as before. */
+function resumeSession(sessionToken) {
+  const token = s_(sessionToken);
+  if (!token) throw new Error('No session to resume.');
+  const raw = CacheService.getScriptCache().get(sessionCacheKey_(token));
+  if (!raw) throw new Error('Session expired — please log in again.');
+  const session = JSON.parse(raw);
+  touchSession_(token, session);
+  return { name: session.name, role: session.role };
+}
+
+/* ============================== PASSWORD HASHING ============================== */
+
+/* Salted SHA-256. Not as strong as bcrypt/scrypt (Apps Script has no
+   built-in slow hash), but it is a large improvement over storing
+   plaintext passwords, which is what this table did before. Stored format
+   in the Password column is "salt:hexhash". */
+function hashPassword_(password, salt) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, salt + password);
+  return bytes.map(function (b) { return ((b < 0 ? b + 256 : b).toString(16)).padStart(2, '0'); }).join('');
+}
+
+function makePasswordRecord_(plainPassword) {
+  const salt = Utilities.getUuid();
+  return salt + ':' + hashPassword_(plainPassword, salt);
+}
+
+/* Verifies a plaintext password against a stored record. Transparently
+   accepts a legacy plaintext record too (no ":" separator) so existing
+   accounts keep working until migrateAllPasswordsToHashed() is run —
+   remove the legacy branch once you've confirmed the migration ran. */
+function verifyPasswordRecord_(plainPassword, stored) {
+  stored = s_(stored);
+  if (!stored) return false;
+  const parts = stored.split(':');
+  if (parts.length === 2) {
+    const salt = parts[0], hash = parts[1];
+    return hashPassword_(plainPassword, salt) === hash;
+  }
+  // Legacy plaintext fallback — only reached for accounts not yet migrated.
+  return stored === plainPassword;
+}
+
+/* One-time migration — run this once from the Apps Script editor (function
+   dropdown -> migrateAllPasswordsToHashed -> Run) after deploying this
+   version. Converts every plaintext password still in Supabase into a
+   salted hash. Already-hashed records (containing ":") are left alone, so
+   this is safe to re-run. */
+function migrateAllPasswordsToHashed() {
+  const rows = supabaseRequest_('GET', SUPABASE_USERS_TABLE, ['select=id,Password']) || [];
+  let migrated = 0;
+  rows.forEach(function (r) {
+    const current = s_(r['Password']);
+    if (!current || current.indexOf(':') !== -1) return; // blank or already hashed
+    const record = makePasswordRecord_(current);
+    supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(r.id)],
+      { 'Password': record }, { 'Prefer': 'return=minimal' });
+    migrated++;
+  });
+  return 'Migrated ' + migrated + ' password(s) to salted hashes.';
+}
+
+/* ============================== LOGIN RATE LIMITING ============================== */
+
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_SECONDS = 300; // 5 minutes
+
+function loginAttemptsKey_(name) {
+  return 'loginattempts_' + s_(name).toLowerCase();
+}
+
+function checkLoginRateLimit_(name) {
+  const cache = CacheService.getScriptCache();
+  const key = loginAttemptsKey_(name);
+  const attempts = Number(cache.get(key) || 0);
+  if (attempts >= LOGIN_MAX_ATTEMPTS) {
+    throw new Error('Too many failed attempts for this account. Try again in a few minutes.');
+  }
+}
+
+function recordFailedLogin_(name) {
+  const cache = CacheService.getScriptCache();
+  const key = loginAttemptsKey_(name);
+  const attempts = Number(cache.get(key) || 0) + 1;
+  cache.put(key, String(attempts), LOGIN_LOCKOUT_SECONDS);
+}
+
+function clearLoginAttempts_(name) {
+  CacheService.getScriptCache().remove(loginAttemptsKey_(name));
+}
+
+function getUsersSheet_() {
+  const ss = openSpreadsheet_();
+  let sh = ss.getSheetByName(USERS_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(USERS_SHEET_NAME);
+    sh.appendRow(['Name', 'Mobile Number', 'Role', 'Photo', 'Created At', 'Active']);
+    sh.setFrozenRows(1);
+    SEED_USERS.forEach(function (u) { sh.appendRow([u.name, '', u.role, '', new Date(), true]); });
+  }
+  return sh;
+}
+
+function getUsersHeaderMap_(sh) {
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  const map = {};
+  headers.forEach(function (h, i) {
+    const key = s_(h).toLowerCase().replace(/[^a-z]/g, '');
+    if (key) map[key] = i + 1;
+  });
+  return { map: map, lastCol: lastCol };
+}
+
+/* ============================== APARTMENT COMPLEXES ============================== */
+
+function listApartmentComplexes_() {
+  const rows = supabaseRequest_('GET', SUPABASE_APARTMENT_COMPLEXES_TABLE, ['select=*', 'order=Name.asc']);
+  return (rows || [])
+    .map(function (r) { return { rowIndex: s_(r['Name']), name: s_(r['Name']), location: s_(r['Location']) }; })
+    .filter(function (c) { return c.name; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+}
+
+function getApartmentComplexes() {
+  return listApartmentComplexes_().map(function (c) { return { name: c.name, location: c.location }; });
+}
+
+function getNextWriteRow_(sh) {
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return 2;
+  const refCol = sh.getRange(2, COL.REF_NO, lastRow - 1, 1).getValues();
+  for (let i = refCol.length - 1; i >= 0; i--) {
+    if (s_(refCol[i][0]) !== '') return i + 2 + 1;
+  }
+  return 2;
+}
+
+function cleanupBlankRows() {
+  const sh = getSheet_();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return 'No data rows.';
+  const refCol = sh.getRange(2, COL.REF_NO, lastRow - 1, 1).getValues();
+  let deleted = 0;
+  for (let i = refCol.length - 1; i >= 0; i--) {
+    if (s_(refCol[i][0]) === '') {
+      sh.deleteRow(i + 2);
+      deleted++;
+    }
+  }
+  return 'Deleted ' + deleted + ' blank row(s).';
+}
+
+function getSheet_() {
+  const ss = openSpreadsheet_();
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) throw new Error('Sheet "' + SHEET_NAME + '" not found in the spreadsheet.');
+  return sh;
+}
+
+function getInquiriesSheet_() {
+  const ss = openSpreadsheet_();
+  let sh = ss.getSheetByName(INQUIRIES_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(INQUIRIES_SHEET_NAME);
+    sh.appendRow(['Timestamp','Property Ref No','Inquirer Name','Inquirer Contact No','Inquirer Email','Status','Updated By','Notes']);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function s_(v) { return (v === null || v === undefined) ? '' : String(v).trim(); }
+
+function levenshtein_(a, b) {
+  const m = a.length, n = b.length;
+  const d = [];
+  for (let i = 0; i <= m; i++) d[i] = [i];
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      d[i][j] = a[i - 1] === b[j - 1] ? d[i - 1][j - 1] : 1 + Math.min(d[i - 1][j], d[i][j - 1], d[i - 1][j - 1]);
+    }
+  }
+  return d[m][n];
+}
+
+function normalizeToClosest_(raw, canonicalList) {
+  raw = s_(raw);
+  if (!raw) return raw;
+  if (canonicalList.indexOf(raw) !== -1) return raw;
+  const rawLower = raw.toLowerCase();
+  let best = null, bestDist = Infinity;
+  canonicalList.forEach(function (opt) {
+    const dist = levenshtein_(rawLower, opt.toLowerCase());
+    if (dist < bestDist) { bestDist = dist; best = opt; }
+  });
+  return (best && bestDist <= Math.max(2, Math.round(best.length * 0.2))) ? best : raw;
+}
+
+function formatContactNumber_(raw) {
+  raw = s_(raw);
+  if (!raw) return raw;
+  if (raw.charAt(0) === '0') return raw;
+  if (raw.charAt(0) === '+') return '00' + raw.slice(1);
+  const digitsOnly = raw.replace(/\D/g, '');
+  if (!digitsOnly) return raw;
+  return (digitsOnly.length === 9 ? '0' : '00') + raw;
+}
+
+function n_(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const num = parseFloat(String(v).toString().replace(/[^0-9.\-]/g, ''));
+  return isNaN(num) ? null : num;
+}
+
+function isoDate_(v) {
+  if (!v) return '';
+  let d = new Date(v);
+  if (isNaN(d.getTime())) {
+    const m = String(v).trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) {
+      d = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+    }
+  }
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
+function rowToObject_(entry) {
+  const c = entry.cells;
+  const propType = s_(c[COL.PROP_TYPE - 1]);
+  const isHouse = propType === 'House' || propType === 'Estate';
+  const isLand = propType === 'Land';
+  const isApt = propType === 'Apartment';
+  const isComm = propType === 'Commercial Property';
+
+  const landSize = isLand ? n_(c[COL.L_LAND_SIZE - 1]) : (isHouse ? n_(c[COL.H_LAND_SIZE - 1]) : (isComm ? n_(c[COL.C_LAND_SIZE - 1]) : null));
+  const floorArea = isApt ? n_(c[COL.A_FLOOR_AREA - 1]) : (isHouse ? n_(c[COL.H_FLOOR_AREA - 1]) : (isComm ? n_(c[COL.C_BUILTUP - 1]) : null));
+  const bedRooms = isHouse ? n_(c[COL.H_BEDROOMS - 1]) : (isApt ? n_(c[COL.A_ROOMS - 1]) : null);
+  const bathRooms = isHouse ? n_(c[COL.H_BATHROOMS - 1]) : (isApt ? n_(c[COL.A_BATHROOMS - 1]) : null);
+  const parking = isHouse ? n_(c[COL.H_PARKING - 1]) : (isApt ? n_(c[COL.A_PARKING - 1]) : null);
+  const amenities = [c[COL.H_AMENITIES - 1], c[COL.L_AMENITIES - 1], c[COL.A_AMENITIES - 1]]
+    .map(s_).filter(Boolean).join(', ');
+  const otherInfo = [c[COL.H_OTHER_INFO - 1], c[COL.L_OTHER_INFO - 1], c[COL.A_COMMENTS - 1], c[COL.C_COMMENTS - 1], c[COL.COMMENTS - 1]]
+    .map(s_).filter(Boolean).join(' | ');
+
+  const currency = s_(c[COL.CURRENCY - 1]) || 'LKR';
+  const priceTotal = n_(c[COL.PRICE_TOTAL - 1]);
+  const budget = n_(c[COL.BUDGET - 1]);
+  const priceOrBudget = priceTotal !== null ? priceTotal : budget;
+  const priceInLKR = priceOrBudget === null ? null : (currency === 'USD' ? priceOrBudget * USD_TO_LKR_RATE : priceOrBudget);
+
+  return {
+    rowIndex: entry.rowIndex,
+    refNo: s_(c[COL.REF_NO - 1]),
+    timestamp: isoDate_(c[COL.TIMESTAMP - 1]),
+    user: s_(c[COL.USER - 1]),
+    contactType: s_(c[COL.CONTACT_TYPE - 1]),
+    name: s_(c[COL.NAME - 1]),
+    contact1: s_(c[COL.CONTACT1 - 1]),
+    contact2: s_(c[COL.CONTACT2 - 1]),
+    email: s_(c[COL.EMAIL - 1]),
+    opportunityType: s_(c[COL.OPP_TYPE - 1]),
+    propertyType: propType,
+    purpose: s_(c[COL.PURPOSE - 1]) || s_(c[COL.C_PURPOSE - 1]),
+    address: s_(c[COL.ADDRESS - 1]),
+    city: s_(c[COL.CITY - 1]),
+    landSize: landSize,
+    bedRooms: bedRooms,
+    bathRooms: bathRooms,
+    parking: parking,
+    floorArea: floorArea,
+    amenities: amenities,
+    otherInfo: otherInfo,
+    apartmentComplex: s_(c[COL.A_COMPLEX - 1]),
+    floor: s_(c[COL.A_FLOOR - 1]),
+    view: s_(c[COL.A_VIEW - 1]),
+    suitableFor: s_(c[COL.L_SUITABLE - 1]),
+    currency: currency,
+    pricePerPerch: n_(c[COL.PRICE_PER_PERCH - 1]),
+    pricePerSqft: n_(c[COL.PRICE_PER_SQFT - 1]),
+    priceTotal: priceTotal,
+    budget: budget,
+    priceInLKR: priceInLKR,
+    furnished: normalizeToClosest_(c[COL.FURNISHED - 1], FURNISHED_LIST),
+    status: s_(c[COL.STATUS - 1]) || 'Active'
+  };
+}
+
+/* ============================== AGENT SELF-SERVICE ACCOUNTS ============================== */
+/* Third-party "Agent" accounts replace the old device-remembered Guest
+   flow: an outside company fills in the same company-info form as
+   before, and their registered mobile number automatically becomes
+   BOTH their username and password (see submitAgentSignup) — nothing
+   extra to create or remember. New signups start life as "Pending" and
+   cannot log in until an Admin approves them (adminApproveAgent).
+   Approved accounts can still be temporarily switched off via "Active"
+   without losing their approval history (adminSetAgentActive), and are
+   always restricted to Search & Filter with owner contact details
+   hidden — enforced both in the client (isGuest checks in
+   JavaScript.html now also cover role 'Agent') and, more importantly,
+   on the server: resolveSession_ rejects an Agent's token for every
+   function that requires a session, since none of the read-only search
+   functions an Agent actually needs require one.
+
+   SECURITY NOTE: because username and password are the same value (a
+   business contact number that companies often share freely), this is
+   effectively single-factor, guessable-if-known-publicly access. That
+   trade-off is intentional here — Agent accounts only ever reach
+   redacted, read-only search results, never owner contact details or
+   any write action — but it should not be extended to any tier with
+   broader access without adding a real, separate secret. */
+
+function submitAgentSignup(payload) {
+  payload = payload || {};
+
+  // Honeypot: as_website is an input hidden from real visitors via CSS
+  // in Index.html. A human never fills it in; a bot filling in every
+  // field on the page will. If it's non-empty, silently report success
+  // without writing anything, so a scripted submitter never learns the
+  // honeypot tripped.
+  if (s_(payload.website)) {
+    return { success: true };
+  }
+
+  const company = s_(payload.company);
+  const contactPerson = s_(payload.contactPerson);
+  const email = s_(payload.email);
+  const address = s_(payload.address);
+  const consent = !!payload.consent;
+
+  if (!company || !contactPerson || !s_(payload.contactNumber) || !email || !address) {
+    throw new Error('Please fill all required fields.');
+  }
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    throw new Error('Please enter a valid email address.');
+  }
+  if (!consent) {
+    throw new Error('Please confirm you agree to act as a partner for Central7.');
+  }
+
+  // The registered mobile number becomes BOTH the login username and
+  // the password — normalized the same way Contact No 1/2 are
+  // normalized everywhere else in this file, so a number entered
+  // slightly differently at signup vs. login (e.g. with or without a
+  // leading 0) still matches consistently.
+  const mobileNumber = formatContactNumber_(s_(payload.contactNumber));
+
+  const existing = supabaseRequest_('GET', SUPABASE_AGENTS_TABLE, [
+    'Username=ilike.' + encodeURIComponent(mobileNumber), 'select=id', 'limit=1'
+  ]);
+  if (existing && existing.length) {
+    throw new Error('This mobile number is already registered. Contact Central7 if you need help logging in.');
+  }
+
+  supabaseRequest_('POST', SUPABASE_AGENTS_TABLE, null,
+    [{
+      'Company Name': company,
+      'Contact Person': contactPerson,
+      'Contact Number': mobileNumber,
+      'Email': email,
+      'Registered Address': address,
+      'Username': mobileNumber,
+      'Password': makePasswordRecord_(mobileNumber),
+      'Status': 'Pending',
+      'Active': 'true',
+      'Created At': new Date()
+    }],
+    { 'Prefer': 'return=minimal' });
+
+  return { success: true };
+}
+
+/* Called from the Agent Log In form — a single "registered mobile
+   number" field, since that value is both the username and the
+   password (see submitAgentSignup). Rate-limited per number (using a
+   distinct 'agent:' cache-key prefix so it never collides with staff
+   login attempt counters), and only issues a session if the account
+   has been Approved by an Admin and is still Active. */
+function verifyAgentLogin(mobileNumber) {
+  mobileNumber = formatContactNumber_(s_(mobileNumber));
+  if (!mobileNumber) throw new Error('Please enter your registered mobile number.');
+  const rateLimitKey = 'agent:' + mobileNumber.toLowerCase();
+  checkLoginRateLimit_(rateLimitKey);
+
+  const rows = supabaseRequest_('GET', SUPABASE_AGENTS_TABLE, [
+    'Username=ilike.' + encodeURIComponent(mobileNumber), 'select=*', 'limit=1'
+  ]);
+  const agent = rows && rows[0];
+  if (!agent || !verifyPasswordRecord_(mobileNumber, agent['Password'])) {
+    recordFailedLogin_(rateLimitKey);
+    throw new Error('No account found for that mobile number.');
+  }
+
+  const status = s_(agent['Status']);
+  if (status === 'Pending') {
+    throw new Error('Your account is still awaiting Admin approval.');
+  }
+  if (status === 'Rejected') {
+    throw new Error('Your account request was not approved. Contact Central7 for details.');
+  }
+  if (status !== 'Approved' || s_(agent['Active']) !== 'true') {
+    throw new Error('Your account is not currently active. Contact Central7 for details.');
+  }
+
+  clearLoginAttempts_(rateLimitKey);
+  const displayName = s_(agent['Contact Person']) || mobileNumber;
+  const token = createSession_(displayName, 'Agent');
+  return { success: true, token: token, role: 'Agent', name: displayName };
+}
+
+/* Admin-only — lists every agent account for the Agents management tab.
+   Password is intentionally never included. */
+function listAgentAccounts(sessionToken) {
+  requireAdmin_(sessionToken);
+  const rows = supabaseRequest_('GET', SUPABASE_AGENTS_TABLE, ['select=*', 'order=id.desc']) || [];
+  return rows.map(function (r) {
+    return {
+      id: r.id,
+      company: s_(r['Company Name']),
+      contactPerson: s_(r['Contact Person']),
+      contactNumber: s_(r['Contact Number']),
+      email: s_(r['Email']),
+      address: s_(r['Registered Address']),
+      username: s_(r['Username']),
+      status: s_(r['Status']) || 'Pending',
+      active: s_(r['Active']) !== 'false',
+      createdAt: isoDate_(r['Created At']),
+      approvedBy: s_(r['Approved By']),
+      approvedAt: isoDate_(r['Approved At'])
+    };
+  });
+}
+
+function adminApproveAgent(sessionToken, username) {
+  const currentAdmin = requireAdmin_(sessionToken);
+  username = s_(username);
+  supabaseRequest_('PATCH', SUPABASE_AGENTS_TABLE, ['Username=ilike.' + encodeURIComponent(username)],
+    { 'Status': 'Approved', 'Active': 'true', 'Approved By': currentAdmin, 'Approved At': new Date() },
+    { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function adminRejectAgent(sessionToken, username) {
+  const currentAdmin = requireAdmin_(sessionToken);
+  username = s_(username);
+  supabaseRequest_('PATCH', SUPABASE_AGENTS_TABLE, ['Username=ilike.' + encodeURIComponent(username)],
+    { 'Status': 'Rejected', 'Approved By': currentAdmin, 'Approved At': new Date() },
+    { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function adminSetAgentActive(sessionToken, username, active) {
+  requireAdmin_(sessionToken);
+  username = s_(username);
+  supabaseRequest_('PATCH', SUPABASE_AGENTS_TABLE, ['Username=ilike.' + encodeURIComponent(username)],
+    { 'Active': active ? 'true' : 'false' }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function adminResetAgentPassword(sessionToken, username) {
+  requireAdmin_(sessionToken);
+  username = s_(username);
+  const newPassword = generateRandomPassword_();
+  supabaseRequest_('PATCH', SUPABASE_AGENTS_TABLE, ['Username=ilike.' + encodeURIComponent(username)],
+    { 'Password': makePasswordRecord_(newPassword) }, { 'Prefer': 'return=minimal' });
+  return { success: true, newPassword: newPassword };
+}
+
+/* Admin-only — powers the "N new agent sign-ups awaiting approval"
+   notification banner on My Dashboard (see loadPendingAgentsAlert_ in
+   JavaScript.html). Cheap targeted count query, not a full row pull. */
+function getPendingAgentCount(sessionToken) {
+  requireAdmin_(sessionToken);
+  const rows = supabaseRequest_('GET', SUPABASE_AGENTS_TABLE, ['select=id', 'Status=eq.Pending']) || [];
+  return rows.length;
+}
+
+/* ============================== DROPDOWN DATA ============================== */
+
+function getFormOptions() {
+  const citiesSet = {};
+  let offset = 0;
+  const pageSize = 5000;
+  while (true) {
+    const page = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+      'select=' + encodeURIComponent('City'), 'limit=' + pageSize, 'offset=' + offset
+    ]);
+    if (!page || !page.length) break;
+    page.forEach(function (obj) { const city = s_(obj['City']); if (city) citiesSet[city] = true; });
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  const cities = Object.keys(citiesSet).sort();
+  const allUsers = listUsers_();
+  return {
+    users: allUsers.filter(function (u) { return u.active; }).map(function (u) { return u.name; }),
+    usersDetailed: allUsers,
+    opportunityTypes: OPPORTUNITY_TYPES,
+    propertyTypes: PROPERTY_TYPES,
+    statusList: STATUS_LIST,
+    furnishedList: FURNISHED_LIST,
+    contactTypes: CONTACT_TYPES,
+    amenities: AMENITIES_LIST,
+    apartmentComplexes: getApartmentComplexes(),
+    cities: cities
+  };
+}
+
+/* ============================== USER MANAGEMENT ============================== */
+
+function listUsers_() {
+  const rows = supabaseRequest_('GET', SUPABASE_USERS_TABLE, ['select=*', 'order=Name.asc']);
+  return (rows || [])
+    .map(function (r) {
+      const photoId = s_(r['Photo']);
+      return {
+        rowIndex: s_(r['Name']),
+        id: r['id'],
+        name: s_(r['Name']),
+        role: s_(r['Role']) || 'User',
+        active: r['Active'] === false ? false : true,
+        mobile: s_(r['Mobile Number']),
+        photoUrl: photoId ? ('https://drive.google.com/thumbnail?id=' + photoId + '&sz=w200') : ''
+      };
+      // Password is intentionally never included here.
+    })
+    .filter(function (u) { return u.name; })
+    .sort(userSortComparator_);
+}
+
+function getUserPassword_(name) {
+  const users = listUsers_();
+  const target = users.find(function (u) { return u.name.toLowerCase() === s_(name).toLowerCase(); });
+  if (!target) return '';
+  const rows = supabaseRequest_('GET', SUPABASE_USERS_TABLE, ['select=Password', 'id=eq.' + encodeURIComponent(target.id)]);
+  return (rows && rows[0]) ? s_(rows[0]['Password']) : '';
+}
+
+/* Called from the login screen after picking a name + entering a password.
+   Rate-limited per account name, verifies against the salted hash (with a
+   transparent legacy-plaintext fallback until migrateAllPasswordsToHashed
+   has been run), and — on success — mints and returns a server-side
+   session token. The client stores ONLY this opaque token from now on;
+   it is never allowed to just assert "I am X" for anything sensitive. */
+function verifyLoginPassword(name, password) {
+  name = s_(name);
+  if (!name) throw new Error('Please select your name.');
+  checkLoginRateLimit_(name);
+
+  const stored = getUserPassword_(name);
+  if (!stored) {
+    recordFailedLogin_(name);
+    throw new Error('No password set for this user yet — ask an Admin to set one in the Users tab.');
+  }
+  if (!verifyPasswordRecord_(password, stored)) {
+    recordFailedLogin_(name);
+    throw new Error('Incorrect password.');
+  }
+
+  clearLoginAttempts_(name);
+  const role = getUserRole_(name);
+  const token = createSession_(name, role);
+  return { success: true, token: token, role: role };
+}
+
+function adminSetPassword(sessionToken, targetName, newPassword) {
+  requireAdmin_(sessionToken);
+  if (!newPassword || s_(newPassword).length < 4) throw new Error('Password must be at least 4 characters.');
+  const users = listUsers_();
+  const target = users.find(function (u) { return u.name.toLowerCase() === s_(targetName).toLowerCase(); });
+  if (!target) throw new Error('User not found.');
+  supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(target.id)],
+    { 'Password': makePasswordRecord_(s_(newPassword)) }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function adminResetPassword(sessionToken, targetName) {
+  requireAdmin_(sessionToken);
+  const users = listUsers_();
+  const target = users.find(function (u) { return u.name.toLowerCase() === s_(targetName).toLowerCase(); });
+  if (!target) throw new Error('User not found.');
+  const newPassword = generateRandomPassword_();
+  supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(target.id)],
+    { 'Password': makePasswordRecord_(newPassword) }, { 'Prefer': 'return=minimal' });
+  return { success: true, newPassword: newPassword };
+}
+
+function generateRandomPassword_() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+  let pwd = '';
+  for (let i = 0; i < 10; i++) {
+    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pwd;
+}
+
+/* One-time setup — now stores salted hashes rather than plaintext. Safe to
+   re-run only if you actually want to reset everyone back to these values. */
+function seedInitialPasswords() {
+  const INITIAL_PASSWORDS = {
+    Keerthie: 'Keerthie87@',
+    Sherden: 'Sherden87@',
+    Theeban: 'Theeban425@',
+    Chaminda: 'Chaminda625@',
+    Jeyendran: 'Jeyendran563@'
+  };
+  const users = listUsers_();
+  let count = 0;
+  Object.keys(INITIAL_PASSWORDS).forEach(function (name) {
+    const target = users.find(function (u) { return u.name.toLowerCase() === name.toLowerCase(); });
+    if (target) {
+      supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(target.id)],
+        { 'Password': makePasswordRecord_(INITIAL_PASSWORDS[name]) }, { 'Prefer': 'return=minimal' });
+      count++;
+    }
+  });
+  return 'Set passwords for ' + count + ' user(s).';
+}
+
+function userSortComparator_(a, b) {
+  const ia = USER_DISPLAY_ORDER.indexOf(a.name);
+  const ib = USER_DISPLAY_ORDER.indexOf(b.name);
+  const ra = ia === -1 ? USER_DISPLAY_ORDER.length : ia;
+  const rb = ib === -1 ? USER_DISPLAY_ORDER.length : ib;
+  if (ra !== rb) return ra - rb;
+  return a.name.localeCompare(b.name);
+}
+
+function getUserRole_(name) {
+  const user = listUsers_().find(function (u) { return u.name.toLowerCase() === s_(name).toLowerCase(); });
+  return user ? user.role : 'User';
+}
+
+// Regular ("User" role) accounts listed here may still access Social Media
+// Queue even though it's otherwise restricted to Admins.
+const SOCIAL_MEDIA_QUEUE_ALLOWED_USERS = ['Gokulesh'];
+
+/* Resolves the session and enforces Social Media Queue access (Admin, or a
+   named exception account). Returns the verified name. */
+function requireSocialMediaQueueAccess_(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  if (session.role === 'Admin') { touchSession_(sessionToken, session); return session.name; }
+  const allowed = SOCIAL_MEDIA_QUEUE_ALLOWED_USERS.some(function (n) { return n.toLowerCase() === session.name.toLowerCase(); });
+  if (!allowed) throw new Error('You do not have access to the Social Media Queue.');
+  touchSession_(sessionToken, session);
+  return session.name;
+}
+
+function adminAddUser(sessionToken, name, role, mobile) {
+  requireAdmin_(sessionToken);
+  return addUser_(name, role === 'Admin' ? 'Admin' : 'User', mobile);
+}
+
+function addUser_(name, role, mobile) {
+  name = s_(name);
+  if (!name) throw new Error('Name is required.');
+  const existing = listUsers_();
+  const dup = existing.find(function (u) { return u.name.toLowerCase() === name.toLowerCase(); });
+  if (dup) {
+    if (!dup.active) {
+      supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(dup.id)],
+        { 'Active': true }, { 'Prefer': 'return=minimal' });
+    }
+    return { success: true, reactivated: !dup.active, name: dup.name };
+  }
+  supabaseRequest_('POST', SUPABASE_USERS_TABLE, null,
+    [{ 'Name': name, 'Role': role, 'Mobile Number': mobile || '', 'Created At': new Date(), 'Active': true }],
+    { 'Prefer': 'return=minimal' });
+  return { success: true, name: name };
+}
+
+function setUserRole(sessionToken, targetName, role) {
+  requireAdmin_(sessionToken);
+  const users = listUsers_();
+  const target = users.find(function (u) { return u.name.toLowerCase() === s_(targetName).toLowerCase(); });
+  if (!target) throw new Error('User not found.');
+  supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(target.id)],
+    { 'Role': role === 'Admin' ? 'Admin' : 'User' }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function setUserActive(sessionToken, targetName, active) {
+  requireAdmin_(sessionToken);
+  const users = listUsers_();
+  const target = users.find(function (u) { return u.name.toLowerCase() === s_(targetName).toLowerCase(); });
+  if (!target) throw new Error('User not found.');
+  supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(target.id)],
+    { 'Active': !!active }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+/* ============================== SEARCH & FILTER (public — no login required) ============================== */
+
+function searchProperties(filters) {
+  filters = filters || {};
+  const rows = getAllDataRows_().map(rowToObject_);
+
+  const wantMinPriceLKR = filters.priceMin ? (filters.priceMin * (filters.priceMinIsUSD ? USD_TO_LKR_RATE : 1)) : null;
+  const wantMaxPriceLKR = filters.priceMax ? (filters.priceMax * (filters.priceMaxIsUSD ? USD_TO_LKR_RATE : 1)) : null;
+
+  const results = rows.filter(function (p) {
+    if (filters.opportunityType && filters.opportunityType !== 'All' && p.opportunityType !== filters.opportunityType) return false;
+    if (filters.propertyTypes && filters.propertyTypes.length) {
+      if (filters.propertyTypes.indexOf(p.propertyType) === -1) return false;
+    } else if (filters.propertyType && filters.propertyType !== 'All' && p.propertyType !== filters.propertyType) return false;
+    if (filters.status && filters.status !== 'All' && p.status !== filters.status) return false;
+    if (filters.agent && filters.agent !== 'All' && p.user !== filters.agent) return false;
+    if (filters.furnished && filters.furnished !== 'All' && p.furnished !== filters.furnished) return false;
+    if (filters.cities && filters.cities.length && filters.cities.indexOf(p.city) === -1) return false;
+    if (filters.refNoContains && p.refNo.toLowerCase().indexOf(filters.refNoContains.toLowerCase()) === -1) return false;
+    if (filters.nameContains && p.name.toLowerCase().indexOf(filters.nameContains.toLowerCase()) === -1) return false;
+    if (filters.phoneContains) {
+      const digits = filters.phoneContains.replace(/\D/g, '').replace(/^0+/, '');
+      const combined = (p.contact1 + p.contact2).replace(/\D/g, '').replace(/^0+/, '');
+      if (digits && combined.indexOf(digits) === -1) return false;
+    }
+    if (filters.minBedrooms && (!p.bedRooms || p.bedRooms < filters.minBedrooms)) return false;
+    if (filters.keyword) {
+      const kw = filters.keyword.toLowerCase();
+      const hay = (p.address + ' ' + p.purpose + ' ' + p.otherInfo + ' ' + p.amenities).toLowerCase();
+      if (hay.indexOf(kw) === -1) return false;
+    }
+    if (filters.floorAreaMin && (!p.floorArea || p.floorArea < filters.floorAreaMin)) return false;
+    if (filters.floorAreaMax && (!p.floorArea || p.floorArea > filters.floorAreaMax)) return false;
+    if (filters.landSizeMin && (!p.landSize || p.landSize < filters.landSizeMin)) return false;
+    if (filters.landSizeMax && (!p.landSize || p.landSize > filters.landSizeMax)) return false;
+    if (wantMinPriceLKR && (p.priceInLKR === null || p.priceInLKR < wantMinPriceLKR)) return false;
+    if (wantMaxPriceLKR && (p.priceInLKR === null || p.priceInLKR > wantMaxPriceLKR)) return false;
+    if (filters.amenities && filters.amenities.length) {
+      const amenLower = p.amenities.toLowerCase();
+      const missing = filters.amenities.some(function (a) { return amenLower.indexOf(a.toLowerCase()) === -1; });
+      if (missing) return false;
+    }
+    return true;
+  });
+
+  results.sort(function (a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+  return filters.noLimit ? results : results.slice(0, 500);
+}
+
+/* Regular users only ever see their own properties — targetUser lets an
+   Admin look at someone else's. Identity + role now come from the
+   session, not from the client-supplied currentUser string. */
+function getMyProperties(sessionToken, targetUser) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const user = targetUser || session.name;
+  if (user.toLowerCase() !== session.name.toLowerCase() && session.role !== 'Admin') {
+    throw new Error('Only an Admin can view another user\'s properties.');
+  }
+  // noLimit: true — "My Properties" must show every matching property,
+  // not just the 500 most recent. The general Search & Filter tab
+  // (searchProperties without this flag) keeps that cap since a broad
+  // search there could otherwise return thousands of rows, but My
+  // Properties is specifically for looking up a known/older property —
+  // capping it silently hid anything not among the newest 500 out of
+  // 10,000+ total records (e.g. an older listing like C7-8718 simply
+  // never appeared, even when searched for directly by Ref No).
+  return searchProperties({ agent: user, status: 'All', noLimit: true });
+}
+
+/* ============================== PARSE A CUSTOMER INQUIRY (public) ============================== */
+
+function parseInquiryText(text) {
+  text = text || '';
+  const lower = text.toLowerCase().replace(/[\u2013\u2014\u2212]/g, '-');
+  const filters = { status: 'Active' };
+
+  if (/\brent(ing)?\s*wanted|\blooking to rent\b|\bwant(s|ed)? to rent\b|\brent\b/.test(lower)) filters.opportunityType = 'Rent Out';
+  else filters.opportunityType = 'Sell';
+
+  if (/\bindustrial\b|\bwarehouse\b|\bfactory\b/.test(lower)) filters.propertyTypes = ['Land', 'Commercial Property'];
+  else if (/\bapartment\b|\bflat\b/.test(lower)) filters.propertyType = 'Apartment';
+  else if (/\bland\b|\bplot\b/.test(lower)) filters.propertyType = 'Land';
+  else if (/\bcommercial\b|\bshop\b|\boffice\b/.test(lower)) filters.propertyType = 'Commercial Property';
+  else if (/\bhouse\b/.test(lower)) filters.propertyType = 'House';
+
+  const options = getFormOptions();
+
+  const foundCities = [];
+  const colomboListMatch = lower.match(/\bcol(?:ombo)?[\s:-]*((?:\d{1,2}\s*(?:,|&|\band\b|\bor\b|\/|-)?\s*)+)/);
+  if (colomboListMatch) {
+    const nums = colomboListMatch[1].match(/\d{1,2}/g) || [];
+    nums.forEach(function (n) {
+      const padded = 'Colombo ' + (n.length === 1 ? '0' + n : n);
+      if (options.cities.indexOf(padded) !== -1 && foundCities.indexOf(padded) === -1) foundCities.push(padded);
+    });
+  }
+  const CITY_ALIASES = {
+    dehiwela: 'Dehiwala', dehiwala: 'Dehiwala',
+    nugegoda: 'Nugegoda',
+    'mount lavinia': 'Mount Lavinia', 'mt lavinia': 'Mount Lavinia',
+    wellawatte: 'Colombo 06', wellawatta: 'Colombo 06',
+    kolpity: 'Colombo 03', kollupitiya: 'Colombo 03', collupitiya: 'Colombo 03', collpitiya: 'Colombo 03', kolupity: 'Colombo 03',
+    bamba: 'Colombo 04', bambalapitiya: 'Colombo 04'
+  };
+  Object.keys(CITY_ALIASES).forEach(function (alias) {
+    const target = CITY_ALIASES[alias];
+    if (lower.indexOf(alias) !== -1 && options.cities.indexOf(target) !== -1 && foundCities.indexOf(target) === -1) foundCities.push(target);
+  });
+  options.cities.forEach(function (city) {
+    if (foundCities.indexOf(city) !== -1) return;
+    if (city.toLowerCase().indexOf('colombo') !== -1) return;
+    if (lower.indexOf(city.toLowerCase()) !== -1) foundCities.push(city);
+  });
+  if (foundCities.length) filters.cities = foundCities;
+
+  const complexes = getApartmentComplexes();
+  const matchedComplex = complexes.find(function (c) {
+    if (!c.name) return false;
+    const nameLower = c.name.toLowerCase();
+    const escape = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+    if (new RegExp('\\b' + escape(nameLower) + '\\b').test(lower)) return true;
+    const firstWord = nameLower.split(/\s+/)[0];
+    return firstWord.length >= 3 && new RegExp('\\b' + escape(firstWord) + '\\b').test(lower);
+  });
+  if (matchedComplex) {
+    if (!filters.cities || !filters.cities.length) {
+      if (matchedComplex.location && options.cities.indexOf(matchedComplex.location) !== -1) {
+        filters.cities = [matchedComplex.location];
+      }
+    }
+  }
+
+  const perchMatch = lower.match(/(\d+(\.\d+)?)\s*(-|to)?\s*(\d+(\.\d+)?)?\s*perch/);
+  if (perchMatch) {
+    if (perchMatch[4]) {
+      // A real range was given (e.g. "6-15 perch") — use both bounds as specified.
+      filters.landSizeMin = parseFloat(perchMatch[1]);
+      filters.landSizeMax = parseFloat(perchMatch[4]);
+    } else {
+      // Single approximate value (e.g. "15 perch") — treat as a rough
+      // target, not a strict minimum. Only cap the upper bound (+3), so
+      // smaller properties that might still be a good fit aren't
+      // invisibly excluded.
+      filters.landSizeMax = parseFloat(perchMatch[1]) + 3;
+    }
+  } else {
+    // No "perch" mentioned — check for acres instead (1 acre = 160 perch).
+    // Handles both "5 acre - 15 acre" (unit repeated after each number)
+    // and "5-15 acres" / "5 acres" (unit given once, at the end).
+    let acreMatch = lower.match(/(\d+(?:\.\d+)?)\s*acres?\s*(?:-|to)\s*(\d+(?:\.\d+)?)\s*acres?/);
+    if (!acreMatch) acreMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:-|to)?\s*(\d+(?:\.\d+)?)?\s*acres?/);
+    if (acreMatch) {
+      const ACRE_TO_PERCH = 160;
+      const acreMin = parseFloat(acreMatch[1]);
+      if (acreMatch[2]) {
+        // Real range given — use both bounds as specified.
+        filters.landSizeMin = acreMin * ACRE_TO_PERCH;
+        filters.landSizeMax = parseFloat(acreMatch[2]) * ACRE_TO_PERCH;
+      } else {
+        // Single approximate value — only cap the upper bound.
+        filters.landSizeMax = (acreMin + 0.5) * ACRE_TO_PERCH;
+      }
+    }
+  }
+
+  const bedMatch = lower.match(/(\d+)\s*(bed\s*rooms?|bedrooms?|beds?|rooms?|br\b)/);
+  if (bedMatch) filters.minBedrooms = parseInt(bedMatch[1], 10);
+
+  if (/\bunfurnished\b|\bnot\s+furnished\b|\bno\s+furnishing\b/.test(lower)) filters.furnished = 'Not Furnished';
+  else if (/\bfully\s+furnished\b/.test(lower)) filters.furnished = 'Fully Furnished';
+  else if (/\bpartly\s+furnished\b|\bpartially\s+furnished\b/.test(lower)) filters.furnished = 'Partly Furnished';
+  else if (/\bfurnished\b/.test(lower)) filters.furnished = 'Fully Furnished';
+
+  const isUSD = /\busd\b|\$/.test(lower);
+
+  const budgetIdx = lower.indexOf('budget');
+  const budgetSection = budgetIdx !== -1 ? lower.slice(budgetIdx, budgetIdx + 80) : lower;
+
+  const rangeMatch = budgetSection.match(/(\d+(\.\d+)?)\s*(?:million\b|mil\b|mn\b|m\b)?\s*(?:-|to|and)\s*(\d+(\.\d+)?)\s*(million\b|mil\b|mn\b|m\b)(?!\s*(?:from|radius|away|wide|deep|long|high|of)\b)/);
+  const rangeMatchThousand = budgetSection.match(/(\d+(\.\d+)?)\s*k?\s*(?:-|to|and)\s*(\d+(\.\d+)?)\s*k\b(?!\s*(?:from|radius|away|wide|deep|long|high|of)\b)/);
+  const millionMatch = budgetSection.match(/(\d+(\.\d+)?)\s*(million\b|mil\b|mn\b|m\b)(?!\s*(?:from|radius|away|wide|deep|long|high|of)\b)(?!\s*(?:-|to|and)\s*\d+(?:\.\d+)?\s*(?:million\b|mil\b|mn\b|m\b)?\s*(?:from|radius|away|wide|deep|long|high|of)\b)/);
+  const thousandMatch = budgetSection.match(/(\d+(\.\d+)?)\s*k\b(?!\s*(?:sq\.?\s*ft|sqft|square\s*feet|sq\.?\s*m|sqm|perch(?:es)?|acres?|cents?))(?!\s*(?:from|radius|away|wide|deep|long|high|of)\b)(?!\s*(?:-|to|and)\s*\d+(?:\.\d+)?\s*k?\b\s*(?:from|radius|away|wide|deep|long|high|of)\b)/);
+  const plainBudgetMatch = budgetSection.match(/(?:lkr|rs\.?)?\s*([\d,]{6,})(?!\d)(?!\s*(?:sq\.?\s*ft|sqft|square\s*feet|sq\.?\s*m|sqm|perch(?:es)?|acres?|cents?)\b)(?!\s*(?:-|to)\s*[\d,]+(?:\.\d+)?\s*(?:sq\.?\s*ft|sqft|square\s*feet|sq\.?\s*m|sqm|perch(?:es)?|acres?|cents?)\b)/);
+
+  if (rangeMatch) {
+    filters.priceMin = parseFloat(rangeMatch[1]) * 1000000;
+    filters.priceMax = parseFloat(rangeMatch[3]) * 1000000;
+  } else if (rangeMatchThousand) {
+    filters.priceMin = parseFloat(rangeMatchThousand[1]) * 1000;
+    filters.priceMax = parseFloat(rangeMatchThousand[3]) * 1000;
+  } else if (millionMatch) {
+    filters.priceMax = parseFloat(millionMatch[1]) * 1000000;
+  } else if (thousandMatch) {
+    filters.priceMax = parseFloat(thousandMatch[1]) * 1000;
+  } else if (plainBudgetMatch) {
+    filters.priceMax = parseFloat(plainBudgetMatch[1].replace(/,/g, ''));
+  }
+  if (filters.priceMin) filters.priceMinIsUSD = isUSD;
+  if (filters.priceMax) filters.priceMaxIsUSD = isUSD;
+
+  const results = searchProperties(filters);
+  return { filters: filters, results: results };
+}
+
+/* ============================== ADD PROPERTY ============================== */
+
+function checkRefNoAvailable(refNo) {
+  refNo = s_(refNo).toUpperCase();
+  if (!refNo) return { available: false, reason: 'Ref No is required.' };
+  const rows = getAllDataRows_();
+  const exists = rows.some(function (r) { return s_(r.cells[COL.REF_NO - 1]).toUpperCase() === refNo; });
+  return { available: !exists, refNo: refNo };
+}
+
+function generateNextRefNo() {
+  const rows = getAllDataRows_();
+  let max = 0;
+  rows.forEach(function (r) {
+    const ref = s_(r.cells[COL.REF_NO - 1]);
+    const m = ref.match(/(\d+)$/);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (num > max) max = num;
+    }
+  });
+  return REF_PREFIX + (max + 1);
+}
+
+/* Now requires a valid session (any logged-in, non-Guest user) before
+   writing anything — previously any client could call this unauthenticated. */
+function saveProperty(sessionToken, formObj) {
+  requireLogin_(sessionToken);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const refNo = generateNextRefNo();
+
+    if (!formObj.name || !formObj.contact1 || !formObj.opportunityType || !formObj.propertyType || !formObj.city) {
+      throw new Error('Name of Contact, Contact No 1, Opportunity Type, Property Type and City are required.');
+    }
+
+    const doNotPublish = !!formObj.doNotPublish;
+    let requestedPlatforms = [];
+    if (!doNotPublish) {
+      requestedPlatforms = (formObj.requestedPlatforms || []).filter(function (p) { return SOCIAL_MEDIA_PLATFORMS.indexOf(p) !== -1; });
+      if (!requestedPlatforms.length) {
+        throw new Error('Select at least one platform to request publishing on.');
+      }
+    }
+
+    const row = new Array(TOTAL_COLS).fill('');
+    row[COL.REF_NO - 1] = refNo;
+    row[COL.TIMESTAMP - 1] = new Date();
+    row[COL.USER - 1] = formObj.user || '';
+    row[COL.CONTACT_TYPE - 1] = formObj.contactType || '';
+    row[COL.NAME - 1] = formObj.name || '';
+    row[COL.CONTACT1 - 1] = s_(formObj.contact1 || '');
+    row[COL.CONTACT2 - 1] = s_(formObj.contact2 || '');
+    row[COL.EMAIL - 1] = formObj.email || '';
+    row[COL.OPP_TYPE - 1] = formObj.opportunityType || '';
+    row[COL.PROP_TYPE - 1] = formObj.propertyType || '';
+    row[COL.ADDRESS - 1] = formObj.address || '';
+    row[COL.CITY - 1] = formObj.city || '';
+
+    const amenitiesText = [formObj.amenities && formObj.amenities.length ? formObj.amenities.join(', ') : '', formObj.otherAmenitiesFreeText || '']
+      .filter(Boolean).join(', ');
+
+    if (formObj.propertyType === 'House' || formObj.propertyType === 'Estate') {
+      row[COL.PURPOSE - 1] = formObj.purpose || '';
+      row[COL.H_LAND_SIZE - 1] = formObj.landSize || '';
+      row[COL.H_BEDROOMS - 1] = formObj.bedRooms || '';
+      row[COL.H_BATHROOMS - 1] = formObj.bathRooms || '';
+      row[COL.H_FLOOR_AREA - 1] = formObj.floorArea || '';
+      row[COL.H_FLOORS - 1] = formObj.noOfFloors || '';
+      row[COL.H_PARKING - 1] = formObj.parkingSpaces || '';
+      row[COL.H_AGE - 1] = formObj.age || '';
+      row[COL.H_AMENITIES - 1] = amenitiesText;
+      row[COL.H_OTHER_INFO - 1] = formObj.comments || '';
+    } else if (formObj.propertyType === 'Land') {
+      row[COL.L_LAND_SIZE - 1] = formObj.landSize || '';
+      row[COL.L_SUITABLE - 1] = formObj.suitableFor || '';
+      row[COL.L_AMENITIES - 1] = amenitiesText;
+      row[COL.L_OTHER_INFO - 1] = formObj.comments || '';
+    } else if (formObj.propertyType === 'Apartment') {
+      row[COL.A_COMPLEX - 1] = formObj.apartmentComplex || '';
+      row[COL.A_FLOOR - 1] = formObj.floor || '';
+      row[COL.A_ROOMS - 1] = formObj.bedRooms || '';
+      row[COL.A_BATHROOMS - 1] = formObj.bathRooms || '';
+      row[COL.A_FLOOR_AREA - 1] = formObj.floorArea || '';
+      row[COL.A_PARKING - 1] = formObj.parkingSpaces || '';
+      row[COL.A_VIEW - 1] = formObj.view || '';
+      row[COL.A_AMENITIES - 1] = amenitiesText;
+      row[COL.A_COMMENTS - 1] = formObj.comments || '';
+    } else if (formObj.propertyType === 'Commercial Property') {
+      row[COL.C_PURPOSE - 1] = formObj.purpose || '';
+      row[COL.C_LAND_SIZE - 1] = formObj.sizeOfLandCommercial || formObj.landSize || '';
+      row[COL.C_BUILTUP - 1] = formObj.builtUpArea || formObj.floorArea || '';
+      row[COL.C_COMMENTS - 1] = formObj.comments || '';
+    }
+
+    row[COL.CURRENCY - 1] = formObj.currency || 'LKR';
+    row[COL.PRICE_PER_PERCH - 1] = formObj.pricePerPerch || '';
+    row[COL.PRICE_PER_SQFT - 1] = formObj.pricePerSqft || '';
+    row[COL.PRICE_TOTAL - 1] = formObj.priceTotal || '';
+    row[COL.BUDGET - 1] = formObj.budget || '';
+    row[COL.COMMENTS - 1] = formObj.comments || '';
+    row[COL.FURNISHED - 1] = formObj.furnished || '';
+    row[COL.STATUS - 1] = formObj.status || 'Active';
+
+    insertPropertyRow_(row);
+
+    // "Do Not Publish" entries are record-only — the property still
+    // gets saved and searchable like any other, but deliberately never
+    // enters the Activity Log / Social Media Queue approval workflow at
+    // all, since there's nothing to publish or approve.
+    if (!doNotPublish) {
+      // CHANGED: new-listing Activity Log entries are now routed exclusively
+      // to Keerthie via "Assigned To", using the same mechanism as Boost
+      // Requests — see ACTIVITY_LOG_NEW_LISTING_ADMIN and getStatusUpdateLog().
+      // Comment is left blank here on purpose — the property's full
+      // description already lives on the property record itself and is
+      // visible via the Ref No link, so repeating it in the Activity Log
+      // just clutters that view with a wall of text per row.
+      supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_TABLE, null,
+        [{
+          'Date & Time': new Date(), 'Ref No': refNo, 'User': formObj.user || '', 'Status': 'Publish',
+          'Comment': '', 'Requested Platforms': requestedPlatforms.join(', '),
+          'Assigned To': ACTIVITY_LOG_NEW_LISTING_ADMIN
+        }],
+        { 'Prefer': 'return=minimal' });
+    }
+
+    return { success: true, refNo: refNo };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* ============================== PROPERTY PHOTOS (Google Drive) ============================== */
+
+const PHOTOS_ROOT_FOLDER_ID = '1RJ1xTzHptaNdAfiZ3z8v1_CN_FfR6Th0';
+
+function getPhotosRootFolder_() {
+  return DriveApp.getFolderById(PHOTOS_ROOT_FOLDER_ID);
+}
+
+function getOrCreatePropertyPhotoFolder_(refNo) {
+  refNo = s_(refNo).toUpperCase();
+  const root = getPhotosRootFolder_();
+  const existing = root.getFoldersByName(refNo);
+  if (existing.hasNext()) return existing.next();
+  return root.createFolder(refNo);
+}
+
+function getOrCreateUserPhotosFolder_() {
+  const root = getPhotosRootFolder_();
+  const existing = root.getFoldersByName('User Photos');
+  if (existing.hasNext()) return existing.next();
+  return root.createFolder('User Photos');
+}
+
+/* Anyone can upload their own photo; only an Admin can upload/replace
+   someone else's. Identity now resolved from sessionToken, not asserted
+   by the client. */
+function uploadUserPhoto(sessionToken, targetName, file) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  if (session.name.toLowerCase() !== s_(targetName).toLowerCase() && session.role !== 'Admin') {
+    throw new Error('Only Admins (Keerthie, Sherden) can do this.');
+  }
+  const users = listUsers_();
+  const target = users.find(function (u) { return u.name.toLowerCase() === s_(targetName).toLowerCase(); });
+  if (!target) throw new Error('User not found.');
+
+  const folder = getOrCreateUserPhotosFolder_();
+  const bytes = Utilities.base64Decode(file.base64);
+  const blob = Utilities.newBlob(bytes, file.mimeType || 'image/jpeg', (targetName + '_' + new Date().getTime()));
+  const driveFile = folder.createFile(blob);
+  try { driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* sharing restricted by domain policy — file still saved */ }
+
+  supabaseRequest_('PATCH', SUPABASE_USERS_TABLE, ['id=eq.' + encodeURIComponent(target.id)],
+    { 'Photo': driveFile.getId() }, { 'Prefer': 'return=minimal' });
+
+  return { success: true, fileId: driveFile.getId(), thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + driveFile.getId() + '&sz=w200' };
+}
+
+/* Now requires a valid session. */
+function uploadPropertyPhotos(sessionToken, refNo, files) {
+  requireLogin_(sessionToken);
+  if (!files || !files.length) return { count: 0 };
+  const folder = getOrCreatePropertyPhotoFolder_(refNo);
+  files.forEach(function (f) {
+    const bytes = Utilities.base64Decode(f.base64);
+    const blob = Utilities.newBlob(bytes, f.mimeType || 'image/jpeg', f.name || 'photo.jpg');
+    const file = folder.createFile(blob);
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { /* sharing restricted by domain policy — file still saved */ }
+  });
+  return { count: files.length, folderUrl: folder.getUrl() };
+}
+
+function getPropertyPhotos(refNo) {
+  refNo = s_(refNo).toUpperCase();
+  const root = getPhotosRootFolder_();
+  const existing = root.getFoldersByName(refNo);
+  if (!existing.hasNext()) return [];
+  const folder = existing.next();
+  const files = folder.getFiles();
+  const photos = [];
+  while (files.hasNext()) {
+    const file = files.next();
+    photos.push({
+      name: file.getName(),
+      url: file.getUrl(),
+      thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w400'
+    });
+  }
+  return photos;
+}
+
+function getPropertyPhotosForPdf(refNo, maxCount) {
+  refNo = s_(refNo).toUpperCase();
+  maxCount = maxCount || 6;
+  const root = getPhotosRootFolder_();
+  const existing = root.getFoldersByName(refNo);
+  if (!existing.hasNext()) return [];
+  const folder = existing.next();
+  const files = folder.getFiles();
+  const results = [];
+  while (files.hasNext() && results.length < maxCount) {
+    const file = files.next();
+    const mimeType = file.getMimeType();
+    if (mimeType.indexOf('image/') !== 0) continue;
+    const blob = file.getBlob();
+    results.push({
+      name: file.getName(),
+      mimeType: mimeType,
+      base64: Utilities.base64Encode(blob.getBytes())
+    });
+  }
+  return results;
+}
+
+/* ============================== INQUIRIES ============================== */
+
+function logInquiry(sessionToken, obj) {
+  const currentUser = requireLogin_(sessionToken);
+  if (!obj.refNo || !obj.status) {
+    throw new Error('Property Ref No and Status are required.');
+  }
+  const sh = getInquiriesSheet_();
+  sh.appendRow([new Date(), s_(obj.refNo).toUpperCase(), obj.inquirerName || '', obj.inquirerContact || '', obj.inquirerEmail || '', obj.status, currentUser, obj.notes || '']);
+  return { success: true };
+}
+
+function getInquiries(filters) {
+  filters = filters || {};
+  const sh = getInquiriesSheet_();
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sh.getRange(2, 1, lastRow - 1, 8).getValues();
+  let results = values.map(function (r) {
+    return {
+      timestamp: r[0] ? new Date(r[0]).toISOString() : '',
+      refNo: s_(r[1]),
+      inquirerName: s_(r[2]),
+      inquirerContact: s_(r[3]),
+      inquirerEmail: s_(r[4]),
+      status: s_(r[5]),
+      updatedBy: s_(r[6]),
+      notes: s_(r[7])
+    };
+  });
+  if (filters.status && filters.status !== 'All') {
+    results = results.filter(function (r) { return r.status === filters.status; });
+  }
+  if (filters.refNoContains) {
+    const kw = filters.refNoContains.toLowerCase();
+    results = results.filter(function (r) { return r.refNo.toLowerCase().indexOf(kw) !== -1; });
+  }
+  results.sort(function (a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+  return results;
+}
+
+function searchRefNos(query) {
+  query = (query || '').toLowerCase();
+  if (!query) return [];
+  const rows = getAllDataRows_();
+  const matches = [];
+  for (let i = 0; i < rows.length && matches.length < 20; i++) {
+    const ref = s_(rows[i].cells[COL.REF_NO - 1]);
+    if (ref.toLowerCase().indexOf(query) !== -1) {
+      matches.push({ refNo: ref, name: s_(rows[i].cells[COL.NAME - 1]), city: s_(rows[i].cells[COL.CITY - 1]) });
+    }
+  }
+  return matches;
+}
+
+/* Lightweight companion to searchRefNos() for live-as-you-type UI (e.g.
+   the Boost Request form). searchRefNos() pulls the ENTIRE properties
+   table via getAllDataRows_(), which is fine for a one-off lookup but far
+   too slow to fire on every keystroke. This queries Supabase directly
+   with a targeted, indexed filter and a small column selection instead. */
+function searchRefNosLight(sessionToken, query) {
+  requireLogin_(sessionToken);
+  query = s_(query);
+  if (!query) return [];
+  const rows = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+    encodeURIComponent('Ref No') + '=ilike.*' + encodeURIComponent(query) + '*',
+    'select=' + encodeURIComponent('Ref No,Name of Contact,City'),
+    'order=' + encodeURIComponent('Ref No') + '.asc',
+    'limit=8'
+  ]) || [];
+  return rows.map(function (r) {
+    return { refNo: s_(r['Ref No']), name: s_(r['Name of Contact']), city: s_(r['City']) };
+  });
+}
+
+/* ============================== PROPERTY DETAIL VIEW & PDF ============================== */
+
+function diagnoseActivityLogSpeed() {
+  const t0 = new Date().getTime();
+  const t1 = new Date().getTime();
+  console.log('start: ' + (t1 - t0) + 'ms');
+
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  const dtCol = encodeURIComponent('"Date & Time"');
+  const query = ['select=*', 'order=' + dtCol + '.desc', 'limit=2000',
+    dtCol + '=gte.' + encodeURIComponent(today + 'T00:00:00.000Z')];
+  const rows = supabaseRequest_('GET', SUPABASE_STATUS_UPDATE_TABLE, query);
+  const t2 = new Date().getTime();
+  console.log('"Status Update" fetch (' + (rows ? rows.length : 0) + ' row(s)): ' + (t2 - t1) + 'ms');
+
+  const queueRows = supabaseRequest_('GET', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['select=' + encodeURIComponent('Ref No,Completed Date')]);
+  const t3 = new Date().getTime();
+  console.log('"Social Media Queue" fetch (' + (queueRows ? queueRows.length : 0) + ' row(s)): ' + (t3 - t2) + 'ms');
+
+  console.log('TOTAL: ' + (t3 - t0) + 'ms');
+  return 'Done — check the log output above (View > Logs, or the Executions panel) for the breakdown.';
+}
+
+function getStatusUpdateLog(sessionToken, dateFrom, dateTo, statusFilter) {
+  const currentAdmin = requireAdmin_(sessionToken);
+  const dtCol = encodeURIComponent('"Date & Time"');
+  const query = ['select=*', 'order=' + dtCol + '.desc', 'limit=2000'];
+  if (dateFrom) query.push(dtCol + '=gte.' + encodeURIComponent(dateFrom + 'T00:00:00.000Z'));
+  if (dateTo) query.push(dtCol + '=lte.' + encodeURIComponent(dateTo + 'T23:59:59.999Z'));
+  if (statusFilter === 'Publish, Republish, Data Change & Boost') {
+    query.push('Status=in.(Publish,Republish,Data%20Change,Boost%20Request)');
+  } else if (statusFilter && statusFilter !== 'All') {
+    query.push('Status=eq.' + encodeURIComponent(statusFilter));
+  }
+
+  const results = supabaseRequestsParallel_([
+    { method: 'GET', table: SUPABASE_STATUS_UPDATE_TABLE, query: query },
+    { method: 'GET', table: SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, query: ['select=' + encodeURIComponent('Ref No,Approved Date,Completed Date')] }
+  ]);
+  const rows = results[0];
+  const queueRows = results[1] || [];
+
+  const lastQueuedAt = {};
+  queueRows.forEach(function (q) {
+    const ref = s_(q['Ref No']).toUpperCase();
+    const approvedIso = isoDate_(q['Approved Date']);
+    if (!approvedIso) return;
+    if (!lastQueuedAt[ref] || approvedIso > lastQueuedAt[ref]) lastQueuedAt[ref] = approvedIso;
+  });
+
+  return (rows || [])
+    .map(function (r) {
+      return {
+        dateTime: isoDate_(r['Date & Time']),
+        refNo: s_(r['Ref No']),
+        user: s_(r['User']),
+        status: s_(r['Status']),
+        comment: s_(r['Comment']),
+        requestedPlatforms: parseRequestedPlatformsRaw_(r['Requested Platforms']),
+        boostCompleted: !!s_(r['Boost Completed']),
+        assignedTo: s_(r['Assigned To'])
+      };
+    })
+    .filter(function (r) {
+      if (r.status === 'Boost Request') {
+        // Each admin only ever sees requests routed to them — Sherden
+        // never sees Keerthie's Ikman bump-ups and vice versa.
+        return !r.boostCompleted && r.assignedTo.toLowerCase() === currentAdmin.toLowerCase();
+      }
+      // CHANGED: any row that carries an "Assigned To" (e.g. new
+      // listings / Republish, routed to Keerthie) is now only shown to
+      // the admin it's assigned to. Rows with no "Assigned To" (Drop,
+      // Lost, Hold, Closed, Data Change, etc.) remain visible to every
+      // Admin, same as before.
+      if (r.assignedTo && r.assignedTo.toLowerCase() !== currentAdmin.toLowerCase()) {
+        return false;
+      }
+      const lastQueued = lastQueuedAt[r.refNo.toUpperCase()];
+      return !lastQueued || r.dateTime > lastQueued;
+    });
+}
+
+/* ============================== BOOST REQUESTS (Ikman/Facebook ad pump-ups) ==============================
+   Any logged-in user (not just Admin) can request a property's existing
+   ad be "boosted"/pumped up on Ikman and/or Facebook, from a card on
+   their My Dashboard. This lands directly in the Activity Log as a
+   'Boost Request' entry — but routed to ONE SPECIFIC admin based on
+   platform (Ikman bump-ups go to Keerthie, Facebook boosts go to
+   Sherden), and each admin's Activity Log only shows requests assigned
+   to them (see getStatusUpdateLog above). This NEVER touches the Social
+   Media Queue at all, since a boost isn't a new listing/removal action,
+   just a paid visibility bump on an ad that's already live. Completion
+   is tracked via a dedicated "Boost Completed" column on the Status
+   Update row itself (the table has no id column, so Ref No + Date & Time
+   + Assigned To together are used to target the exact row — if both
+   platforms are requested at once, they share the same timestamp but
+   land in two separate rows distinguished by Assigned To). */
+
+const BOOST_PLATFORMS = ['Ikman', 'Facebook'];
+const BOOST_PLATFORM_ADMIN_ROUTING = { 'Ikman': 'Keerthie', 'Facebook': 'Sherden' };
+
+// New-listing (Publish) entries, and Republish entries (whether triggered
+// from My Properties or the Republish Queue), are always routed to
+// Keerthie only, using the same "Assigned To" column already used above
+// for Boost Requests. Other status changes (Drop/Lost/Hold/Closed/Data
+// Change) are left unassigned and stay visible to any Admin, as before.
+// See getStatusUpdateLog() for the matching read-side filter.
+const ACTIVITY_LOG_NEW_LISTING_ADMIN = 'Keerthie';
+
+function submitBoostRequest(sessionToken, refNo, platforms, comment) {
+  const currentUser = requireLogin_(sessionToken);
+  refNo = s_(refNo).toUpperCase();
+  if (!refNo) throw new Error('Ref No is required.');
+
+  const validPlatforms = (platforms || []).filter(function (p) { return BOOST_PLATFORMS.indexOf(p) !== -1; });
+  if (!validPlatforms.length) throw new Error('Select at least one platform (Ikman or Facebook) to boost.');
+
+  const existing = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+    encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo), 'select=' + encodeURIComponent('Ref No'), 'limit=1'
+  ]);
+  if (!existing || !existing.length) throw new Error('Property ' + refNo + ' not found — check the Ref No.');
+
+  const now = new Date();
+  // One row per platform, each routed to that platform's responsible
+  // admin, so Keerthie and Sherden can each independently see and
+  // complete only their own part of the request.
+  const rows = validPlatforms.map(function (plat) {
+    return {
+      'Date & Time': now, 'Ref No': refNo, 'User': currentUser, 'Status': 'Boost Request',
+      'Comment': s_(comment), 'Requested Platforms': plat,
+      'Assigned To': BOOST_PLATFORM_ADMIN_ROUTING[plat] || '', 'Boost Completed': null
+    };
+  });
+  supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_TABLE, null, rows, { 'Prefer': 'return=minimal' });
+
+  return { success: true, refNo: refNo, platforms: validPlatforms };
+}
+
+/* Admin-only — marks a specific Boost Request row done, so it drops out
+   of the Activity Log. Only the admin it's assigned to can complete it.
+   Does not write anything to the Social Media Queue table at all. */
+function completeBoostRequest(sessionToken, refNo, dateTime, assignedTo) {
+  const currentAdmin = requireAdmin_(sessionToken);
+  if (s_(assignedTo).toLowerCase() !== currentAdmin.toLowerCase()) {
+    throw new Error('This request is assigned to ' + assignedTo + '.');
+  }
+  refNo = s_(refNo).toUpperCase();
+  const dtCol = encodeURIComponent('"Date & Time"');
+  supabaseRequest_('PATCH', SUPABASE_STATUS_UPDATE_TABLE, [
+    encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo),
+    dtCol + '=eq.' + encodeURIComponent(dateTime),
+    'Assigned%20To=eq.' + encodeURIComponent(assignedTo)
+  ], { 'Boost Completed': new Date() }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function getPropertyDetails(refNo) {
+  refNo = s_(refNo).toUpperCase();
+  const results = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+    encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo), 'select=*', 'limit=1'
+  ]);
+  if (!results || !results.length) throw new Error('Property ' + refNo + ' not found.');
+  const obj = results[0];
+  const cells = PROPERTY_COLUMN_NAMES.map(function (colName) { return obj[colName]; });
+  return rowToObject_({ rowIndex: refNo, cells: cells });
+}
+
+function getRepublishQueue(sessionToken, agentFilter) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const isAdmin = session.role === 'Admin';
+  const effectiveAgent = isAdmin ? (agentFilter || 'All') : session.name;
+
+  const queueRows = supabaseRequest_('GET', SUPABASE_REPUBLISH_QUEUE_TABLE, ['select=*', 'order=id.asc']) || [];
+  const filteredQueue = queueRows
+    .filter(function (q) { return effectiveAgent === 'All' || s_(q['User Name']) === effectiveAgent; })
+    .filter(function (q) { return !s_(q['Status']); });
+  if (!filteredQueue.length) return [];
+
+  const propsByRef = getPropertiesByRefNos_(filteredQueue.map(function (q) { return q['Ref No']; }));
+  const now = new Date();
+
+  return filteredQueue.map(function (q) {
+    const refNo = s_(q['Ref No']).toUpperCase();
+    const p = propsByRef[refNo];
+    const daysLive = (p && p.timestamp) ? Math.floor((now - new Date(p.timestamp)) / 86400000) : null;
+    return {
+      refNo: refNo,
+      user: s_(q['User Name']),
+      city: p ? p.city : '',
+      propertyType: p ? p.propertyType : '',
+      opportunityType: p ? p.opportunityType : '',
+      currentStatus: p ? p.status : '',
+      daysLive: daysLive,
+      lastAction: s_(q['Status']),
+      lastComment: s_(q['Action']),
+      lastActionDate: isoDate_(q['Date'])
+    };
+  });
+}
+
+function getPendingRepublishCounts_() {
+  const rows = supabaseRequest_('GET', SUPABASE_REPUBLISH_QUEUE_TABLE, ['select=' + encodeURIComponent('User Name,Status')]) || [];
+  const counts = {};
+  rows.forEach(function (r) {
+    if (!s_(r['Status'])) {
+      const u = s_(r['User Name']) || '(no user assigned)';
+      counts[u] = (counts[u] || 0) + 1;
+    }
+  });
+  return counts;
+}
+
+function getMyPendingRepublishCount(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const counts = getPendingRepublishCounts_();
+  return counts[session.name] || 0;
+}
+
+const REPUBLISH_QUEUE_SUPER_USER = 'Sherden';
+
+function blockIfPendingRepublishItems_(actionVerb, currentUser) {
+  if (s_(currentUser).toLowerCase() === REPUBLISH_QUEUE_SUPER_USER.toLowerCase()) return;
+  const counts = getPendingRepublishCounts_();
+  const users = Object.keys(counts);
+  if (!users.length) return;
+  const summary = users.map(function (u) { return u + ' (' + counts[u] + ')'; }).join(', ');
+  throw new Error('Cannot ' + actionVerb + ' the queue — these users still have pending items they haven\'t actioned yet: ' + summary + '. Ask them to finish reviewing their queue first, then try again.');
+}
+
+function clearRepublishQueue(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  if (session.name.toLowerCase() !== REPUBLISH_QUEUE_SUPER_USER.toLowerCase()) {
+    throw new Error('Only ' + REPUBLISH_QUEUE_SUPER_USER + ' can clear the Republish Queue.');
+  }
+  touchSession_(sessionToken, session);
+  blockIfPendingRepublishItems_('clear', session.name);
+  supabaseRequest_('DELETE', SUPABASE_REPUBLISH_QUEUE_TABLE, ['id=gte.0']);
+  return { success: true };
+}
+
+function uploadRepublishQueueFile(sessionToken, base64Data, filename) {
+  const currentUser = requireAdmin_(sessionToken);
+  blockIfPendingRepublishItems_('replace', currentUser);
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, MimeType.MICROSOFT_EXCEL, filename || 'import.xlsx');
+
+  let tempFile;
+  try {
+    tempFile = Drive.Files.create(
+      { name: 'TEMP_REPUBLISH_IMPORT_' + new Date().getTime(), mimeType: MimeType.GOOGLE_SHEETS },
+      blob,
+      { convert: true }
+    );
+  } catch (err) {
+    throw new Error('Could not convert the uploaded file. Make sure the "Drive API" advanced service is enabled in this Apps Script project. Original error: ' + err.message);
+  }
+
+  try {
+    const tempSs = SpreadsheetApp.openById(tempFile.id);
+    const sheet = tempSs.getSheets()[0];
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return { count: 0 };
+
+    const rawRows = values.slice(1)
+      .map(function (r) { return { refNo: s_(r[0]).toUpperCase(), user: s_(r[1]) }; })
+      .filter(function (r) { return r.refNo; });
+
+    const byRef = {};
+    rawRows.forEach(function (r) { byRef[r.refNo] = r; });
+    const rows = Object.keys(byRef).map(function (k) { return byRef[k]; });
+    const duplicateCount = rawRows.length - rows.length;
+
+    supabaseRequest_('DELETE', SUPABASE_REPUBLISH_QUEUE_TABLE, ['id=gte.0']);
+    if (rows.length) {
+      const objs = rows.map(function (r) { return { 'Ref No': r.refNo, 'User Name': r.user, 'Status': '', 'Action': '', 'Date': '' }; });
+      supabaseRequest_('POST', SUPABASE_REPUBLISH_QUEUE_TABLE, null, objs, { 'Prefer': 'return=minimal' });
+    }
+    return { count: rows.length, duplicates: duplicateCount };
+  } finally {
+    Drive.Files.remove(tempFile.id);
+  }
+}
+
+/* ============================== SOCIAL MEDIA QUEUE ============================== */
+
+const SOCIAL_MEDIA_APPROVAL_ACTIONS = ['Publish', 'Republish', 'Drop', 'Lost', 'Hold', 'Closed', 'Data Change'];
+
+function parseRequestedPlatforms_(raw) {
+  raw = s_(raw);
+  if (!raw) return SOCIAL_MEDIA_PLATFORMS.slice();
+  const list = raw.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return SOCIAL_MEDIA_PLATFORMS.indexOf(s) !== -1; });
+  return list.length ? list : SOCIAL_MEDIA_PLATFORMS.slice();
+}
+
+function parseRequestedPlatformsRaw_(raw) {
+  raw = s_(raw);
+  if (!raw) return [];
+  return raw.split(',').map(function (s) { return s.trim(); }).filter(function (s) { return SOCIAL_MEDIA_PLATFORMS.indexOf(s) !== -1; });
+}
+
+function getSocialMediaQueue(sessionToken, filters) {
+  requireSocialMediaQueueAccess_(sessionToken);
+  filters = filters || {};
+  const rows = supabaseRequest_('GET', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['select=*', 'order=id.desc']) || [];
+  if (!rows.length) return [];
+  let activeRows = rows.filter(function (q) { return !s_(q['Completed Date']); });
+
+  // Filter by Approved Date range, if provided.
+  if (filters.dateFrom || filters.dateTo) {
+    const from = filters.dateFrom ? new Date(filters.dateFrom + 'T00:00:00.000Z') : null;
+    const to = filters.dateTo ? new Date(filters.dateTo + 'T23:59:59.999Z') : null;
+    activeRows = activeRows.filter(function (q) {
+      const approvedIso = isoDate_(q['Approved Date']);
+      if (!approvedIso) return false;
+      const d = new Date(approvedIso);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }
+
+  // Filter by Approved Action (Publish, Republish, Drop, Lost, Hold, Closed, Data Change), if provided.
+  if (filters.status && filters.status !== 'All') {
+    activeRows = activeRows.filter(function (q) { return s_(q['Approved Action']) === filters.status; });
+  }
+
+  if (!activeRows.length) return [];
+  const propsByRef = getPropertiesByRefNos_(activeRows.map(function (q) { return q['Ref No']; }));
+  return activeRows.map(function (q) {
+    const refNo = s_(q['Ref No']).toUpperCase();
+    const p = propsByRef[refNo];
+    const platforms = {};
+    SOCIAL_MEDIA_PLATFORMS.forEach(function (plat) { platforms[plat] = isoDate_(q[plat + ' Date']); });
+    return {
+      refNo: refNo,
+      approvedAction: s_(q['Approved Action']),
+      approvedBy: s_(q['Approved By']),
+      approvedDate: isoDate_(q['Approved Date']),
+      city: p ? p.city : '',
+      propertyType: p ? p.propertyType : '',
+      opportunityType: p ? p.opportunityType : '',
+      currentStatus: p ? p.status : '',
+      platforms: platforms,
+      comment: s_(q['Comment']),
+      requestedPlatforms: parseRequestedPlatforms_(q['Requested Platforms'])
+    };
+  });
+}
+
+function markSocialMediaEntryDone(sessionToken, refNo) {
+  requireSocialMediaQueueAccess_(sessionToken);
+  refNo = s_(refNo).toUpperCase();
+  const rows = supabaseRequest_('GET', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, [
+    encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo), 'select=*', 'limit=1'
+  ]);
+  if (!rows || !rows.length) throw new Error('Property ' + refNo + ' not found in the Social Media Queue.');
+  const row = rows[0];
+  const requestedPlatforms = parseRequestedPlatforms_(row['Requested Platforms']);
+  const stillPending = requestedPlatforms.filter(function (plat) { return !s_(row[plat + ' Date']); });
+  if (stillPending.length) {
+    throw new Error('Mark every requested platform published first — still pending: ' + stillPending.join(', ') + '.');
+  }
+  supabaseRequest_('PATCH', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, [encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo)],
+    { 'Completed Date': new Date() }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+/* ============================== MY DASHBOARD ============================== */
+
+function getMyDashboardStats(sessionToken, dateFrom, dateTo) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const currentUser = session.name;
+  const from = dateFrom ? new Date(dateFrom + 'T00:00:00.000Z') : null;
+  const to = dateTo ? new Date(dateTo + 'T23:59:59.999Z') : null;
+
+  const propRows = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+    'User=eq.' + encodeURIComponent(currentUser), 'select=' + encodeURIComponent('Ref No,Timestamp'), 'limit=5000'
+  ]) || [];
+  const propertiesAdded = propRows.filter(function (r) {
+    const ts = isoDate_(r['Timestamp']);
+    if (!ts) return false;
+    const d = new Date(ts);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  }).length;
+
+  const isTrackedAgent = INV_AGENTS.indexOf(currentUser) !== -1;
+  let salesValue = 0;
+  const currentYear = new Date().getFullYear();
+  const quarterly = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+  if (isTrackedAgent) {
+    getAllInvoiceRows_().forEach(function (r) {
+      if (r.agents[currentUser] === null || r.agents[currentUser] === undefined) return;
+      if (!r.invDate) return;
+      const amt = r.agents[currentUser] || 0;
+      if (r.invDate.getFullYear() === currentYear) {
+        const q = Math.floor(r.invDate.getMonth() / 3) + 1;
+        quarterly['Q' + q] += amt;
+      }
+      if (from && r.invDate < from) return;
+      if (to && r.invDate > to) return;
+      salesValue += amt;
+    });
+  }
+
+  let target = null, achievedThisYear = 0, remainingTarget = null, achievedPct = null, paceNeeded = null, monthsRemaining = null;
+  if (isTrackedAgent) {
+    achievedThisYear = quarterly.Q1 + quarterly.Q2 + quarterly.Q3 + quarterly.Q4;
+    const targetsForYear = INV_TARGETS_BY_YEAR[String(currentYear)];
+    if (targetsForYear && targetsForYear[currentUser] !== undefined) {
+      target = targetsForYear[currentUser];
+      remainingTarget = Math.max(target - achievedThisYear, 0);
+      achievedPct = target ? Math.min(100, Math.round(achievedThisYear / target * 100)) : 0;
+      const now = new Date();
+      monthsRemaining = 12 - now.getMonth();
+      paceNeeded = monthsRemaining > 0 ? Math.round(remainingTarget / monthsRemaining) : 0;
+    }
+  }
+
+  // Admins see the company-wide C7 brokering total instead of
+  // (necessarily small or zero) personal sales — summed from c7Booking
+  // specifically, which is C7's own brokering revenue on each invoice,
+  // not the full invoiceAmt (which can include amounts that aren't
+  // actually C7's, like owner proceeds or other parties' shares).
+  // Deliberately NOT gated by the selected from/to filter — this is
+  // always the full current calendar year, so switching the date
+  // filter to e.g. just this month never makes this figure look like
+  // "LKR 0"; that filter still applies to the Admin Overview cards
+  // below it, just not to this headline number. Car Park revenue is
+  // excluded from both this total and the quarterly breakdown (so the
+  // total always equals the sum of the four quarters shown).
+  let companySalesValue = null;
+  const companyQuarterly = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+  if (session.role === 'Admin') {
+    companySalesValue = 0;
+    getAllInvoiceRows_().forEach(function (r) {
+      if (!r.invDate) return;
+      if (r.invoiceFor === 'Car Park') return;
+      if (r.invDate.getFullYear() !== currentYear) return;
+      const q = Math.floor(r.invDate.getMonth() / 3) + 1;
+      companyQuarterly['Q' + q] += r.c7Booking;
+      companySalesValue += r.c7Booking;
+    });
+  }
+
+  return {
+    propertiesAdded: propertiesAdded, salesValue: salesValue, isTrackedAgent: isTrackedAgent,
+    isAdmin: session.role === 'Admin', companySalesValue: companySalesValue, companyQuarterly: companyQuarterly,
+    quarterly: quarterly, quarterlyYear: currentYear,
+    target: target, achievedThisYear: achievedThisYear, remainingTarget: remainingTarget,
+    achievedPct: achievedPct, paceNeeded: paceNeeded, monthsRemaining: monthsRemaining
+  };
+}
+
+// Regular ("User" role) accounts listed here may still view the Admin
+// Overview card on My Dashboard even though it's otherwise Admin-only.
+const ADMIN_OVERVIEW_ALLOWED_USERS = ['Theeban'];
+
+/* Resolves the session and enforces Admin Overview access (Admin, or a
+   named exception account). Returns the verified name. */
+function requireAdminOverviewAccess_(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  if (session.role === 'Admin') { touchSession_(sessionToken, session); return session.name; }
+  const allowed = ADMIN_OVERVIEW_ALLOWED_USERS.some(function (n) { return n.toLowerCase() === session.name.toLowerCase(); });
+  if (!allowed) throw new Error('You do not have access to the Admin Overview.');
+  touchSession_(sessionToken, session);
+  return session.name;
+}
+
+/* Admin-only operational overview for the given date range: how many
+   properties were added, how many the social media person actually
+   finished publishing, how many Ikman/Facebook boost requests are still
+   outstanding across the whole team (informational counts only — the
+   actionable, per-admin-filtered worklist is still Activity Log), and
+   how many properties were Dropped/Lost/Closed/Republished in that
+   window. Uses small, targeted queries (not getAllDataRows_) so this
+   stays fast regardless of how large the properties table grows. */
+function getAdminDashboardOverview(sessionToken, dateFrom, dateTo) {
+  requireAdminOverviewAccess_(sessionToken);
+  const fromIso = dateFrom ? (dateFrom + 'T00:00:00.000Z') : null;
+  const toIso = dateTo ? (dateTo + 'T23:59:59.999Z') : null;
+
+  const tsCol = encodeURIComponent('Timestamp');
+  const propsQuery = ['select=' + encodeURIComponent('Ref No,User')];
+  if (fromIso) propsQuery.push(tsCol + '=gte.' + encodeURIComponent(fromIso));
+  if (toIso) propsQuery.push(tsCol + '=lte.' + encodeURIComponent(toIso));
+
+  const cdCol = encodeURIComponent('Completed Date');
+  const smQuery = ['select=' + encodeURIComponent('Ref No')];
+  if (fromIso) smQuery.push(cdCol + '=gte.' + encodeURIComponent(fromIso));
+  if (toIso) smQuery.push(cdCol + '=lte.' + encodeURIComponent(toIso));
+
+  const dtCol = encodeURIComponent('"Date & Time"');
+  const suQuery = ['select=' + encodeURIComponent('Status'), 'Status=in.(Drop,Lost,Closed,Republish)'];
+  if (fromIso) suQuery.push(dtCol + '=gte.' + encodeURIComponent(fromIso));
+  if (toIso) suQuery.push(dtCol + '=lte.' + encodeURIComponent(toIso));
+
+  const boostQuery = ['select=' + encodeURIComponent('Requested Platforms,Boost Completed'), 'Status=eq.' + encodeURIComponent('Boost Request')];
+
+  // "Publish/Republish To Do" tracks the SOCIAL MEDIA team's own
+  // backlog — items already approved by an Admin (so they're sitting in
+  // the Social Media Queue) but not yet marked complete on all
+  // requested platforms. This is a different stage from admin approval:
+  // an item leaves the Activity Log the moment it's approved, then sits
+  // here until someone actually publishes it on Ikman/LPW/Facebook/etc.
+  // Deliberately not gated by the selected date range, same reasoning
+  // as the other backlog-style figures on this page — an unfinished
+  // item from last week is still unfinished today.
+  const smWorkQuery = ['select=' + encodeURIComponent('Approved Action,Completed Date'), 'Approved Action=in.(Publish,Republish)'];
+
+  const results = supabaseRequestsParallel_([
+    { method: 'GET', table: SUPABASE_PROPERTIES_TABLE, query: propsQuery },
+    { method: 'GET', table: SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, query: smQuery },
+    { method: 'GET', table: SUPABASE_STATUS_UPDATE_TABLE, query: suQuery },
+    { method: 'GET', table: SUPABASE_STATUS_UPDATE_TABLE, query: boostQuery },
+    { method: 'GET', table: SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, query: smWorkQuery }
+  ]);
+
+  const propsRows = results[0] || [];
+  const smRows = results[1] || [];
+  const suRows = results[2] || [];
+  const boostRows = results[3] || [];
+  const smWorkRows = results[4] || [];
+
+  const statusCounts = { Drop: 0, Lost: 0, Closed: 0, Republish: 0 };
+  suRows.forEach(function (r) {
+    const st = s_(r['Status']);
+    if (statusCounts.hasOwnProperty(st)) statusCounts[st]++;
+  });
+
+  let pendingIkman = 0, pendingFacebook = 0;
+  boostRows.forEach(function (r) {
+    if (s_(r['Boost Completed'])) return;
+    const plat = s_(r['Requested Platforms']);
+    if (plat === 'Ikman') pendingIkman++;
+    else if (plat === 'Facebook') pendingFacebook++;
+  });
+
+  // Group Properties Added (within the selected date range) by agent,
+  // for the "published by agent this month" breakdown on My Dashboard.
+  const publishedByAgentMap = {};
+  propsRows.forEach(function (r) {
+    const agent = s_(r['User']) || '(Unassigned)';
+    publishedByAgentMap[agent] = (publishedByAgentMap[agent] || 0) + 1;
+  });
+  const publishedByAgent = Object.keys(publishedByAgentMap)
+    .map(function (agent) { return { agent: agent, count: publishedByAgentMap[agent] }; })
+    .sort(function (a, b) { return b.count - a.count; });
+
+  let pendingPublishCount = 0, pendingRepublishCount = 0;
+  smWorkRows.forEach(function (r) {
+    if (s_(r['Completed Date'])) return; // already finished — not part of the backlog
+    const action = s_(r['Approved Action']);
+    if (action === 'Publish') pendingPublishCount++;
+    else if (action === 'Republish') pendingRepublishCount++;
+  });
+
+  return {
+    propertiesAdded: propsRows.length,
+    propertiesPublishedBySocialMedia: smRows.length,
+    droppedCount: statusCounts.Drop,
+    lostCount: statusCounts.Lost,
+    closedCount: statusCounts.Closed,
+    republishedCount: statusCounts.Republish,
+    pendingIkmanBumpUps: pendingIkman,
+    pendingFacebookBoosts: pendingFacebook,
+    publishedByAgent: publishedByAgent,
+    pendingPublishCount: pendingPublishCount,
+    pendingRepublishCount: pendingRepublishCount
+  };
+}
+
+function getMyMessages(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const currentUser = session.name;
+  const orValue = '(To.eq.' + currentUser + ',To.eq.All,From.eq.' + currentUser + ')';
+  const rows = supabaseRequest_('GET', SUPABASE_MESSAGES_TABLE, [
+    'or=' + encodeURIComponent(orValue), 'Resolved=is.false', 'select=*', 'order=id.desc', 'limit=500'
+  ]) || [];
+  return rows
+    .filter(function (r) {
+      const to = s_(r['To']);
+      const from = s_(r['From']);
+      return to === currentUser || to === 'All' || from === currentUser;
+    })
+    .map(function (r) {
+      return { id: r.id, from: s_(r['From']), to: s_(r['To']), message: s_(r['Message']), date: isoDate_(r['Date']) };
+    });
+}
+
+function sendMessage(sessionToken, to, message) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const currentUser = session.name;
+  message = s_(message);
+  to = s_(to);
+  if (!message) throw new Error('Message cannot be empty.');
+  if (!to) throw new Error('Please choose a recipient.');
+  if (session.role !== 'Admin') {
+    if (to === 'All') throw new Error('Only Admins can send a message to everyone.');
+    if (getUserRole_(to) !== 'Admin') throw new Error('You can only send messages to an Admin.');
+  }
+  supabaseRequest_('POST', SUPABASE_MESSAGES_TABLE, null,
+    [{ 'From': currentUser, 'To': to, 'Message': message, 'Date': new Date() }],
+    { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function resolveMessageAndReply(sessionToken, originalMessageId, replyMessage) {
+  const currentUser = requireLogin_(sessionToken);
+  replyMessage = s_(replyMessage);
+  if (!replyMessage) throw new Error('Reply cannot be empty.');
+  const rows = supabaseRequest_('GET', SUPABASE_MESSAGES_TABLE, ['id=eq.' + encodeURIComponent(originalMessageId), 'select=*', 'limit=1']);
+  if (!rows || !rows.length) throw new Error('Original message not found.');
+  const original = rows[0];
+  if (s_(original['To']) !== currentUser) throw new Error('Only the recipient of a message can reply and resolve it this way.');
+
+  supabaseRequest_('POST', SUPABASE_MESSAGES_TABLE, null,
+    [{ 'From': currentUser, 'To': s_(original['From']), 'Message': replyMessage, 'Date': new Date() }],
+    { 'Prefer': 'return=minimal' });
+  supabaseRequest_('PATCH', SUPABASE_MESSAGES_TABLE, ['id=eq.' + encodeURIComponent(originalMessageId)],
+    { 'Resolved': true }, { 'Prefer': 'return=minimal' });
+  return { success: true };
+}
+
+function deleteMessages(sessionToken, messageIds) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const currentUser = session.name;
+  const ids = (messageIds || []).map(function (id) { return parseInt(id, 10); }).filter(function (id) { return !isNaN(id); });
+  if (!ids.length) return { deleted: 0 };
+  const isAdminCaller = session.role === 'Admin';
+  const rows = supabaseRequest_('GET', SUPABASE_MESSAGES_TABLE, [
+    'id=in.(' + ids.join(',') + ')', 'select=' + encodeURIComponent('id,From,To')
+  ]) || [];
+  const allowedIds = rows
+    .filter(function (r) { return isAdminCaller || s_(r['From']) === currentUser || s_(r['To']) === currentUser; })
+    .map(function (r) { return r.id; });
+  if (!allowedIds.length) return { deleted: 0 };
+  supabaseRequest_('DELETE', SUPABASE_MESSAGES_TABLE, ['id=in.(' + allowedIds.join(',') + ')']);
+  return { deleted: allowedIds.length };
+}
+
+function uploadSocialMediaQueueFile(sessionToken, base64Data, filename) {
+  const currentUser = requireAdmin_(sessionToken);
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, MimeType.MICROSOFT_EXCEL, filename || 'import.xlsx');
+
+  let tempFile;
+  try {
+    tempFile = Drive.Files.create(
+      { name: 'TEMP_SOCIAL_MEDIA_IMPORT_' + new Date().getTime(), mimeType: MimeType.GOOGLE_SHEETS },
+      blob,
+      { convert: true }
+    );
+  } catch (err) {
+    throw new Error('Could not convert the uploaded file. Make sure the "Drive API" advanced service is enabled in this Apps Script project. Original error: ' + err.message);
+  }
+
+  try {
+    const tempSs = SpreadsheetApp.openById(tempFile.id);
+    const sheet = tempSs.getSheets()[0];
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return { approved: 0, errors: [] };
+
+    const rawRows = values.slice(1)
+      .map(function (r) { return { refNo: s_(r[0]).toUpperCase(), action: s_(r[1]) }; })
+      .filter(function (r) { return r.refNo; });
+
+    const errors = [];
+    let approved = 0;
+    const now = new Date();
+
+    rawRows.forEach(function (r) {
+      if (SOCIAL_MEDIA_APPROVAL_ACTIONS.indexOf(r.action) === -1) {
+        errors.push(r.refNo + ': "' + r.action + '" is not a valid action (must be ' + SOCIAL_MEDIA_APPROVAL_ACTIONS.join(', ') + ').');
+        return;
+      }
+      try {
+        updatePropertyStatus_internal_(r.refNo, r.action, currentUser, 'Approved for social media publishing');
+      } catch (err) {
+        errors.push(r.refNo + ': ' + err.message);
+        return;
+      }
+      const row = { 'Ref No': r.refNo, 'Approved Action': r.action, 'Approved By': currentUser, 'Approved Date': now, 'Completed Date': null };
+      SOCIAL_MEDIA_PLATFORMS.forEach(function (plat) { row[plat + ' Date'] = null; });
+      supabaseRequest_('POST', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['on_conflict=' + encodeURIComponent('Ref No')],
+        [row], { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+      approved++;
+    });
+
+    return { approved: approved, errors: errors };
+  } finally {
+    Drive.Files.remove(tempFile.id);
+  }
+}
+
+function approveForSocialMedia(sessionToken, refNo, newStatus, comment) {
+  const currentUser = requireAdmin_(sessionToken);
+  if (SOCIAL_MEDIA_APPROVAL_ACTIONS.indexOf(newStatus) === -1) {
+    throw new Error('"' + newStatus + '" is not a valid action for Social Media approval (must be ' + SOCIAL_MEDIA_APPROVAL_ACTIONS.join(', ') + ').');
+  }
+  const result = updatePropertyStatus_internal_(refNo, newStatus, currentUser, comment || 'Approved for social media publishing');
+  refNo = s_(refNo).toUpperCase();
+  const row = { 'Ref No': refNo, 'Approved Action': newStatus, 'Approved By': currentUser, 'Approved Date': new Date(), 'Completed Date': null };
+  SOCIAL_MEDIA_PLATFORMS.forEach(function (plat) { row[plat + ' Date'] = null; });
+  supabaseRequest_('POST', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['on_conflict=' + encodeURIComponent('Ref No')],
+    [row], { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+  return result;
+}
+
+function approveActivityLogEntryForSocialMedia(sessionToken, refNo, status) {
+  requireAdmin_(sessionToken);
+  const currentUser = resolveSession_(sessionToken).name;
+  if (SOCIAL_MEDIA_APPROVAL_ACTIONS.indexOf(status) === -1) {
+    throw new Error('"' + status + '" is not a valid action for Social Media approval (must be ' + SOCIAL_MEDIA_APPROVAL_ACTIONS.join(', ') + ').');
+  }
+  refNo = s_(refNo).toUpperCase();
+  const row = { 'Ref No': refNo, 'Approved Action': status, 'Approved By': currentUser, 'Approved Date': new Date(), 'Completed Date': null };
+  SOCIAL_MEDIA_PLATFORMS.forEach(function (plat) { row[plat + ' Date'] = null; });
+  supabaseRequest_('POST', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['on_conflict=' + encodeURIComponent('Ref No')],
+    [row], { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+  return { success: true };
+}
+
+function approveActivityLogEntryForSocialMediaPlatforms(sessionToken, refNo, status, platforms, comment) {
+  const currentUser = requireAdmin_(sessionToken);
+  if (SOCIAL_MEDIA_APPROVAL_ACTIONS.indexOf(status) === -1) {
+    throw new Error('"' + status + '" is not a valid action for Social Media approval (must be ' + SOCIAL_MEDIA_APPROVAL_ACTIONS.join(', ') + ').');
+  }
+  refNo = s_(refNo).toUpperCase();
+  const isDataChange = status === 'Data Change';
+  let validPlatforms;
+  if (isDataChange) {
+    const existing = supabaseRequest_('GET', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, [
+      encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo),
+      'select=' + encodeURIComponent('Requested Platforms,Completed Date'), 'limit=1'
+    ]);
+    const priorRow = existing && existing[0];
+    validPlatforms = (priorRow && s_(priorRow['Completed Date']))
+      ? parseRequestedPlatforms_(priorRow['Requested Platforms'])
+      : SOCIAL_MEDIA_PLATFORMS.slice();
+  } else {
+    validPlatforms = (platforms || []).filter(function (p) { return SOCIAL_MEDIA_PLATFORMS.indexOf(p) !== -1; });
+    if (!validPlatforms.length) {
+      throw new Error('Choose at least one platform to publish on.');
+    }
+  }
+  const now = new Date();
+  const row = {
+    'Ref No': refNo, 'Approved Action': status, 'Approved By': currentUser, 'Approved Date': now,
+    'Requested Platforms': validPlatforms.join(', '),
+    'Comment': s_(comment),
+    'Completed Date': null
+  };
+  SOCIAL_MEDIA_PLATFORMS.forEach(function (plat) { row[plat + ' Date'] = null; });
+
+  supabaseRequestsParallel_([
+    {
+      method: 'POST', table: SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE,
+      query: ['on_conflict=' + encodeURIComponent('Ref No')],
+      body: [row], extraHeaders: { 'Prefer': 'resolution=merge-duplicates,return=minimal' }
+    },
+    {
+      method: 'POST', table: SUPABASE_STATUS_UPDATE_TABLE, query: null,
+      body: [{
+        'Date & Time': now, 'Ref No': refNo, 'User': currentUser,
+        'Status': 'Social Media Requested',
+        'Comment': 'Requested on: ' + validPlatforms.join(', ')
+      }],
+      extraHeaders: { 'Prefer': 'return=minimal' }
+    }
+  ]);
+
+  return { success: true };
+}
+
+function clearSocialMediaQueue(sessionToken) {
+  requireAdmin_(sessionToken);
+  supabaseRequest_('DELETE', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['id=gte.0']);
+  return { success: true };
+}
+
+function markSocialMediaPlatformDone(sessionToken, refNo, platform) {
+  const currentUser = requireSocialMediaQueueAccess_(sessionToken);
+  if (SOCIAL_MEDIA_PLATFORMS.indexOf(platform) === -1) throw new Error('"' + platform + '" is not a valid platform.');
+  refNo = s_(refNo).toUpperCase();
+  const now = new Date();
+  const body = {};
+  body[platform + ' Date'] = now;
+
+  supabaseRequestsParallel_([
+    {
+      method: 'PATCH', table: SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE,
+      query: [encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo)],
+      body: body, extraHeaders: { 'Prefer': 'return=minimal' }
+    },
+    {
+      method: 'POST', table: SUPABASE_STATUS_UPDATE_TABLE, query: null,
+      body: [{ 'Date & Time': now, 'Ref No': refNo, 'User': currentUser, 'Status': 'Published on ' + platform, 'Comment': '' }],
+      extraHeaders: { 'Prefer': 'return=minimal' }
+    }
+  ]);
+
+  return { success: true };
+}
+
+function submitRepublishQueueAction(sessionToken, refNo, newStatus, comment, platforms) {
+  const currentUser = requireLogin_(sessionToken);
+  if (STATUS_CHANGE_OPTIONS.indexOf(newStatus) === -1) {
+    throw new Error('"' + newStatus + '" is not a valid action.');
+  }
+  refNo = s_(refNo).toUpperCase();
+  const validPlatforms = (platforms || []).filter(function (p) { return SOCIAL_MEDIA_PLATFORMS.indexOf(p) !== -1; });
+
+  const logComment = s_(comment) ? (comment + ' (Republish Queue — advertisement tracking only, property record unchanged)') : '';
+  const logEntry = { 'Date & Time': new Date(), 'Ref No': refNo, 'User': currentUser, 'Status': newStatus, 'Comment': logComment };
+  if (validPlatforms.length) logEntry['Requested Platforms'] = validPlatforms.join(', ');
+  // CHANGED: Republish actions triggered from the Republish Queue are
+  // routed to Keerthie only, same as Republish from My Properties and
+  // new-listing Publish entries above.
+  if (newStatus === 'Republish') logEntry['Assigned To'] = ACTIVITY_LOG_NEW_LISTING_ADMIN;
+  supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_TABLE, null, [logEntry], { 'Prefer': 'return=minimal' });
+
+  supabaseRequest_('PATCH', SUPABASE_REPUBLISH_QUEUE_TABLE, [encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo)],
+    { 'Status': newStatus, 'Action': comment || '', 'Date': new Date() }, { 'Prefer': 'return=minimal' });
+
+  pushRemovalToSocialMediaQueue_(refNo, newStatus, currentUser);
+
+  return { success: true, refNo: refNo };
+}
+
+const STATUS_CHANGE_OPTIONS = ['Publish', 'Republish', 'Drop', 'Lost', 'Hold', 'New Ad Published', 'Closed', 'Data Change', 'Obsolete', 'Duplicate'];
+
+/* ============================== ACTIVITY LOG ARCHIVING ============================== */
+
+const SUPABASE_STATUS_UPDATE_ARCHIVE_TABLE = 'Status Update Archive';
+const ARCHIVE_CUTOFF_DAYS = 90;
+
+function archiveOldActivityLog() {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ARCHIVE_CUTOFF_DAYS);
+  const dtCol = encodeURIComponent('"Date & Time"');
+
+  const oldRows = supabaseRequest_('GET', SUPABASE_STATUS_UPDATE_TABLE, [
+    'select=*', dtCol + '=lt.' + encodeURIComponent(cutoff.toISOString()), 'limit=5000'
+  ]) || [];
+  if (!oldRows.length) return 'Nothing older than ' + ARCHIVE_CUTOFF_DAYS + ' days to archive.';
+
+  supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_ARCHIVE_TABLE, null, oldRows, { 'Prefer': 'return=minimal' });
+
+  const ids = oldRows.map(function (r) { return r.id; }).filter(function (id) { return id !== undefined && id !== null; });
+  if (ids.length) {
+    supabaseRequest_('DELETE', SUPABASE_STATUS_UPDATE_TABLE, ['id=in.(' + ids.join(',') + ')']);
+  }
+
+  return 'Archived ' + oldRows.length + ' row(s) older than ' + ARCHIVE_CUTOFF_DAYS + ' days into "' + SUPABASE_STATUS_UPDATE_ARCHIVE_TABLE + '". Run again if there were more than 5000 to catch up on.';
+}
+
+function fixStaleDataChangeStatuses() {
+  const rows = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+    encodeURIComponent('Status') + '=eq.' + encodeURIComponent('Data Change'), 'select=' + encodeURIComponent('Ref No')
+  ]) || [];
+  if (!rows.length) return 'Nothing to fix — no properties currently have Status "Data Change".';
+  rows.forEach(function (r) {
+    updatePropertyField_(s_(r['Ref No']), 'Status', 'Active');
+  });
+  return 'Fixed ' + rows.length + ' propert' + (rows.length === 1 ? 'y' : 'ies') + ': ' + rows.map(function (r) { return s_(r['Ref No']); }).join(', ');
+}
+
+function getStatusUpdateSheet_() {
+  const ss = openSpreadsheet_();
+  let sh = ss.getSheetByName(STATUS_UPDATE_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(STATUS_UPDATE_SHEET_NAME);
+    sh.appendRow(['Date & Time', 'Ref No', 'User', 'Status', 'Comment']);
+    sh.setFrozenRows(1);
+  } else {
+    const lastCol = Math.max(sh.getLastColumn(), 1);
+    const headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return s_(h).toLowerCase(); });
+    if (headers.indexOf('comment') === -1) {
+      sh.getRange(1, lastCol + 1).setValue('Comment');
+    }
+  }
+  return sh;
+}
+
+/* Public entry point used by the client — resolves the session, then
+   delegates to the internal implementation so admin-approval helpers
+   above (which already have a verified `currentUser`) can call the same
+   logic without re-resolving a session token. */
+function updatePropertyStatus(sessionToken, refNo, newStatus, comment) {
+  const currentUser = requireLogin_(sessionToken);
+  return updatePropertyStatus_internal_(refNo, newStatus, currentUser, comment);
+}
+
+const REMOVAL_ACTIONS = ['Drop', 'Lost', 'Hold', 'Closed'];
+
+/* Pushes a property into the Social Media Queue as a removal task whenever
+   it's marked Drop/Lost/Hold/Closed, so whoever manages the listings on
+   Ikman/LPW/Facebook/Instagram knows to take the ad down. Shared by
+   both updatePropertyStatus_internal_ (status changes from My Properties)
+   and submitRepublishQueueAction (status changes from the Republish Queue)
+   so marking something Lost/Drop/Hold/Closed always triggers this,
+   regardless of which screen the change was made from. */
+function pushRemovalToSocialMediaQueue_(refNo, newStatus, currentUser) {
+  if (REMOVAL_ACTIONS.indexOf(newStatus) === -1) return;
+  const now = new Date();
+
+  // Carry forward the platforms this property was actually requested/
+  // published on previously, so a removal only flags the platforms the
+  // ad is actually live on (e.g. only Ikman & LPW, not Facebook and
+  // Instagram too if it was never posted there). Falls back to blank
+  // only if there's no prior queue row at all — parseRequestedPlatforms_
+  // already treats a blank value as "all platforms" downstream, which is
+  // a reasonable default only for a property with no publishing history.
+  const existing = supabaseRequest_('GET', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, [
+    encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo),
+    'select=' + encodeURIComponent('Requested Platforms'), 'limit=1'
+  ]);
+  const priorRow = existing && existing[0];
+  const requestedPlatforms = priorRow ? s_(priorRow['Requested Platforms']) : '';
+
+  // Comment is still explicitly cleared (not carried forward) so a
+  // removal action never inherits a stale note from an earlier, unrelated
+  // approval on this same property (e.g. a past price-update Publish).
+  const queueRow = {
+    'Ref No': refNo, 'Approved Action': newStatus, 'Approved By': currentUser || '',
+    'Approved Date': now, 'Completed Date': null,
+    'Comment': '', 'Requested Platforms': requestedPlatforms
+  };
+  SOCIAL_MEDIA_PLATFORMS.forEach(function (plat) { queueRow[plat + ' Date'] = null; });
+  supabaseRequest_('POST', SUPABASE_SOCIAL_MEDIA_QUEUE_TABLE, ['on_conflict=' + encodeURIComponent('Ref No')],
+    [queueRow], { 'Prefer': 'resolution=merge-duplicates,return=minimal' });
+}
+
+function updatePropertyStatus_internal_(refNo, newStatus, currentUser, comment) {
+  if (STATUS_CHANGE_OPTIONS.indexOf(newStatus) === -1) {
+    throw new Error('"' + newStatus + '" is not a valid status change option.');
+  }
+  refNo = s_(refNo).toUpperCase();
+
+  const results = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+    encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo), 'select=' + encodeURIComponent('Ref No,User,Status'), 'limit=1'
+  ]);
+  if (!results || !results.length) throw new Error('Property ' + refNo + ' not found.');
+  const ownerName = s_(results[0]['User']);
+  const currentStatus = s_(results[0]['Status']) || 'Active';
+
+  if (ownerName.toLowerCase() !== s_(currentUser).toLowerCase() && getUserRole_(currentUser) !== 'Admin') {
+    throw new Error('Only ' + ownerName + ' (or an Admin) can change this property\'s status.');
+  }
+
+  const REACTIVATING_ACTIONS = ['Publish', 'Republish', 'New Ad Published'];
+  let sheetStatus;
+  if (newStatus === 'Data Change') {
+    sheetStatus = currentStatus;
+  } else {
+    sheetStatus = REACTIVATING_ACTIONS.indexOf(newStatus) !== -1 ? 'Active' : newStatus;
+    updatePropertyField_(refNo, 'Status', sheetStatus);
+  }
+
+  // CHANGED: Republish and Data Change entries created here (status
+  // change from My Properties) are routed to Keerthie only, same as
+  // new-listing Publish entries and Republish from the Republish Queue.
+  const logEntry = {
+    'Date & Time': new Date(), 'Ref No': refNo, 'User': currentUser || '',
+    'Status': newStatus, 'Comment': comment || ''
+  };
+  if (newStatus === 'Republish' || newStatus === 'Data Change') logEntry['Assigned To'] = ACTIVITY_LOG_NEW_LISTING_ADMIN;
+  supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_TABLE, null, [logEntry], { 'Prefer': 'return=minimal' });
+
+  pushRemovalToSocialMediaQueue_(refNo, newStatus, currentUser);
+
+  return { success: true, refNo: refNo, status: sheetStatus };
+}
+
+/* Admin-only, drives the data change directly instead of via Supabase UI. */
+function adminUpdatePropertyFields(sessionToken, refNo, fields) {
+  const currentUser = requireAdmin_(sessionToken);
+  refNo = s_(refNo).toUpperCase();
+  fields = fields || {};
+
+  let propertyType = s_(fields.propertyType);
+  if (!propertyType) {
+    const existing = supabaseRequest_('GET', SUPABASE_PROPERTIES_TABLE, [
+      encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo), 'select=' + encodeURIComponent('Property Type'), 'limit=1'
+    ]);
+    if (!existing || !existing.length) throw new Error('Property ' + refNo + ' not found.');
+    propertyType = s_(existing[0]['Property Type']);
+  }
+
+  const body = {};
+  const changes = [];
+  function setIfProvided(key, colName, label) {
+    if (!colName) return;
+    const val = fields[key];
+    if (val === undefined || val === null || val === '') return;
+    body[colName] = val;
+    changes.push(label + ': ' + val);
+  }
+
+  setIfProvided('opportunityType', 'Opportunity Type', 'Opportunity Type');
+  setIfProvided('propertyType', 'Property Type', 'Property Type');
+  setIfProvided('address', 'Address', 'Address');
+  setIfProvided('city', 'City', 'City');
+  setIfProvided('priceTotal', 'Price Total', 'Price Total');
+  setIfProvided('pricePerPerch', 'Price per Perch', 'Price per Perch');
+  setIfProvided('furnished', 'Furnished', 'Furnished');
+  setIfProvided('contact1', 'Contact No 1', 'Contact No 1');
+  setIfProvided('user', 'User', 'Agent');
+  setIfProvided('apartmentComplex', 'Apartment Complex', 'Apartment Complex');
+  setIfProvided('bedRooms', bedRoomsColumnFor_(propertyType), 'Bed Rooms');
+  setIfProvided('bathRooms', bathRoomsColumnFor_(propertyType), 'Bath Rooms');
+  setIfProvided('floorArea', floorAreaColumnFor_(propertyType), 'Floor Area');
+  setIfProvided('landSize', landSizeColumnFor_(propertyType), 'Land Size');
+  setIfProvided('floor', 'Floor', 'Floor');
+
+  // "Other Information" as shown to the user is actually assembled by
+  // joining up to 5 different source columns depending on property type
+  // (see rowToObject_'s otherInfo logic) — House/Land/Apartment/
+  // Commercial each historically wrote to a different one, plus the
+  // generic "Comments" column used across all types. To avoid an edit
+  // here creating duplicate/stale text (the old column's text still
+  // showing alongside the newly-edited text), an edit consolidates
+  // everything into "Comments" going forward and clears the other four,
+  // so there's a single, unambiguous source of truth after any edit.
+  if (fields.comments !== undefined) {
+    body['Comments'] = fields.comments;
+    body['Other information'] = null;
+    body['Other information_1'] = null;
+    body['Comments_1'] = null;
+    body['Comments_2'] = null;
+    changes.push('Other Information updated');
+  }
+
+  if (!Object.keys(body).length) return { success: true, refNo: refNo, changed: false };
+
+  supabaseRequest_('PATCH', SUPABASE_PROPERTIES_TABLE, [encodeURIComponent('Ref No') + '=eq.' + encodeURIComponent(refNo)], body, { 'Prefer': 'return=minimal' });
+
+  supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_TABLE, null,
+    [{ 'Date & Time': new Date(), 'Ref No': refNo, 'User': currentUser, 'Status': 'Admin Edit', 'Comment': changes.join('; ') }],
+    { 'Prefer': 'return=minimal' });
+
+  return { success: true, refNo: refNo, changed: true };
+}
+
+function generatePropertyPdf(refNo) {
+  const p = getPropertyDetails(refNo);
+  const doc = DocumentApp.create('TEMP_PROPERTY_PDF_' + p.refNo + '_' + new Date().getTime());
+  const body = doc.getBody();
+  body.appendParagraph(p.refNo + ' — ' + p.propertyType + ' (' + p.opportunityType + ')').setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  body.appendParagraph('Status: ' + p.status);
+  body.appendHorizontalRule();
+
+  function row(label, value) {
+    if (value === null || value === undefined || value === '') return;
+    body.appendParagraph(label + ': ' + value);
+  }
+
+  row('Address', p.address);
+  row('City', p.city);
+  row('Purpose', p.purpose);
+  row('Bed Rooms', p.bedRooms);
+  row('Bath Rooms', p.bathRooms);
+  row('Floor Area / Built-up (sqft)', p.floorArea);
+  row('Land Size (Perch)', p.landSize);
+  row('Apartment Complex', p.apartmentComplex);
+  row('Floor', p.floor);
+  row('View', p.view);
+  row('Suitable For', p.suitableFor);
+  row('Amenities', p.amenities);
+  row('Other Information', p.otherInfo);
+  body.appendHorizontalRule();
+  row('Currency', p.currency);
+  row('Price per Perch', p.pricePerPerch);
+  row('Price per Sqft', p.pricePerSqft);
+  row('Price Total', p.priceTotal);
+  row('Budget', p.budget);
+  row('Furnished', p.furnished);
+  body.appendHorizontalRule();
+  row('Email', p.email);
+  row('Type of Contact', p.contactType);
+  body.appendHorizontalRule();
+  row('Agent (User)', p.user);
+  row('Entered At', p.timestamp ? new Date(p.timestamp).toLocaleString() : '');
+
+  doc.saveAndClose();
+  const file = DriveApp.getFileById(doc.getId());
+  const pdfBlob = file.getAs(MimeType.PDF);
+  const base64 = Utilities.base64Encode(pdfBlob.getBytes());
+  file.setTrashed(true);
+  return { base64: base64, filename: p.refNo + '.pdf' };
+}
+
+/* ============================== BULK UPLOAD ============================== */
+
+function bulkImportRows(sessionToken, pastedText, dryRun) {
+  const currentUser = requireAdmin_(sessionToken);
+  if (!pastedText || !pastedText.trim()) throw new Error('No rows to import.');
+  const lines = pastedText.split(/\r?\n/).filter(function (l) { return l.trim().length > 0; });
+  let dataLines = lines;
+  if (lines.length && lines[0].toLowerCase().indexOf('ref no') !== -1 && lines[0].toLowerCase().indexOf('timestamp') !== -1) {
+    dataLines = lines.slice(1);
+  }
+
+  const existing = getAllDataRows_();
+  const refToRow = {};
+  existing.forEach(function (r) { refToRow[s_(r.cells[COL.REF_NO - 1]).toUpperCase()] = r.rowIndex; });
+
+  let updated = 0, added = 0, skipped = 0;
+  const allRows = [];
+  const logEntries = [];
+
+  dataLines.forEach(function (line) {
+    const cells = line.split('\t');
+    if (!cells[0] || !s_(cells[0])) { skipped++; return; }
+    const refNo = s_(cells[0]).toUpperCase();
+    const padded = new Array(TOTAL_COLS).fill('');
+    for (let i = 0; i < TOTAL_COLS; i++) padded[i] = i < cells.length ? cells[i] : '';
+    padded[0] = refNo;
+    if (!padded[COL.TIMESTAMP - 1]) padded[COL.TIMESTAMP - 1] = new Date().toISOString();
+    padded[COL.CONTACT1 - 1] = s_(padded[COL.CONTACT1 - 1]);
+    padded[COL.CONTACT2 - 1] = s_(padded[COL.CONTACT2 - 1]);
+
+    allRows.push(padded);
+    const isUpdate = !!refToRow[refNo];
+    if (isUpdate) updated++; else added++;
+    logEntries.push({
+      'Date & Time': new Date(), 'Ref No': refNo, 'User': currentUser,
+      'Status': isUpdate ? 'Data Change' : 'Publish', 'Comment': 'Bulk import'
+    });
+  });
+
+  if (!dryRun && allRows.length) {
+    upsertPropertyRows_(allRows);
+    supabaseRequest_('POST', SUPABASE_STATUS_UPDATE_TABLE, null, logEntries, { 'Prefer': 'return=minimal' });
+  }
+
+  return { updated: updated, added: added, skipped: skipped, dryRun: !!dryRun };
+}
+
+function bulkImportFile(sessionToken, base64Data, filename, dryRun) {
+  requireAdmin_(sessionToken);
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, MimeType.MICROSOFT_EXCEL, filename || 'import.xlsx');
+
+  let tempFile;
+  try {
+    tempFile = Drive.Files.create(
+      { name: 'TEMP_IMPORT_' + new Date().getTime(), mimeType: MimeType.GOOGLE_SHEETS },
+      blob,
+      { convert: true }
+    );
+  } catch (err) {
+    throw new Error('Could not convert the uploaded file. Make sure the "Drive API" advanced service is enabled in this Apps Script project. Original error: ' + err.message);
+  }
+
+  try {
+    const tempSs = SpreadsheetApp.openById(tempFile.id);
+    let sheet = tempSs.getSheetByName(SHEET_NAME) || tempSs.getSheets()[0];
+    const values = sheet.getDataRange().getValues();
+    if (!values.length) return { updated: 0, added: 0, skipped: 0, dryRun: !!dryRun };
+
+    const tsv = values.map(function (row) { return row.join('\t'); }).join('\n');
+    return bulkImportRows(sessionToken, tsv, dryRun);
+  } finally {
+    Drive.Files.remove(tempFile.id);
+  }
+}
+
+/* ============================== INVOICE & COMMISSION DASHBOARD ============================== */
+
+function n0_(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const num = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^0-9.\-]/g, ''));
+  return isNaN(num) ? 0 : num;
+}
+
+function classifyInvoice_(details) {
+  const d = (details || '').toLowerCase();
+  if (d.indexOf('sale') !== -1) return 'Sale';
+  if (d.indexOf('rent') !== -1) return 'Rental';
+  return 'Other';
+}
+
+const HEADLINE_CATEGORIES = ['Sale', 'Rental', 'Management Fee', 'Car Park', 'Others'];
+function classifyHeadline_(category, invoiceFor) {
+  if (category === 'Sale' || category === 'Rental') return category;
+  if (invoiceFor === 'Car Park') return 'Car Park';
+  if (invoiceFor === 'C7 Management') return 'Management Fee';
+  return 'Others';
+}
+
+let _invRowsCache = null;
+let _invHeaderMapCache = {};
+function getInvoiceHeaderMap_(sh) {
+  if (_invHeaderMapCache[sh.getSheetId()]) return _invHeaderMapCache[sh.getSheetId()];
+  const result = getUsersHeaderMap_(sh);
+  _invHeaderMapCache[sh.getSheetId()] = result;
+  return result;
+}
+
+function getAllInvoiceRows_() {
+  if (_invRowsCache) return _invRowsCache;
+  const ss = SpreadsheetApp.openById(INVOICE_SPREADSHEET_ID);
+  const rows = [];
+  INV_YEAR_SHEETS.forEach(function (yearName) {
+    const sh = ss.getSheetByName(yearName);
+    if (!sh) return;
+    const lastRow = sh.getLastRow();
+    if (lastRow < 2) return;
+    const { map, lastCol } = getInvoiceHeaderMap_(sh);
+    const detailsCol = map['details'];
+    const invoiceNoCol = map['invoiceno'];
+    const customerCol = map['customername'];
+    const invDateCol = map['invdate'] || map['duedate'];
+    const invoiceAmtCol = map['invoiceamt'];
+    const paymentAmtCol = map['paymentamt'];
+    const toBeReceivedCol = map['tobereceived'];
+    const invoiceForCol = map['incoicefor'] || map['invoicefor'];
+    const c7BookingCol = map['cbooking'] || map['c7booking'];
+    if (!invoiceNoCol || !detailsCol) return;
+    const agentTextCol = map['agent'];
+
+    const values = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    values.forEach(function (r) {
+      const invoiceNo = s_(r[invoiceNoCol - 1]);
+      if (!invoiceNo) return;
+      const invDate = invDateCol ? r[invDateCol - 1] : null;
+      const agents = {};
+      const invAmtForRow = invoiceAmtCol ? n0_(r[invoiceAmtCol - 1]) : 0;
+      INV_AGENTS.forEach(function (a) {
+        const col = map[a.toLowerCase()];
+        if (col) {
+          agents[a] = n0_(r[col - 1]) || null;
+        } else if (agentTextCol) {
+          const agentText = s_(r[agentTextCol - 1]).toLowerCase();
+          agents[a] = agentText.indexOf(a.toLowerCase()) !== -1 ? invAmtForRow : null;
+        } else {
+          agents[a] = null;
+        }
+      });
+      rows.push({
+        year: yearName,
+        invDate: invDate instanceof Date ? invDate : null,
+        details: s_(r[detailsCol - 1]),
+        customerName: customerCol ? s_(r[customerCol - 1]) : '',
+        invoiceNo: invoiceNo,
+        invoiceAmt: invoiceAmtCol ? n0_(r[invoiceAmtCol - 1]) : 0,
+        paymentAmt: paymentAmtCol ? n0_(r[paymentAmtCol - 1]) : 0,
+        toBeReceived: toBeReceivedCol ? n0_(r[toBeReceivedCol - 1]) : 0,
+        invoiceFor: invoiceForCol ? s_(r[invoiceForCol - 1]) : '',
+        c7Booking: c7BookingCol ? n0_(r[c7BookingCol - 1]) : 0,
+        agents: agents,
+        category: classifyInvoice_(r[detailsCol - 1])
+      });
+    });
+  });
+  _invRowsCache = rows;
+  return rows;
+}
+
+const INV_TARGETS_BY_YEAR = {
+  '2026': { Theeban: 16000000, Chaminda: 16000000, Jeyandran: 16000000 },
+  '2025': { Theeban: 16000000, Chaminda: 16000000, Jeyandran: 16000000 },
+  '2024': { Theeban: 12000000, Chaminda: 12000000, Jeyandran: 12000000 },
+  '2023': { Theeban: 12000000, Chaminda: 12000000, Jeyandran: 12000000 },
+  '2022': { Theeban: 9600000, Chaminda: 9600000, Jeyandran: 1200000 }
+};
+
+function buildInvoiceTargets_(year, byAgent) {
+  const targets = INV_TARGETS_BY_YEAR[String(year)];
+  if (!targets) return null;
+  function block(agentName) {
+    const achieved = (byAgent.find(function (a) { return a.agent === agentName; }) || { total: 0 }).total;
+    const target = targets[agentName];
+    return { target: target, remaining: Math.max(target - achieved, 0), achievedPct: target ? (achieved / target * 100) : 0 };
+  }
+  return { Theeban: block('Theeban'), Chaminda: block('Chaminda'), Jeyandran: block('Jeyandran') };
+}
+
+function getInvoiceFilterOptions(sessionToken) {
+  requireAdmin_(sessionToken);
+  return {
+    users: INV_AGENTS,
+    years: INV_YEAR_SHEETS
+  };
+}
+
+function invInQuarter_(month, quarter) {
+  if (!quarter || quarter === 'All') return true;
+  const q = parseInt(quarter, 10);
+  return Math.ceil(month / 3) === q;
+}
+
+function getQuarterlyAgentPerformance(sessionToken, filters) {
+  requireAdmin_(sessionToken);
+  filters = filters || {};
+  const rows = getAllInvoiceRows_();
+
+  const useDateRange = filters.dateFrom && filters.dateTo;
+  const rangeFrom = useDateRange ? new Date(filters.dateFrom) : null;
+  const rangeTo = useDateRange ? new Date(filters.dateTo + 'T23:59:59') : null;
+
+  const filtered = rows.filter(function (r) {
+    if (!r.invDate) return false;
+    if (useDateRange) {
+      if (r.invDate < rangeFrom || r.invDate > rangeTo) return false;
+    } else {
+      if (filters.year && filters.year !== 'All' && r.year !== String(filters.year)) return false;
+      if (filters.month && filters.month !== 'All' && (r.invDate.getMonth() + 1) !== parseInt(filters.month, 10)) return false;
+      if (filters.quarter && filters.quarter !== 'All' && !invInQuarter_(r.invDate.getMonth() + 1, filters.quarter)) return false;
+    }
+    return true;
+  });
+
+  const agents = INV_AGENTS.filter(function (a) { return a !== 'Keerthie' && a !== 'Sherden'; });
+  const quarterMap = {};
+
+  filtered.forEach(function (r) {
+    const q = Math.ceil((r.invDate.getMonth() + 1) / 3);
+    const key = r.year + '-Q' + q;
+    if (!quarterMap[key]) quarterMap[key] = {};
+    agents.forEach(function (a) {
+      const amt = r.agents[a] || 0;
+      quarterMap[key][a] = (quarterMap[key][a] || 0) + amt;
+    });
+  });
+
+  const quarters = Object.keys(quarterMap).sort();
+  const data = quarters.map(function (k) {
+    const row = { quarter: k };
+    agents.forEach(function (a) { row[a] = quarterMap[k][a] || 0; });
+    return row;
+  });
+
+  return { agents: agents, quarters: quarters, data: data };
+}
+
+function getInvoiceDashboardData(sessionToken, filters) {
+  requireAdmin_(sessionToken);
+  filters = filters || {};
+  const rows = getAllInvoiceRows_();
+
+  const useDateRange = filters.dateFrom && filters.dateTo;
+  const rangeFrom = useDateRange ? new Date(filters.dateFrom) : null;
+  const rangeTo = useDateRange ? new Date(filters.dateTo + 'T23:59:59') : null;
+  const selectedUsers = (filters.users && filters.users.length) ? filters.users : null;
+
+  const matching = rows.filter(function (r) {
+    if (!r.invDate) return false;
+    if (useDateRange) {
+      if (r.invDate < rangeFrom || r.invDate > rangeTo) return false;
+    } else {
+      if (filters.year && filters.year !== 'All' && r.year !== String(filters.year)) return false;
+      if (filters.month && filters.month !== 'All' && (r.invDate.getMonth() + 1) !== parseInt(filters.month, 10)) return false;
+      if (filters.quarter && filters.quarter !== 'All' && !invInQuarter_(r.invDate.getMonth() + 1, filters.quarter)) return false;
+    }
+    if (selectedUsers) {
+      const hasAny = selectedUsers.some(function (u) { return r.agents[u] !== null && r.agents[u] !== undefined; });
+      if (!hasAny) return false;
+    }
+    return true;
+  });
+
+  function amountFor(r) {
+    if (selectedUsers) {
+      return selectedUsers.reduce(function (sum, u) { return sum + (r.agents[u] || 0); }, 0);
+    }
+    return r.invoiceAmt;
+  }
+
+  function summarize(list) {
+    const summary = { Sale: { count: 0, amount: 0 }, Rental: { count: 0, amount: 0 }, Other: { count: 0, amount: 0 } };
+    const headline = {};
+    HEADLINE_CATEGORIES.forEach(function (k) { headline[k] = { count: 0, amount: 0 }; });
+    let totalInvoiced = 0, totalReceived = 0, totalOutstanding = 0;
+    list.forEach(function (r) {
+      const amt = amountFor(r);
+      summary[r.category].count++;
+      summary[r.category].amount += amt;
+      const hKey = classifyHeadline_(r.category, r.invoiceFor);
+      headline[hKey].count++;
+      headline[hKey].amount += amt;
+      totalInvoiced += r.invoiceAmt;
+      totalReceived += r.paymentAmt;
+      totalOutstanding += r.toBeReceived;
+    });
+    return {
+      sale: summary.Sale, rental: summary.Rental, other: summary.Other,
+      headline: headline,
+      totalCount: list.length, totalInvoiced: totalInvoiced,
+      totalReceived: totalReceived, totalOutstanding: totalOutstanding
+    };
+  }
+
+  const overall = summarize(matching);
+
+  const byAgent = INV_AGENTS.map(function (agent) {
+    const agentRows = matching.filter(function (r) { return r.agents[agent] !== null && r.agents[agent] !== undefined; });
+    const sale = agentRows.filter(function (r) { return r.category === 'Sale'; }).reduce(function (s, r) { return s + (r.agents[agent] || 0); }, 0);
+    const rental = agentRows.filter(function (r) { return r.category === 'Rental'; }).reduce(function (s, r) { return s + (r.agents[agent] || 0); }, 0);
+    const other = agentRows.filter(function (r) { return r.category === 'Other'; }).reduce(function (s, r) { return s + (r.agents[agent] || 0); }, 0);
+    return { agent: agent, count: agentRows.length, sale: sale, rental: rental, other: other, total: sale + rental + other };
+  }).filter(function (a) { return a.count > 0; });
+
+  const byCategoryMap = {};
+  matching.forEach(function (r) {
+    if (!r.invoiceFor) return;
+    byCategoryMap[r.invoiceFor] = (byCategoryMap[r.invoiceFor] || 0) + amountFor(r);
+  });
+
+  const allYearsNumeric = INV_YEAR_SHEETS.map(Number);
+  const refYear = (filters.year && filters.year !== 'All') ? parseInt(filters.year, 10) : Math.max.apply(null, allYearsNumeric);
+  const comparisonYears = [refYear, refYear - 1, refYear - 2, refYear - 3].filter(function (y) { return allYearsNumeric.indexOf(y) !== -1; });
+  const categoryByYear = {};
+  comparisonYears.forEach(function (y) {
+    categoryByYear[y] = {};
+    rows.forEach(function (r) {
+      if (r.year !== String(y) || !r.invDate || !r.invoiceFor) return;
+      if (selectedUsers && !selectedUsers.some(function (u) { return r.agents[u] !== null && r.agents[u] !== undefined; })) return;
+      const amt = amountFor(r);
+      categoryByYear[y][r.invoiceFor] = (categoryByYear[y][r.invoiceFor] || 0) + amt;
+    });
+  });
+
+  const allCategoryKeys = {};
+  Object.keys(byCategoryMap).forEach(function (k) { allCategoryKeys[k] = true; });
+  comparisonYears.forEach(function (y) { Object.keys(categoryByYear[y]).forEach(function (k) { allCategoryKeys[k] = true; }); });
+
+  const byCategory = Object.keys(allCategoryKeys).sort().map(function (k) {
+    const years = {};
+    comparisonYears.forEach(function (y) { years[y] = categoryByYear[y][k] || 0; });
+    return { category: k, total: byCategoryMap[k] || 0, years: years };
+  });
+  const byCategoryGrandTotal = byCategory.reduce(function (s, c) { return s + c.total; }, 0);
+  const byCategoryYearTotals = {};
+  comparisonYears.forEach(function (y) { byCategoryYearTotals[y] = byCategory.reduce(function (s, c) { return s + c.years[y]; }, 0); });
+
+  const outstandingInvoices = matching
+    .filter(function (r) { return r.toBeReceived > 0; })
+    .sort(function (a, b) { return a.invDate - b.invDate; })
+    .map(function (r) {
+      return {
+        invoiceNo: r.invoiceNo, customerName: r.customerName,
+        invDate: r.invDate.toISOString(), invoiceFor: r.invoiceFor,
+        category: r.category, invoiceAmt: r.invoiceAmt, toBeReceived: r.toBeReceived
+      };
+    });
+
+  const targets = (filters.year && filters.year !== 'All' && !useDateRange) ? buildInvoiceTargets_(filters.year, byAgent) : null;
+
+  return {
+    overall: overall,
+    byAgent: byAgent,
+    byCategory: byCategory,
+    byCategoryGrandTotal: byCategoryGrandTotal,
+    byCategoryYears: comparisonYears,
+    byCategoryYearTotals: byCategoryYearTotals,
+    outstandingInvoices: outstandingInvoices,
+    targets: targets,
+    matchedInvoices: matching.length
+  };
+}
+
+/* ============================== LISTINGS DASHBOARD (ADMIN ONLY) ============================== */
+
+const WIN_STATUSES_ = ['Closed'];
+const LOSS_STATUSES_ = ['Lost', 'Drop', 'Duplicate', 'Obsolete'];
+
+function listingAgentSort_(a, b) {
+  const ia = USER_DISPLAY_ORDER.indexOf(a);
+  const ib = USER_DISPLAY_ORDER.indexOf(b);
+  const ra = ia === -1 ? USER_DISPLAY_ORDER.length : ia;
+  const rb = ib === -1 ? USER_DISPLAY_ORDER.length : ib;
+  if (ra !== rb) return ra - rb;
+  return a.localeCompare(b);
+}
+
+function listingAgentsFromRows_(rows) {
+  const set = {};
+  rows.forEach(function (r) { if (r.user) set[r.user] = true; });
+  return Object.keys(set).sort(listingAgentSort_);
+}
+
+let _listingRowsCache = null;
+function getAllListingRows_() {
+  if (_listingRowsCache) return _listingRowsCache;
+  const rows = getAllDataRows_().map(rowToObject_).filter(function (r) { return !!r.timestamp; });
+  _listingRowsCache = rows;
+  return rows;
+}
+
+function getListingsFilterOptions(sessionToken) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  const isAdminUser = session.role === 'Admin';
+  const rows = getAllListingRows_();
+  const yearsSet = {};
+  rows.forEach(function (r) { yearsSet[new Date(r.timestamp).getFullYear()] = true; });
+  const years = Object.keys(yearsSet).sort(function (a, b) { return Number(a) - Number(b); });
+  return {
+    years: years,
+    // Non-admins only ever see their own name here — not because the
+    // dropdown itself enforces anything (a client could tamper with the
+    // request), but so the UI honestly reflects what getListingsDashboardData
+    // below actually allows. The real restriction is enforced there,
+    // server-side, regardless of what gets sent from the browser.
+    agents: isAdminUser ? listingAgentsFromRows_(rows) : [session.name],
+    propertyTypes: PROPERTY_TYPES,
+    statusList: STATUS_LIST,
+    isAdmin: isAdminUser
+  };
+}
+
+function getListingsDashboardData(sessionToken, filters) {
+  const session = resolveSession_(sessionToken);
+  touchSession_(sessionToken, session);
+  filters = filters || {};
+  // Non-admins can only ever see their own entries — this overrides
+  // whatever "agent" value the client sent, so a regular user can never
+  // view another agent's data by tampering with the request client-side.
+  // Admins keep full access to any agent, or "All".
+  if (session.role !== 'Admin') {
+    filters = Object.assign({}, filters, { agent: session.name });
+  }
+  const allRows = getAllListingRows_();
+
+  function matchesBase(r) {
+    if (filters.propertyType && filters.propertyType !== 'All' && r.propertyType !== filters.propertyType) return false;
+    if (filters.agent && filters.agent !== 'All' && r.user !== filters.agent) return false;
+    return true;
+  }
+  function matchesTime(r) {
+    const d = new Date(r.timestamp);
+    if (filters.year && filters.year !== 'All' && d.getFullYear() !== parseInt(filters.year, 10)) return false;
+    if (filters.month && filters.month !== 'All' && (d.getMonth() + 1) !== parseInt(filters.month, 10)) return false;
+    return true;
+  }
+
+  const baseFiltered = allRows.filter(matchesBase);
+  const filtered = baseFiltered.filter(matchesTime);
+
+  const useYearlyTrend = !filters.year || filters.year === 'All';
+  const trendSource = baseFiltered.filter(function (r) {
+    if (useYearlyTrend) return true;
+    return new Date(r.timestamp).getFullYear() === parseInt(filters.year, 10);
+  });
+  const trendAgents = (filters.agent && filters.agent !== 'All') ? [filters.agent] : listingAgentsFromRows_(trendSource);
+  const trendMap = {};
+  trendSource.forEach(function (r) {
+    const d = new Date(r.timestamp);
+    const key = useYearlyTrend ? String(d.getFullYear()) : (d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    if (!trendMap[key]) trendMap[key] = {};
+    trendMap[key][r.user] = (trendMap[key][r.user] || 0) + 1;
+  });
+  const trendKeys = Object.keys(trendMap).sort();
+  const trend = trendKeys.map(function (k) {
+    const row = { label: k };
+    trendAgents.forEach(function (a) { row[a] = trendMap[k][a] || 0; });
+    return row;
+  });
+
+  const now = new Date();
+  const curYear = now.getFullYear(), curMonth = now.getMonth();
+  const dailySource = baseFiltered.filter(function (r) {
+    const d = new Date(r.timestamp);
+    return d.getFullYear() === curYear && d.getMonth() === curMonth;
+  });
+  const dailyAgents = (filters.agent && filters.agent !== 'All') ? [filters.agent] : listingAgentsFromRows_(dailySource);
+  const dailyMap = {};
+  dailySource.forEach(function (r) {
+    const key = String(new Date(r.timestamp).getDate()).padStart(2, '0');
+    if (!dailyMap[key]) dailyMap[key] = {};
+    dailyMap[key][r.user] = (dailyMap[key][r.user] || 0) + 1;
+  });
+  const dailyKeys = Object.keys(dailyMap).sort();
+  const daily = dailyKeys.map(function (k) {
+    const row = { label: k };
+    dailyAgents.forEach(function (a) { row[a] = dailyMap[k][a] || 0; });
+    return row;
+  });
+
+  const statusByAgentMap = {};
+  filtered.forEach(function (r) {
+    const st = r.status || 'Active';
+    if (!statusByAgentMap[r.user]) statusByAgentMap[r.user] = {};
+    statusByAgentMap[r.user][st] = (statusByAgentMap[r.user][st] || 0) + 1;
+  });
+  const statusByAgentAgents = (filters.agent && filters.agent !== 'All') ? [filters.agent] : listingAgentsFromRows_(filtered);
+  const statusByAgent = statusByAgentAgents.map(function (a) {
+    const row = { agent: a };
+    let total = 0;
+    STATUS_LIST.forEach(function (s) { const n = (statusByAgentMap[a] && statusByAgentMap[a][s]) || 0; row[s] = n; total += n; });
+    row.total = total;
+    return row;
+  });
+
+  const statusByTypeMap = {};
+  filtered.forEach(function (r) {
+    const st = r.status || 'Active';
+    const pt = r.propertyType || 'Unknown';
+    if (!statusByTypeMap[pt]) statusByTypeMap[pt] = {};
+    statusByTypeMap[pt][st] = (statusByTypeMap[pt][st] || 0) + 1;
+  });
+  const typesForStatus = (filters.propertyType && filters.propertyType !== 'All') ? [filters.propertyType] : PROPERTY_TYPES;
+  const statusByType = typesForStatus.map(function (t) {
+    const row = { type: t };
+    let total = 0;
+    STATUS_LIST.forEach(function (s) { const n = (statusByTypeMap[t] && statusByTypeMap[t][s]) || 0; row[s] = n; total += n; });
+    row.total = total;
+    return row;
+  });
+
+  const winLossAgents = (filters.agent && filters.agent !== 'All') ? [filters.agent] : listingAgentsFromRows_(filtered);
+  const winLoss = winLossAgents.map(function (a) {
+    const rows = filtered.filter(function (r) { return r.user === a; });
+    const total = rows.length;
+    const won = rows.filter(function (r) { return WIN_STATUSES_.indexOf(r.status) !== -1; }).length;
+    const lost = rows.filter(function (r) { return LOSS_STATUSES_.indexOf(r.status) !== -1; }).length;
+    const pending = total - won - lost;
+    return {
+      agent: a, total: total, won: won, lost: lost, pending: pending,
+      winRate: total ? Math.round(won / total * 100) : 0,
+      lossRate: total ? Math.round(lost / total * 100) : 0
+    };
+  });
+
+  const cityMap = {};
+  filtered.forEach(function (r) {
+    const c = r.city || 'Unknown';
+    cityMap[c] = (cityMap[c] || 0) + 1;
+  });
+  const cityBreakdown = Object.keys(cityMap)
+    .map(function (c) { return { city: c, count: cityMap[c] }; })
+    .sort(function (a, b) { return b.count - a.count; });
+
+  return {
+    matchedCount: filtered.length,
+    trendAgents: trendAgents, trend: trend, trendIsYearly: useYearlyTrend,
+    dailyAgents: dailyAgents, daily: daily,
+    statusByAgent: statusByAgent,
+    statusByType: statusByType,
+    winLoss: winLoss,
+    cityBreakdown: cityBreakdown
+  };
+}
