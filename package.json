@@ -12,6 +12,10 @@
     "migrate:load": "tsx scripts/migrate/load.ts",
     "migrate:update-view": "tsx scripts/migrate/update-view-from-excel.ts",
     "migrate:update-parking": "tsx scripts/migrate/update-parking-from-excel.ts",
+    "seed:staff": "tsx scripts/seed-staff.ts",
+    "seed:agent": "tsx scripts/seed-agent.ts",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
