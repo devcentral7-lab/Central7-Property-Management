@@ -44,4 +44,16 @@ Staff/agent passwords are **not** imported — use Supabase Auth invites / reset
 
 ## Next (Phase 5)
 
-Fastify API + React UI with Drive photo integration and Code.gs workflow parity.
+Next.js app lives in [`web/`](web/). See [`web/README.md`](web/README.md).
+
+```bash
+cd web
+cp .env.example .env.local   # fill NEXT_PUBLIC_SUPABASE_* from root .env
+npm run dev
+```
+
+Seed a staff login (from repo root):
+
+```bash
+npm run seed:staff -- you@email.com 'TempPass123!' Keerthie Admin
+```
