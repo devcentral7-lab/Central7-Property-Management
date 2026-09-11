@@ -1,0 +1,8 @@
+# A string used to distinguish different Supabase projects on the same host. Not used by migrate:schema.
+project_id = "central7-property-management"
+
+[api]
+enabled = true
+
+[db]
+major_version = 15

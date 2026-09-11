@@ -89,7 +89,9 @@ function cleanProperty(row: Row): Record<string, unknown> | null {
 
   const propertyType = oneOf(s(row['Property Type']), PROPERTY_TYPES);
   const opportunityType = oneOf(s(row['Opportunity Type']), OPPORTUNITY_TYPES);
-  const status = oneOf(s(row['Status']), STATUS_LIST) ?? 'Active';
+  const statusRaw = s(row['Status']);
+  const status =
+    oneOf(statusRaw === 'Duplicate' ? 'Obsolete' : statusRaw, STATUS_LIST) ?? 'Active';
   const contactType = oneOf(s(row['Type of Contact (Direct/ Partner)']), CONTACT_TYPES);
   const furnished = oneOf(s(row['Furnished']), FURNISHED_LIST);
   const currencyRaw = s(row['Currency']).toUpperCase();
@@ -104,7 +106,6 @@ function cleanProperty(row: Row): Record<string, unknown> | null {
 
   const typeAttributes: Record<string, unknown> = {};
   if (s(row['Suitable for'])) typeAttributes.suitable_for = s(row['Suitable for']);
-  if (s(row['View'])) typeAttributes.view = s(row['View']);
   if (s(row['Built up Area'])) typeAttributes.built_up_area = parseNumber(row['Built up Area']);
   if (s(row['Apartment Complex'])) typeAttributes.apartment_complex_name = s(row['Apartment Complex']);
 
@@ -123,15 +124,19 @@ function cleanProperty(row: Row): Record<string, unknown> | null {
     purpose,
     property_subtype: s(row['Property Sub-type']) || null,
     address: s(row['Address']) || null,
-    city_name: s(row['City']) || null,
+    city: s(row['City']) || null,
     land_size_perch: pickLandSize(row, propertyType),
     floor_area_sqft: pickFloorArea(row, propertyType),
     bedrooms: pickBeds(row, propertyType),
     bathrooms: pickBaths(row, propertyType),
-    floors: parseNumber(row['No of Floors']),
+    number_of_floors: (() => {
+      const n = parseNumber(row['No of Floors']);
+      return n === null ? null : Math.round(n);
+    })(),
     parking_spaces: pickParking(row, propertyType),
     age_years: parseNumber(row['Age of the House']),
     apartment_floor: s(row['Floor']) || null,
+    view: s(row['View']) || null,
     currency,
     price_per_perch: parseNumber(row['Price per Perch']),
     price_per_sqft: parseNumber(row['Price per sqft']),
@@ -174,12 +179,6 @@ function main(): void {
   cleaned.push(...seen.values());
   cleaned.sort((a, b) => Number(a.ref_seq) - Number(b.ref_seq));
 
-  const cities = [
-    ...new Set(
-      cleaned.map((r) => s(r.city_name)).filter(Boolean),
-    ),
-  ].map((name) => ({ name }));
-
   const complexes = [
     ...new Set(
       cleaned
@@ -189,12 +188,11 @@ function main(): void {
   ].map((name) => ({ name }));
 
   writeJsonFile(dataPath('clean', 'properties.json'), cleaned);
-  writeJsonFile(dataPath('clean', 'cities.json'), cities);
   writeJsonFile(dataPath('clean', 'apartment_complexes.json'), complexes);
   writeJsonFile(dataPath('rejected', 'properties.json'), rejected);
 
   console.log(
-    `Cleaned properties: ${cleaned.length}; rejected: ${rejected.length}; cities: ${cities.length}; complexes: ${complexes.length}`,
+    `Cleaned properties: ${cleaned.length}; rejected: ${rejected.length}; complexes: ${complexes.length}`,
   );
 }
 

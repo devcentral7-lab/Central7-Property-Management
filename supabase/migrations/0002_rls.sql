@@ -1,16 +1,14 @@
 -- Row Level Security for Central7 Pulse
 -- Browser uses anon key + user JWT. Service role bypasses RLS (server only).
 
-alter table public.cities enable row level security;
 alter table public.apartment_complexes enable row level security;
 alter table public.profiles enable row level security;
-alter table public.agents enable row level security;
+alter table public.users enable row level security;
 alter table public.properties enable row level security;
 alter table public.property_media enable row level security;
 alter table public.property_status_events enable row level security;
 alter table public.republish_queue enable row level security;
 alter table public.social_media_queue enable row level security;
-alter table public.messages enable row level security;
 alter table public.inquiries enable row level security;
 alter table public.app_settings enable row level security;
 
@@ -35,19 +33,8 @@ create policy profiles_insert_admin
   with check (public.is_admin() or id = auth.uid());
 
 -- ---------------------------------------------------------------------------
--- cities / apartment_complexes — staff read; admin write
+-- apartment_complexes — staff read; admin write
 -- ---------------------------------------------------------------------------
-
-create policy cities_select_authenticated
-  on public.cities for select
-  to authenticated
-  using (true);
-
-create policy cities_write_admin
-  on public.cities for all
-  to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
 
 create policy complexes_select_authenticated
   on public.apartment_complexes for select
@@ -61,21 +48,21 @@ create policy complexes_write_admin
   with check (public.is_admin());
 
 -- ---------------------------------------------------------------------------
--- agents — admin manage; agent can read own row
+-- users (partner accounts) — admin manage; partner can read own row
 -- ---------------------------------------------------------------------------
 
-create policy agents_select_admin_or_self
-  on public.agents for select
+create policy users_select_admin_or_self
+  on public.users for select
   to authenticated
   using (public.is_admin() or auth_user_id = auth.uid());
 
-create policy agents_insert_anon_signup
-  on public.agents for insert
+create policy users_insert_anon_signup
+  on public.users for insert
   to anon, authenticated
   with check (status = 'Pending' and active = false);
 
-create policy agents_update_admin
-  on public.agents for update
+create policy users_update_admin
+  on public.users for update
   to authenticated
   using (public.is_admin())
   with check (public.is_admin());
@@ -187,40 +174,6 @@ create policy smq_write_staff
   with check (public.is_staff());
 
 -- ---------------------------------------------------------------------------
--- messages
--- ---------------------------------------------------------------------------
-
-create policy messages_select_involved
-  on public.messages for select
-  to authenticated
-  using (
-    public.is_admin()
-    or from_name = (select display_name from public.profiles where id = auth.uid())
-    or to_name = (select display_name from public.profiles where id = auth.uid())
-    or to_name = 'All'
-  );
-
-create policy messages_insert_staff
-  on public.messages for insert
-  to authenticated
-  with check (public.is_staff());
-
-create policy messages_update_staff
-  on public.messages for update
-  to authenticated
-  using (public.is_staff())
-  with check (public.is_staff());
-
-create policy messages_delete_admin_or_own
-  on public.messages for delete
-  to authenticated
-  using (
-    public.is_admin()
-    or from_name = (select display_name from public.profiles where id = auth.uid())
-    or to_name = (select display_name from public.profiles where id = auth.uid())
-  );
-
--- ---------------------------------------------------------------------------
 -- inquiries — staff
 -- ---------------------------------------------------------------------------
 
@@ -252,6 +205,8 @@ create policy app_settings_write_admin
 
 -- Grants for authenticated role
 grant usage on schema public to authenticated, anon;
+revoke all on public.property_list_cards from public;
+revoke all on public.property_list_cards from anon;
 grant select on public.property_list_cards to authenticated;
 grant execute on function public.next_property_ref() to authenticated;
 grant execute on function public.dashboard_listing_counts(timestamptz, timestamptz, text) to authenticated;

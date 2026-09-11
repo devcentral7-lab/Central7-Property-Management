@@ -2,7 +2,6 @@
 -- Apply to a NEW Supabase project. Do not run against the legacy DB in place.
 
 create extension if not exists "pgcrypto";
-create extension if not exists "postgis";
 
 -- ---------------------------------------------------------------------------
 -- Enums (idempotent)
@@ -19,7 +18,7 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create type public.listing_status as enum (
-    'Active', 'Hold', 'Lost', 'Drop', 'Closed', 'Obsolete'
+    'Active', 'Hold', 'Lost', 'Drop', 'Closed', 'Duplicate', 'Obsolete'
   );
 exception when duplicate_object then null; end $$;
 do $$ begin
@@ -63,14 +62,18 @@ $$;
 -- Lookups
 -- ---------------------------------------------------------------------------
 
+create table public.cities (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  added_by text,
+  created_at timestamptz not null default now()
+);
+
 create table public.apartment_complexes (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   location text,
-  amenities text[] not null default '{}',
-  developer text,
-  apartments_per_floor integer,
-  notes text,
+  default_amenities text[] not null default '{}',
   added_by text,
   created_at timestamptz not null default now()
 );
@@ -158,19 +161,17 @@ after insert on auth.users
 for each row execute function public.handle_new_user();
 
 -- ---------------------------------------------------------------------------
--- External partner users (legacy "Agents" table)
+-- External partner agents
 -- ---------------------------------------------------------------------------
 
-create table public.users (
+create table public.agents (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid unique references auth.users (id) on delete set null,
   company_name text,
   contact_person text,
   contact_number text,
   email text,
-  address text,
-  nic text,
-  passport_number text,
+  registered_address text,
   username text not null unique,
   status public.agent_approval_status not null default 'Pending',
   active boolean not null default false,
@@ -180,11 +181,11 @@ create table public.users (
   updated_at timestamptz not null default now()
 );
 
-create index users_status_idx on public.users (status);
-create index users_active_idx on public.users (active);
+create index agents_status_idx on public.agents (status);
+create index agents_active_idx on public.agents (active);
 
-create trigger users_set_updated_at
-before update on public.users
+create trigger agents_set_updated_at
+before update on public.agents
 for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
@@ -211,19 +212,18 @@ create table public.properties (
   purpose text,
   property_subtype text,
   address text,
-  location geography(Point, 4326),
-  city text,
+  city_id uuid references public.cities (id) on delete set null,
+  city_name text,
 
   land_size_perch numeric(12, 3),
   floor_area_sqft numeric(12, 2),
-  bedrooms numeric(12, 2),
-  bathrooms numeric(12, 2),
-  number_of_floors integer,
-  parking_spaces numeric(12, 2),
+  bedrooms smallint,
+  bathrooms smallint,
+  floors smallint,
+  parking_spaces smallint,
   age_years numeric(6, 1),
   apartment_complex_id uuid references public.apartment_complexes (id) on delete set null,
   apartment_floor text,
-  view text,
 
   currency public.currency_code not null default 'LKR',
   price_per_perch numeric(14, 2),
@@ -245,13 +245,13 @@ create table public.properties (
 
 create index properties_status_idx on public.properties (status);
 create index properties_property_type_idx on public.properties (property_type);
+create index properties_city_id_idx on public.properties (city_id);
 create index properties_created_by_idx on public.properties (created_by);
 create index properties_created_at_desc_idx on public.properties (created_at desc);
 create index properties_opportunity_status_idx on public.properties (opportunity_type, status);
 create index properties_price_total_idx on public.properties (price_total);
 create index properties_contact_name_idx on public.properties (contact_name);
-create index properties_city_idx on public.properties (city);
-create index properties_location_idx on public.properties using gist (location);
+create index properties_city_name_idx on public.properties (city_name);
 
 create trigger properties_set_updated_at
 before update on public.properties
@@ -273,10 +273,7 @@ end;
 $$;
 
 -- List card view (slim DTO for paginated search — never select *)
--- security_invoker: enforce RLS on underlying properties rows
-create or replace view public.property_list_cards
-with (security_invoker = true)
-as
+create or replace view public.property_list_cards as
 select
   p.id,
   p.ref_no,
@@ -285,7 +282,7 @@ select
   p.created_by_name,
   p.opportunity_type,
   p.property_type,
-  p.city,
+  p.city_name,
   p.status,
   p.currency,
   p.price_total,
@@ -390,6 +387,23 @@ before update on public.social_media_queue
 for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
+-- Messages
+-- ---------------------------------------------------------------------------
+
+create table public.messages (
+  id uuid primary key default gen_random_uuid(),
+  from_profile_id uuid references public.profiles (id) on delete set null,
+  from_name text not null,
+  to_name text not null,
+  body text not null,
+  sent_at timestamptz not null default now(),
+  resolved boolean not null default false
+);
+
+create index messages_inbox_idx on public.messages (to_name, resolved, sent_at desc);
+create index messages_from_idx on public.messages (from_name, sent_at desc);
+
+-- ---------------------------------------------------------------------------
 -- Inquiries (migrated off Sheets)
 -- ---------------------------------------------------------------------------
 
@@ -467,3 +481,261 @@ as $$
     and (p_created_by_name is null or p.created_by_name = p_created_by_name)
   group by p.status, p.property_type;
 $$;
+
+-- Row Level Security for Central7 Pulse
+-- Browser uses anon key + user JWT. Service role bypasses RLS (server only).
+
+alter table public.cities enable row level security;
+alter table public.apartment_complexes enable row level security;
+alter table public.profiles enable row level security;
+alter table public.agents enable row level security;
+alter table public.properties enable row level security;
+alter table public.property_media enable row level security;
+alter table public.property_status_events enable row level security;
+alter table public.republish_queue enable row level security;
+alter table public.social_media_queue enable row level security;
+alter table public.messages enable row level security;
+alter table public.inquiries enable row level security;
+alter table public.app_settings enable row level security;
+
+-- ---------------------------------------------------------------------------
+-- profiles
+-- ---------------------------------------------------------------------------
+
+create policy profiles_select_staff
+  on public.profiles for select
+  to authenticated
+  using (public.is_staff() or id = auth.uid());
+
+create policy profiles_update_self_or_admin
+  on public.profiles for update
+  to authenticated
+  using (id = auth.uid() or public.is_admin())
+  with check (id = auth.uid() or public.is_admin());
+
+create policy profiles_insert_admin
+  on public.profiles for insert
+  to authenticated
+  with check (public.is_admin() or id = auth.uid());
+
+-- ---------------------------------------------------------------------------
+-- cities / apartment_complexes — staff read; admin write
+-- ---------------------------------------------------------------------------
+
+create policy cities_select_authenticated
+  on public.cities for select
+  to authenticated
+  using (true);
+
+create policy cities_write_admin
+  on public.cities for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy complexes_select_authenticated
+  on public.apartment_complexes for select
+  to authenticated
+  using (true);
+
+create policy complexes_write_admin
+  on public.apartment_complexes for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- ---------------------------------------------------------------------------
+-- agents — admin manage; agent can read own row
+-- ---------------------------------------------------------------------------
+
+create policy agents_select_admin_or_self
+  on public.agents for select
+  to authenticated
+  using (public.is_admin() or auth_user_id = auth.uid());
+
+create policy agents_insert_anon_signup
+  on public.agents for insert
+  to anon, authenticated
+  with check (status = 'Pending' and active = false);
+
+create policy agents_update_admin
+  on public.agents for update
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- ---------------------------------------------------------------------------
+-- properties — staff full access; authenticated agents/guests: read Active only via API
+-- Prefer API redaction; RLS allows staff all rows, agents only non-DNP Active.
+-- ---------------------------------------------------------------------------
+
+create policy properties_select_staff
+  on public.properties for select
+  to authenticated
+  using (
+    public.is_staff()
+    or (
+      status = 'Active'
+      and do_not_publish = false
+    )
+  );
+
+create policy properties_insert_staff
+  on public.properties for insert
+  to authenticated
+  with check (public.is_staff());
+
+create policy properties_update_staff
+  on public.properties for update
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+create policy properties_delete_admin
+  on public.properties for delete
+  to authenticated
+  using (public.is_admin());
+
+-- ---------------------------------------------------------------------------
+-- property_media
+-- ---------------------------------------------------------------------------
+
+create policy property_media_select
+  on public.property_media for select
+  to authenticated
+  using (
+    exists (
+      select 1 from public.properties p
+      where p.id = property_id
+        and (
+          public.is_staff()
+          or (p.status = 'Active' and p.do_not_publish = false)
+        )
+    )
+  );
+
+create policy property_media_write_staff
+  on public.property_media for all
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+-- ---------------------------------------------------------------------------
+-- property_status_events — staff only
+-- ---------------------------------------------------------------------------
+
+create policy status_events_select_staff
+  on public.property_status_events for select
+  to authenticated
+  using (public.is_staff());
+
+create policy status_events_insert_staff
+  on public.property_status_events for insert
+  to authenticated
+  with check (public.is_staff());
+
+create policy status_events_update_staff
+  on public.property_status_events for update
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+-- ---------------------------------------------------------------------------
+-- republish_queue — staff; non-admins see own user_name (enforced also in API)
+-- ---------------------------------------------------------------------------
+
+create policy republish_select_staff
+  on public.republish_queue for select
+  to authenticated
+  using (public.is_staff());
+
+create policy republish_write_staff
+  on public.republish_queue for all
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+-- ---------------------------------------------------------------------------
+-- social_media_queue — admin or allow-list enforced in API; RLS = staff for now
+-- ---------------------------------------------------------------------------
+
+create policy smq_select_staff
+  on public.social_media_queue for select
+  to authenticated
+  using (public.is_staff());
+
+create policy smq_write_staff
+  on public.social_media_queue for all
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+-- ---------------------------------------------------------------------------
+-- messages
+-- ---------------------------------------------------------------------------
+
+create policy messages_select_involved
+  on public.messages for select
+  to authenticated
+  using (
+    public.is_admin()
+    or from_name = (select display_name from public.profiles where id = auth.uid())
+    or to_name = (select display_name from public.profiles where id = auth.uid())
+    or to_name = 'All'
+  );
+
+create policy messages_insert_staff
+  on public.messages for insert
+  to authenticated
+  with check (public.is_staff());
+
+create policy messages_update_staff
+  on public.messages for update
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+create policy messages_delete_admin_or_own
+  on public.messages for delete
+  to authenticated
+  using (
+    public.is_admin()
+    or from_name = (select display_name from public.profiles where id = auth.uid())
+    or to_name = (select display_name from public.profiles where id = auth.uid())
+  );
+
+-- ---------------------------------------------------------------------------
+-- inquiries — staff
+-- ---------------------------------------------------------------------------
+
+create policy inquiries_select_staff
+  on public.inquiries for select
+  to authenticated
+  using (public.is_staff());
+
+create policy inquiries_write_staff
+  on public.inquiries for all
+  to authenticated
+  using (public.is_staff())
+  with check (public.is_staff());
+
+-- ---------------------------------------------------------------------------
+-- app_settings — staff read; admin write
+-- ---------------------------------------------------------------------------
+
+create policy app_settings_select_staff
+  on public.app_settings for select
+  to authenticated
+  using (public.is_staff());
+
+create policy app_settings_write_admin
+  on public.app_settings for all
+  to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- Grants for authenticated role
+grant usage on schema public to authenticated, anon;
+grant select on public.property_list_cards to authenticated;
+grant execute on function public.next_property_ref() to authenticated;
+grant execute on function public.dashboard_listing_counts(timestamptz, timestamptz, text) to authenticated;

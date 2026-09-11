@@ -33,7 +33,6 @@ async function main(): Promise<void> {
   const key = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
   const supabase = createClient(url, key, { auth: { persistSession: false } });
 
-  const citiesPath = dataPath('clean', 'cities.json');
   const complexesPath = dataPath('clean', 'apartment_complexes.json');
   const propsPath = dataPath('clean', 'properties.json');
 
@@ -41,17 +40,10 @@ async function main(): Promise<void> {
     throw new Error('Run npm run migrate:clean first (missing data/clean/properties.json)');
   }
 
-  const cities = fs.existsSync(citiesPath) ? readJsonFile<Row[]>(citiesPath) : [];
   const complexes = fs.existsSync(complexesPath)
     ? readJsonFile<Row[]>(complexesPath)
     : [];
   const properties = readJsonFile<Row[]>(propsPath);
-
-  console.log(`Upserting ${cities.length} cities…`);
-  for (const batch of chunk(cities, 500)) {
-    const { error } = await supabase.from('cities').upsert(batch, { onConflict: 'name' });
-    if (error) throw error;
-  }
 
   console.log(`Upserting ${complexes.length} apartment complexes…`);
   for (const batch of chunk(complexes, 500)) {
@@ -61,14 +53,11 @@ async function main(): Promise<void> {
     if (error) throw error;
   }
 
-  const { data: cityRows, error: cityErr } = await supabase.from('cities').select('id, name');
-  if (cityErr) throw cityErr;
   const { data: complexRows, error: cxErr } = await supabase
     .from('apartment_complexes')
     .select('id, name');
   if (cxErr) throw cxErr;
 
-  const cityId = new Map((cityRows ?? []).map((c) => [c.name as string, c.id as string]));
   const complexId = new Map(
     (complexRows ?? []).map((c) => [c.name as string, c.id as string]),
   );
@@ -76,9 +65,12 @@ async function main(): Promise<void> {
   const payload = properties.map((p) => {
     const attrs = (p.type_attributes ?? {}) as Row;
     const complexName = s(attrs.apartment_complex_name);
+    // Support older cleaned files that still use city_name
+    const city = s(p.city) || s(p.city_name) || null;
+    const { city_name: _cn, city_id: _ci, floors: _fl, ...rest } = p;
     return {
-      ...p,
-      city_id: cityId.get(s(p.city_name)) ?? null,
+      ...rest,
+      city,
       apartment_complex_id: complexName ? complexId.get(complexName) ?? null : null,
     };
   });

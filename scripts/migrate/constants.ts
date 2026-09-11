@@ -14,7 +14,6 @@ export const STATUS_LIST = [
   'Lost',
   'Drop',
   'Closed',
-  'Duplicate',
   'Obsolete',
 ] as const;
 export const FURNISHED_LIST = [

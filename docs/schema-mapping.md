@@ -20,12 +20,15 @@ Target: new Supabase schema in `supabase/migrations/0001_init.sql`.
 | `Purpose` | `purpose` | House/Estate primary purpose |
 | `Property Sub-type` | `property_subtype` | Unused in Code.gs writes; keep nullable |
 | `Address` | `address` | |
-| `City` | `city_name` + `city_id` | Resolve/create `cities` |
+| *(new — Google Maps)* | `location` | `geography(Point, 4326)` — store lng/lat via PostGIS |
+| `City` | `city` | text on properties (no lookup table) |
 | `land Size (perch)` | `land_size_perch` | House/Estate |
 | `Bed Rooms` | `bedrooms` | House/Estate |
 | `Bath Rooms` | `bathrooms` | House/Estate |
 | `Floor Area (sqft)` | `floor_area_sqft` | House/Estate |
-| `No of Floors` | `floors` | |
+| `No of Floors` | `number_of_floors` | integer |
+| `View` | `view` | text (apartment / scenic view) |
+| `Other Amenities` / `_1` / `_2` | `amenities` (`text[]`) | Non-apartment and apartment amenity tags |
 | `Parking Space (No of vehicles)` | `parking_spaces` | House/Estate |
 | `Age of the House` | `age_years` | |
 | `Other Amenities` | `amenities` (text[]) | Split on comma; merge free text |
@@ -93,7 +96,7 @@ Estate uses the same core columns as House.
 
 ---
 
-## Agents
+## Agents (legacy) → `users`
 
 | Legacy | New |
 |---|---|
@@ -101,7 +104,9 @@ Estate uses the same core columns as House.
 | `Contact Person` | `contact_person` |
 | `Contact Number` | `contact_number` |
 | `Email` | `email` |
-| `Registered Address` | `registered_address` |
+| `Registered Address` | `address` |
+| *(new)* | `nic` |
+| *(new)* | `passport_number` |
 | `Username` | `username` |
 | `Password` | Auth only — invite/reset |
 | `Status` | `status` enum |
@@ -109,6 +114,8 @@ Estate uses the same core columns as House.
 | `Created At` | `created_at` |
 | `Approved By` | resolve → `approved_by` profile id + keep name in notes if needed |
 | `Approved At` | `approved_at` |
+
+Staff accounts live in `profiles` (not `users`). `public.users` is the partner/agent table only.
 
 ---
 
@@ -156,15 +163,9 @@ Estate uses the same core columns as House.
 
 ---
 
-## Messages → `messages`
+## Messages
 
-| Legacy | New |
-|---|---|
-| `From` | `from_name` (+ `from_profile_id`) |
-| `To` | `to_name` |
-| `Message` | `body` |
-| `Date` | `sent_at` |
-| `Resolved` | `resolved` |
+Legacy `Messages` table is **not** carried into the new schema (feature removed).
 
 ---
 
@@ -172,10 +173,10 @@ Estate uses the same core columns as House.
 
 | Legacy | New |
 |---|---|
-| `City`.`Name of the City` | `cities.name` |
-| `City`.`Added by` | `cities.added_by` |
+| `City` sheet / column | `properties.city` (text only — no `cities` table) |
 | `Apartment Complexes`.`Name` | `apartment_complexes.name` |
-| `Added By` / `Created At` / `Location` / `Default Amenities` | matching columns; amenities → `text[]` |
+| `Added By` / `Created At` / `Location` / `Default Amenities` | `added_by`, `created_at`, `location`, `amenities` (`text[]`) |
+| *(new)* | `developer`, `apartments_per_floor`, `notes` |
 
 ---
 
