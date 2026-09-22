@@ -18,6 +18,7 @@ export type PropertyCard = {
   opportunity_type: OpportunityType;
   property_type: PropertyType;
   city: string | null;
+  address?: string | null;
   status: ListingStatus;
   currency: "LKR" | "USD";
   price_total: number | null;

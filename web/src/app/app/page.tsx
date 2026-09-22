@@ -1,12 +1,34 @@
 import Link from "next/link";
-import { requireProfile } from "@/lib/auth";
+import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
+import { loadAdminAnalytics } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
+import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
 
 export default async function AppHomePage() {
   const profile = await requireProfile();
-  const supabase = await createClient();
 
-  const [{ count: myCount }, { count: activeCount }, { count: pendingSmq }] =
+  if (profile.role === "Admin") {
+    try {
+      const data = await loadAdminAnalytics();
+      return <AdminDashboard data={data} name={profile.display_name} />;
+    } catch (e) {
+      return (
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
+            Operations overview
+          </h1>
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
+            {e instanceof Error ? e.message : "Could not load analytics."}
+          </p>
+        </div>
+      );
+    }
+  }
+
+  const supabase = await createClient();
+  const socialOk = await canAccessSocialQueue(profile);
+
+  const [{ count: myCount }, { count: activeCount }, smqResult] =
     await Promise.all([
       supabase
         .from("properties")
@@ -16,16 +38,30 @@ export default async function AppHomePage() {
         .from("properties")
         .select("*", { count: "exact", head: true })
         .eq("status", "Active"),
-      supabase
-        .from("social_media_queue")
-        .select("*", { count: "exact", head: true })
-        .is("completed_at", null),
+      socialOk
+        ? supabase
+            .from("social_media_queue")
+            .select("*", { count: "exact", head: true })
+            .is("completed_at", null)
+        : Promise.resolve({ count: null }),
     ]);
 
   const cards = [
     { label: "My listings", value: myCount ?? 0, href: "/app/my-properties" },
-    { label: "Active inventory", value: activeCount ?? 0, href: "/app/properties?status=Active" },
-    { label: "Social queue open", value: pendingSmq ?? 0, href: "/app/social-queue" },
+    {
+      label: "Active inventory",
+      value: activeCount ?? 0,
+      href: "/app/properties?status=Active",
+    },
+    ...(socialOk
+      ? [
+          {
+            label: "Social queue open",
+            value: smqResult.count ?? 0,
+            href: "/app/social-queue",
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -45,7 +81,9 @@ export default async function AppHomePage() {
             className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 transition hover:border-[var(--brand)]"
           >
             <p className="text-sm text-[var(--muted)]">{c.label}</p>
-            <p className="mt-2 font-display text-3xl font-semibold">{c.value}</p>
+            <p className="mt-2 font-display text-3xl font-semibold">
+              {(c.value ?? 0).toLocaleString()}
+            </p>
           </Link>
         ))}
       </div>

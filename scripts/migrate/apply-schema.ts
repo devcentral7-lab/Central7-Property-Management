@@ -11,6 +11,8 @@ import { loadEnvFile } from './load-env.js';
 
 loadEnvFile();
 loadEnvFile('.env.local');
+loadEnvFile('.env.production');
+loadEnvFile('.env.production.local');
 
 function requireDatabaseUrl(): string {
   const v = process.env.DATABASE_URL;

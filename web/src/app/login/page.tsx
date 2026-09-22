@@ -8,10 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get("next") || "/app";
+  const errorParam = params.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(errorParam);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: FormEvent) {
@@ -28,30 +28,34 @@ function LoginForm() {
       setError(authError.message);
       return;
     }
-    router.replace(next);
+    router.replace("/auth/continue");
     router.refresh();
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 space-y-4">
-      <label className="block text-sm font-medium">
+    <form onSubmit={onSubmit} className="mt-8 space-y-4" suppressHydrationWarning>
+      <label className="block text-sm font-medium" suppressHydrationWarning>
         Email
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          autoComplete="username"
+          suppressHydrationWarning
           className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[var(--brand)] focus:ring-2"
           placeholder="keerthie@central7.lk"
         />
       </label>
-      <label className="block text-sm font-medium">
+      <label className="block text-sm font-medium" suppressHydrationWarning>
         Password
         <input
           type="password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          suppressHydrationWarning
           className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[var(--brand)] focus:ring-2"
         />
       </label>
@@ -63,6 +67,7 @@ function LoginForm() {
       <button
         type="submit"
         disabled={loading}
+        suppressHydrationWarning
         className="w-full rounded-full bg-[var(--brand)] py-3 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
       >
         {loading ? "Signing in…" : "Sign in"}
@@ -78,9 +83,10 @@ export default function LoginPage() {
         <Link href="/" className="font-display text-2xl font-semibold text-[var(--brand-deep)]">
           Central7 Pulse
         </Link>
-        <h1 className="mt-6 font-display text-3xl font-semibold">Staff login</h1>
+        <h1 className="mt-6 font-display text-3xl font-semibold">Sign in</h1>
         <p className="mt-2 text-sm text-[var(--muted)]">
-          Uses Supabase Auth — identity comes from your session, never a client-supplied name.
+          Staff and approved partners use the same login. You are routed by
+          account type after sign-in.
         </p>
         <Suspense>
           <LoginForm />
