@@ -1,32 +1,23 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function ActivityPage() {
   const profile = await requireProfile();
+  if (profile.role !== "Admin") redirect("/app");
+
   const supabase = await createClient();
 
-  let query = supabase
+  const query = supabase
     .from("property_status_events")
     .select(
       "id, occurred_at, ref_no, actor_name, action, comment, assigned_to, requested_platforms, boost_completed",
     )
     .is("archived_at", null)
     .order("occurred_at", { ascending: false })
-    .limit(50);
-
-  // Non-admins shouldn't see full activity log (Code.gs: Admin only for getStatusUpdateLog)
-  if (profile.role !== "Admin") {
-    return (
-      <div>
-        <h1 className="font-display text-3xl font-semibold">Activity log</h1>
-        <p className="mt-2 text-[var(--muted)]">Admin only — same as Code.gs `getStatusUpdateLog`.</p>
-      </div>
-    );
-  }
-
-  // Assignment filter: show unassigned OR assigned to me (Code.gs behavior)
-  query = query.or(`assigned_to.is.null,assigned_to.eq.${profile.display_name}`);
+    .limit(50)
+    .or(`assigned_to.is.null,assigned_to.eq.${profile.display_name}`);
 
   const { data, error } = await query;
   if (error) {

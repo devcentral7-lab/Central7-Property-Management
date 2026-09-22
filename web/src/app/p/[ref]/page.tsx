@@ -11,13 +11,11 @@ export default async function PublicPropertyPage({
   const refNo = decodeURIComponent(ref).toUpperCase();
   const supabase = await createClient();
   const { data } = await supabase
-    .from("properties")
+    .from("property_public_cards")
     .select(
-      "ref_no, property_type, opportunity_type, city, address, status, currency, price_total, bedrooms, bathrooms, land_size_perch, floor_area_sqft, view, amenities, comments, do_not_publish",
+      "ref_no, property_type, opportunity_type, city, address, status, currency, price_total, bedrooms, bathrooms, land_size_perch, floor_area_sqft, view, amenities, comments",
     )
     .eq("ref_no", refNo)
-    .eq("status", "Active")
-    .eq("do_not_publish", false)
     .maybeSingle();
 
   if (!data) notFound();
@@ -62,7 +60,7 @@ export default async function PublicPropertyPage({
         </p>
       ) : null}
       <p className="mt-6 text-xs text-[var(--muted)]">
-        Contact details are hidden on the public view (Agent/Guest gap closed vs old GAS client-only redaction).
+        Contact details are not available on the public view.
       </p>
     </main>
   );

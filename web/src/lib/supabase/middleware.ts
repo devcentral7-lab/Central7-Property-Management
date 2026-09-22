@@ -30,24 +30,54 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthRoute =
-    path.startsWith("/login") ||
-    path.startsWith("/agent") ||
-    path.startsWith("/auth");
+  const isLogin = path === "/login" || path.startsWith("/login/");
+  const isAuthContinue = path.startsWith("/auth/");
   const isPublic =
     path === "/" || path.startsWith("/search") || path.startsWith("/p/");
+  const isStaffApp = path.startsWith("/app");
+  const isAgentApp = path.startsWith("/agent");
 
-  if (!user && !isAuthRoute && !isPublic) {
+  if (!user && (isStaffApp || isAgentApp || isAuthContinue)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    url.searchParams.set("next", path);
+    url.searchParams.set("next", path.startsWith("/auth") ? "/auth/continue" : path);
     return NextResponse.redirect(url);
   }
 
-  if (user && path === "/login") {
+  if (!user && !isLogin && !isPublic) {
+    // allow other unknown public paths through; protected prefixes handled above
+  }
+
+  if (user && isLogin) {
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
+    url.pathname = "/auth/continue";
     return NextResponse.redirect(url);
+  }
+
+  if (user && isStaffApp) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id, active")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!profile?.active) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/continue";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  if (user && isAgentApp) {
+    const { data: agent } = await supabase
+      .from("users")
+      .select("id, status, active")
+      .eq("auth_user_id", user.id)
+      .maybeSingle();
+    if (!(agent?.status === "Approved" && agent.active)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/continue";
+      return NextResponse.redirect(url);
+    }
   }
 
   return supabaseResponse;

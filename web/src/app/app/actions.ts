@@ -13,6 +13,41 @@ import {
   STATUS_LIST,
   type PropertyType,
 } from "@/lib/constants";
+import {
+  extractPropertyFieldsWithGemini,
+  isGeminiConfigured,
+} from "@/lib/gemini/extract-property";
+
+export type ExtractPropertyResult =
+  | { ok: true; fields: Record<string, string>; configured: true }
+  | { ok: false; error: string; configured: boolean };
+
+export async function extractPropertyFromParagraph(
+  paragraph: string,
+): Promise<ExtractPropertyResult> {
+  try {
+    await requireProfile();
+  } catch {
+    return { ok: false, error: "Sign in required.", configured: isGeminiConfigured() };
+  }
+
+  if (!isGeminiConfigured()) {
+    return {
+      ok: false,
+      configured: false,
+      error:
+        "Gemini is not configured yet. Add GEMINI_API_KEY to web/.env.local and restart the server — you can still fill the form manually.",
+    };
+  }
+
+  try {
+    const fields = await extractPropertyFieldsWithGemini(paragraph);
+    return { ok: true, fields, configured: true };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Extraction failed.";
+    return { ok: false, error: message, configured: true };
+  }
+}
 
 export async function signOut() {
   const supabase = await createClient();
@@ -172,7 +207,8 @@ export async function updatePropertyStatus(formData: FormData) {
 
   const isOwner =
     property.created_by === profile.id ||
-    property.created_by_name === profile.display_name;
+    (!property.created_by &&
+      property.created_by_name === profile.display_name);
   if (profile.role !== "Admin" && !isOwner) {
     throw new Error("Only owner or Admin can change status");
   }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireProfile } from "@/lib/auth";
+import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { signOut } from "@/app/app/actions";
 
 const nav = [
@@ -8,11 +8,13 @@ const nav = [
   { href: "/app/properties", label: "Properties" },
   { href: "/app/properties/new", label: "Add listing" },
   { href: "/app/my-properties", label: "My properties" },
-  { href: "/app/activity", label: "Activity log" },
-  { href: "/app/social-queue", label: "Social queue" },
+  { href: "/app/activity", label: "Activity log", adminOnly: true },
+  { href: "/app/social-queue", label: "Social queue", socialOnly: true },
   { href: "/app/republish-queue", label: "Republish" },
-  { href: "/app/agents", label: "Partners" },
-];
+  { href: "/app/users", label: "Users", adminOnly: true },
+  { href: "/app/agents", label: "Partners", adminOnly: true },
+  { href: "/app/account", label: "Account" },
+] as const;
 
 export default async function AppLayout({
   children,
@@ -23,13 +25,17 @@ export default async function AppLayout({
   try {
     profile = await requireProfile();
   } catch {
-    redirect("/login?next=/app");
+    redirect("/auth/continue");
   }
 
-  const items =
-    profile.role === "Admin"
-      ? nav
-      : nav.filter((n) => !["/app/agents"].includes(n.href));
+  const isAdmin = profile.role === "Admin";
+  const socialOk = isAdmin || (await canAccessSocialQueue(profile));
+
+  const items = nav.filter((n) => {
+    if ("adminOnly" in n && n.adminOnly && !isAdmin) return false;
+    if ("socialOnly" in n && n.socialOnly && !socialOk) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen">

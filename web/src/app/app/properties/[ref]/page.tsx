@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updatePropertyStatus } from "@/app/app/actions";
+import { requireProfile } from "@/lib/auth";
 import { STATUS_CHANGE_OPTIONS } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,6 +12,7 @@ export default async function PropertyDetailPage({
 }) {
   const { ref } = await params;
   const refNo = decodeURIComponent(ref).toUpperCase();
+  const profile = await requireProfile();
   const supabase = await createClient();
 
   const { data: property, error } = await supabase
@@ -20,6 +22,12 @@ export default async function PropertyDetailPage({
     .maybeSingle();
 
   if (error || !property) notFound();
+
+  const isOwner =
+    property.created_by === profile.id ||
+    (!property.created_by &&
+      property.created_by_name === profile.display_name);
+  const canChangeStatus = profile.role === "Admin" || isOwner;
 
   const { data: events } = await supabase
     .from("property_status_events")
@@ -77,37 +85,43 @@ export default async function PropertyDetailPage({
       </div>
 
       <aside className="space-y-6">
-        <form
-          action={updatePropertyStatus}
-          className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5"
-        >
-          <h2 className="font-display text-lg font-semibold">Update status</h2>
-          <input type="hidden" name="ref_no" value={property.ref_no} />
-          <select
-            name="action"
-            required
-            className="mt-3 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-            defaultValue="Data Change"
+        {canChangeStatus ? (
+          <form
+            action={updatePropertyStatus}
+            className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5"
           >
-            {STATUS_CHANGE_OPTIONS.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
-          <textarea
-            name="comment"
-            rows={3}
-            placeholder="Comment"
-            className="mt-3 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-          />
-          <button
-            type="submit"
-            className="mt-3 w-full rounded-full bg-[var(--brand)] py-2.5 text-sm font-semibold text-white"
-          >
-            Submit
-          </button>
-        </form>
+            <h2 className="font-display text-lg font-semibold">Update status</h2>
+            <input type="hidden" name="ref_no" value={property.ref_no} />
+            <select
+              name="action"
+              required
+              className="mt-3 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+              defaultValue="Data Change"
+            >
+              {STATUS_CHANGE_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <textarea
+              name="comment"
+              rows={3}
+              placeholder="Comment"
+              className="mt-3 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              className="mt-3 w-full rounded-full bg-[var(--brand)] py-2.5 text-sm font-semibold text-white"
+            >
+              Submit
+            </button>
+          </form>
+        ) : (
+          <div className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 text-sm text-[var(--muted)]">
+            Only the listing owner or an Admin can change status.
+          </div>
+        )}
 
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
           <h2 className="font-display text-lg font-semibold">Recent activity</h2>

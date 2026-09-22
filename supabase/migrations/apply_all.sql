@@ -1,3 +1,9 @@
+-- STALE / DO NOT USE FOR INCREMENTAL UPDATES.
+-- This file is a frozen early snapshot (0001+0002 era) and still references
+-- dropped objects (cities, messages, agents). Apply numbered migrations instead:
+--   npx tsx scripts/migrate/apply-schema.ts 0015_audit_security_hardening.sql
+-- Fresh projects: apply 0001_init.sql then 0002…0015 in order.
+
 -- Central7 Pulse — optimized schema (Code.gs–aligned)
 -- Apply to a NEW Supabase project. Do not run against the legacy DB in place.
 

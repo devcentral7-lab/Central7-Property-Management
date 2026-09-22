@@ -1,9 +1,14 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
-import { requireProfile } from "@/lib/auth";
+import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function SocialQueuePage() {
-  await requireProfile();
+  const profile = await requireProfile();
+  if (!(await canAccessSocialQueue(profile))) {
+    redirect("/app");
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("social_media_queue")
@@ -18,7 +23,8 @@ export default async function SocialQueuePage() {
     <div>
       <h1 className="font-display text-3xl font-semibold">Social media queue</h1>
       <p className="mt-1 text-sm text-[var(--muted)]">
-        Incomplete items only (max 50). Platform date marking can be wired next.
+        Incomplete items only (max 50). Restricted to Admin and allow-listed
+        operators.
       </p>
       <ul className="mt-6 divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--card)]">
         {(data ?? []).map((row) => (
