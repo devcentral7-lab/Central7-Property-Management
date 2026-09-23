@@ -41,23 +41,24 @@ export default async function SocialQueuePage({
   const supabase = await createClient();
 
   // Only approved (or published) items appear here — pending approval stays on Activity.
-  let query = supabase
-    .from("social_media_queue")
-    .select("*")
-    .not("approved_at", "is", null)
-    .limit(100);
+  // Separate query chains avoid Supabase TS "excessively deep" errors.
+  const { data, error } =
+    tab === "published"
+      ? await supabase
+          .from("social_media_queue")
+          .select("*")
+          .not("approved_at", "is", null)
+          .not("completed_at", "is", null)
+          .order("completed_at", { ascending: false })
+          .limit(100)
+      : await supabase
+          .from("social_media_queue")
+          .select("*")
+          .not("approved_at", "is", null)
+          .is("completed_at", null)
+          .order("approved_at", { ascending: false })
+          .limit(100);
 
-  if (tab === "published") {
-    query = query
-      .not("completed_at", "is", null)
-      .order("completed_at", { ascending: false });
-  } else {
-    query = query
-      .is("completed_at", null)
-      .order("approved_at", { ascending: false });
-  }
-
-  const { data, error } = await query;
   if (error) return <p className="text-[var(--danger)]">{error.message}</p>;
 
   const tabs = [
