@@ -47,7 +47,7 @@ export default async function AppHomePage() {
     ]);
 
   const cards = [
-    { label: "My listings", value: myCount ?? 0, href: "/app/my-properties" },
+    { label: "My listings", value: myCount ?? 0, href: "/app/properties?tab=mine" },
     {
       label: "Active inventory",
       value: activeCount ?? 0,
@@ -69,10 +69,6 @@ export default async function AppHomePage() {
       <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
         Welcome, {profile.display_name}
       </h1>
-      <p className="mt-2 max-w-2xl text-[var(--muted)]">
-        Slim bootstrap only — counts and navigation. Property rows load when you
-        open a list, never the full database.
-      </p>
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {cards.map((c) => (
           <Link
@@ -89,7 +85,7 @@ export default async function AppHomePage() {
       </div>
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/app/listings"
+          href="/app/properties?tab=add"
           className="rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white"
         >
           Add listing

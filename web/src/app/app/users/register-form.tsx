@@ -120,10 +120,6 @@ export function RegisterStaffForm() {
           >
             {pending ? "Registering…" : "Register"}
           </button>
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            A 10-digit temporary password is generated once — copy it and share
-            securely. The user should change it after first login.
-          </p>
         </div>
         {error ? (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">
@@ -137,9 +133,6 @@ export function RegisterStaffForm() {
           <h3 className="font-display text-lg font-semibold text-[var(--brand-deep)]">
             Account created — copy password now
           </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            This password is shown once and cannot be retrieved later.
-          </p>
           <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">Name</dt>

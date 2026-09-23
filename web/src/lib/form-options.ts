@@ -40,61 +40,27 @@ export type FormOptions = {
 export const FORM_LIST_META: {
   key: FormListKey;
   title: string;
-  description: string;
   field: keyof FormOptions;
 }[] = [
-  {
-    key: "amenities_list",
-    title: "Amenities",
-    description: "Checkbox options on the listing form.",
-    field: "amenities",
-  },
-  {
-    key: "contact_types",
-    title: "Contact types",
-    description: "Direct / Partner, etc.",
-    field: "contactTypes",
-  },
+  { key: "amenities_list", title: "Amenities", field: "amenities" },
+  { key: "contact_types", title: "Contact types", field: "contactTypes" },
   {
     key: "opportunity_types",
     title: "Opportunity types",
-    description: "Sell, Rent Out, and any custom options.",
     field: "opportunityTypes",
   },
-  {
-    key: "property_types",
-    title: "Property types",
-    description: "House, Land, Apartment, and custom types.",
-    field: "propertyTypes",
-  },
-  {
-    key: "furnished_list",
-    title: "Furnished options",
-    description: "Furnished dropdown on pricing.",
-    field: "furnished",
-  },
-  {
-    key: "currencies",
-    title: "Currencies",
-    description: "Currency codes shown on the form.",
-    field: "currencies",
-  },
-  {
-    key: "status_list",
-    title: "Listing statuses",
-    description: "Active, Hold, Lost, and other listing statuses.",
-    field: "statuses",
-  },
+  { key: "property_types", title: "Property types", field: "propertyTypes" },
+  { key: "furnished_list", title: "Furnished options", field: "furnished" },
+  { key: "currencies", title: "Currencies", field: "currencies" },
+  { key: "status_list", title: "Listing statuses", field: "statuses" },
   {
     key: "social_media_platforms",
     title: "Publish platforms",
-    description: "Ikman, LPW, Facebook, Instagram, …",
     field: "platforms",
   },
   {
     key: "status_change_options",
     title: "Status change actions",
-    description: "Actions on the property detail activity form.",
     field: "statusChangeOptions",
   },
 ];
@@ -153,6 +119,7 @@ export async function loadFormOptions(): Promise<FormOptions> {
     console.error("loadFormOptions", error.message);
     return FALLBACK;
   }
+
   return fromRows(data);
 }
 

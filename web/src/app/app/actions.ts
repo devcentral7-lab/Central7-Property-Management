@@ -110,8 +110,13 @@ async function buildPropertyPayload(formData: FormData) {
   if (propertyType === "Land") {
     type_attributes.suitable_for = str(formData.get("suitable_for")) || null;
   }
+
+  let floor_area_sqft = num(formData.get("floor_area_sqft"));
   if (propertyType === "Commercial Property") {
-    type_attributes.built_up_area = num(formData.get("built_up_area"));
+    const builtUp = num(formData.get("built_up_area"));
+    type_attributes.built_up_area = builtUp;
+    // Legacy used built-up as the commercial floor-area value.
+    if (builtUp != null) floor_area_sqft = builtUp;
   }
 
   let contact_type: string | null = str(formData.get("contact_type")) || null;
@@ -154,7 +159,7 @@ async function buildPropertyPayload(formData: FormData) {
       address: str(formData.get("address")) || null,
       city,
       land_size_perch: num(formData.get("land_size_perch")),
-      floor_area_sqft: num(formData.get("floor_area_sqft")),
+      floor_area_sqft,
       bedrooms: num(formData.get("bedrooms")),
       bathrooms: num(formData.get("bathrooms")),
       number_of_floors: num(formData.get("number_of_floors")),
@@ -256,6 +261,22 @@ export async function createProperty(formData: FormData) {
       requested_platforms: platforms,
       assigned_to: assignedTo,
     });
+
+    if (platforms.length > 0) {
+      const { error: queueErr } = await supabase.from("social_media_queue").upsert(
+        {
+          property_id: property.id,
+          ref_no: property.ref_no,
+          approved_action: "Publish",
+          approved_by: null,
+          approved_at: null,
+          requested_platforms: platforms,
+          completed_at: null,
+        },
+        { onConflict: "ref_no" },
+      );
+      if (queueErr) throw queueErr;
+    }
   }
 
   await logAudit({
@@ -279,7 +300,8 @@ export async function createProperty(formData: FormData) {
 
   revalidatePath("/app/properties");
   revalidatePath("/app/activity");
-  redirect(`/app/properties/${property.ref_no}`);
+  revalidatePath("/app/social-queue");
+  redirect("/app/properties");
 }
 
 export async function updateProperty(formData: FormData) {
@@ -330,7 +352,7 @@ export async function updateProperty(formData: FormData) {
   revalidatePath(`/app/properties/${refNo}`);
   revalidatePath("/app/properties");
   revalidatePath("/app/activity");
-  redirect(`/app/properties/${refNo}`);
+  redirect("/app/properties");
 }
 
 export async function updatePropertyStatus(formData: FormData) {
@@ -424,8 +446,9 @@ export async function updatePropertyStatus(formData: FormData) {
         property_id: property.id,
         ref_no: property.ref_no,
         approved_action: action,
-        approved_by: profile.display_name,
-        approved_at: new Date().toISOString(),
+        approved_by: null,
+        approved_at: null,
+        completed_at: null,
       },
       { onConflict: "ref_no" },
     );
@@ -433,4 +456,53 @@ export async function updatePropertyStatus(formData: FormData) {
 
   revalidatePath(`/app/properties/${refNo}`);
   revalidatePath("/app/activity");
+  revalidatePath("/app/social-queue");
+}
+
+export async function deleteProperty(formData: FormData) {
+  const profile = await requireProfile();
+  if (profile.role !== "Admin") {
+    throw new Error("Only Admin can delete listings");
+  }
+
+  const supabase = await createClient();
+  const refNo = str(formData.get("ref_no")).toUpperCase();
+  if (!refNo) throw new Error("Missing ref");
+
+  const { data: existing, error: findErr } = await supabase
+    .from("properties")
+    .select("id, ref_no, property_type, city, status, created_by_name")
+    .eq("ref_no", refNo)
+    .single();
+  if (findErr || !existing) throw findErr ?? new Error("Property not found");
+
+  const { error } = await supabase
+    .from("properties")
+    .delete()
+    .eq("id", existing.id);
+  if (error) throw error;
+
+  await logAudit({
+    category: "property",
+    action: "delete",
+    actorName: profile.display_name,
+    actorKind: "staff",
+    subjectType: "property",
+    subjectId: existing.id,
+    subjectLabel: existing.ref_no,
+    summary: `Deleted listing ${existing.ref_no}`,
+    details: {
+      property_type: existing.property_type,
+      city: existing.city,
+      status: existing.status,
+      created_by_name: existing.created_by_name,
+    },
+  });
+
+  revalidatePath("/app/properties");
+  revalidatePath("/app/my-properties");
+  revalidatePath("/app/activity");
+  revalidatePath("/search");
+  revalidatePath("/app");
+  redirect("/app/properties");
 }

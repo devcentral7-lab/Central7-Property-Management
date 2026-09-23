@@ -125,9 +125,6 @@ export function RegisterPartnerForm() {
           <p className="mt-2 text-sm">Username: {created.username}</p>
           {created.tempPassword && created.email ? (
             <>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Copy login credentials now — password shown once.
-              </p>
               <p className="mt-2 text-sm">Email: {created.email}</p>
               <p className="mt-1 font-mono text-base font-semibold tracking-wider">
                 {created.tempPassword}
@@ -142,7 +139,7 @@ export function RegisterPartnerForm() {
             </>
           ) : (
             <p className="mt-1 text-sm text-[var(--muted)]">
-              No login created. You can add one later from the directory.
+              No login created.
             </p>
           )}
         </div>

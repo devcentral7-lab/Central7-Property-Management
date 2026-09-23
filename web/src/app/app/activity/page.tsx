@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import {
+  SocialQueueActions,
+  SocialQueueStatusBadge,
+  type SocialQueueStatus,
+} from "@/app/app/social-queue/queue-actions";
+import { PropertyLink } from "@/app/app/properties/property-modal";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,6 +26,8 @@ type FeedRow = {
   subject_href: string | null;
   summary: string | null;
   detail_lines: string[];
+  queue_id?: string;
+  queue_status?: SocialQueueStatus;
 };
 
 const CATEGORIES = [
@@ -30,6 +38,7 @@ const CATEGORIES = [
   { id: "partner", label: "Partners" },
   { id: "settings", label: "Settings" },
   { id: "workflow", label: "Workflow" },
+  { id: "social", label: "Social media queue" },
 ] as const;
 
 function formatDetails(details: unknown): string[] {
@@ -46,6 +55,15 @@ function formatDetails(details: unknown): string[] {
     .slice(0, 8);
 }
 
+function socialStatus(row: {
+  approved_at: string | null;
+  completed_at: string | null;
+}): SocialQueueStatus {
+  if (row.completed_at) return "published";
+  if (row.approved_at) return "approved";
+  return "pending";
+}
+
 export default async function ActivityPage({
   searchParams,
 }: {
@@ -59,29 +77,39 @@ export default async function ActivityPage({
   const q = one(sp.q).trim().toLowerCase();
   const supabase = await createClient();
 
-  const [{ data: auditRows, error: auditErr }, { data: workflowRows, error: wfErr }] =
-    await Promise.all([
-      supabase
-        .from("audit_log")
-        .select(
-          "id, occurred_at, category, action, actor_name, actor_kind, subject_type, subject_id, subject_label, summary, details, ip, user_agent",
-        )
-        .order("occurred_at", { ascending: false })
-        .limit(200),
-      supabase
-        .from("property_status_events")
-        .select(
-          "id, occurred_at, ref_no, actor_name, action, comment, assigned_to, requested_platforms",
-        )
-        .is("archived_at", null)
-        .order("occurred_at", { ascending: false })
-        .limit(200),
-    ]);
+  const [
+    { data: auditRows, error: auditErr },
+    { data: workflowRows, error: wfErr },
+    { data: socialRows, error: socialErr },
+  ] = await Promise.all([
+    supabase
+      .from("audit_log")
+      .select(
+        "id, occurred_at, category, action, actor_name, actor_kind, subject_type, subject_id, subject_label, summary, details, ip, user_agent",
+      )
+      .order("occurred_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("property_status_events")
+      .select(
+        "id, occurred_at, ref_no, actor_name, action, comment, assigned_to, requested_platforms",
+      )
+      .is("archived_at", null)
+      .order("occurred_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("social_media_queue")
+      .select(
+        "id, ref_no, approved_action, approved_by, approved_at, requested_platforms, completed_at, created_at, updated_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
+  ]);
 
-  if (auditErr || wfErr) {
+  if (auditErr || wfErr || socialErr) {
     return (
       <p className="text-[var(--danger)]">
-        {auditErr?.message || wfErr?.message}
+        {auditErr?.message || wfErr?.message || socialErr?.message}
       </p>
     );
   }
@@ -134,13 +162,53 @@ export default async function ActivityPage({
     });
   }
 
+  for (const row of socialRows ?? []) {
+    const status = socialStatus(row);
+    const platforms =
+      Array.isArray(row.requested_platforms) && row.requested_platforms.length
+        ? row.requested_platforms.join(", ")
+        : "No platforms";
+    const occurred =
+      row.completed_at ||
+      row.approved_at ||
+      row.updated_at ||
+      row.created_at;
+    feed.push({
+      id: `smq-${row.id}`,
+      occurred_at: occurred,
+      category: "social",
+      action: status,
+      actor_name: row.approved_by,
+      actor_kind: row.approved_by ? "staff" : null,
+      subject_label: row.ref_no,
+      subject_href: `/app/properties/${row.ref_no}`,
+      summary: `${row.ref_no} · ${platforms}`,
+      detail_lines: [
+        `status: ${status}`,
+        row.approved_action ? `intent: ${row.approved_action}` : null,
+        row.approved_at
+          ? `approved_at: ${new Date(row.approved_at).toLocaleString()}`
+          : null,
+        row.completed_at
+          ? `published_at: ${new Date(row.completed_at).toLocaleString()}`
+          : null,
+      ].filter(Boolean) as string[],
+      queue_id: row.id,
+      queue_status: status,
+    });
+  }
+
   feed.sort(
     (a, b) =>
       new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
   );
 
   const filtered = feed.filter((row) => {
-    if (category !== "all" && row.category !== category) return false;
+    if (category === "social") {
+      if (!row.queue_id) return false;
+    } else if (category !== "all" && row.category !== category) {
+      return false;
+    }
     if (!q) return true;
     const hay = [
       row.action,
@@ -160,10 +228,6 @@ export default async function ActivityPage({
   return (
     <div>
       <h1 className="font-display text-3xl font-semibold">Activity log</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Full audit trail — logins, logouts, listing changes, staff/partner
-        actions, form option edits, and publish workflow events.
-      </p>
 
       <form className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
         <label className="text-sm font-medium">
@@ -239,6 +303,7 @@ export default async function ActivityPage({
               <th className="px-4 py-3">Actor</th>
               <th className="px-4 py-3">Subject</th>
               <th className="px-4 py-3">Details</th>
+              <th className="px-4 py-3">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -252,7 +317,9 @@ export default async function ActivityPage({
                     ? new Date(e.occurred_at).toLocaleString()
                     : "—"}
                 </td>
-                <td className="px-4 py-3 capitalize">{e.category}</td>
+                <td className="px-4 py-3 capitalize">
+                  {e.category === "social" ? "Social media" : e.category}
+                </td>
                 <td className="px-4 py-3 font-medium">{e.action}</td>
                 <td className="px-4 py-3">
                   {e.actor_name || "—"}
@@ -264,12 +331,18 @@ export default async function ActivityPage({
                 </td>
                 <td className="px-4 py-3">
                   {e.subject_href && e.subject_label ? (
-                    <Link
-                      href={e.subject_href}
-                      className="font-semibold text-[var(--brand-deep)] hover:underline"
-                    >
-                      {e.subject_label}
-                    </Link>
+                    e.subject_href.startsWith("/app/properties/") ? (
+                      <PropertyLink refNo={e.subject_label}>
+                        {e.subject_label}
+                      </PropertyLink>
+                    ) : (
+                      <Link
+                        href={e.subject_href}
+                        className="font-semibold text-[var(--brand-deep)] hover:underline"
+                      >
+                        {e.subject_label}
+                      </Link>
+                    )
                   ) : (
                     e.subject_label || "—"
                   )}
@@ -286,15 +359,28 @@ export default async function ActivityPage({
                     </ul>
                   ) : null}
                 </td>
+                <td className="px-4 py-3">
+                  {e.queue_id && e.queue_status ? (
+                    <div className="space-y-2">
+                      <SocialQueueStatusBadge status={e.queue_status} />
+                      <SocialQueueActions
+                        id={e.queue_id}
+                        status={e.queue_status}
+                      />
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
               </tr>
             ))}
             {!visible.length ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="px-4 py-8 text-center text-sm text-[var(--muted)]"
                 >
-                  No events yet. Sign-ins and admin actions will appear here.
+                  No events yet.
                 </td>
               </tr>
             ) : null}

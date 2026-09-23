@@ -106,14 +106,10 @@ export function AdminDashboard({
           <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
             Operations overview
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--muted)]">
-            Welcome, {name}. Charts use SQL aggregates only — no full inventory
-            download. Window: {data.rangeLabel}.
-          </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Link
-            href="/app/listings"
+            href="/app/properties?tab=add"
             className="rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white"
           >
             Add listing

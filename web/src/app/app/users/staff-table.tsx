@@ -109,9 +109,6 @@ export function StaffTable({ rows, currentAdminId }: Props) {
           <h3 className="font-display text-lg font-semibold text-[var(--brand-deep)]">
             Password reset — copy now
           </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Shown once. Share securely with the user.
-          </p>
           <p className="mt-3 text-sm">
             <span className="text-[var(--muted)]">Email:</span> {resetCred.email}
           </p>

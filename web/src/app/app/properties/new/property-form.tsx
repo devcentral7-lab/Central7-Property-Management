@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   createProperty,
   extractPropertyFromParagraph,
@@ -105,21 +105,30 @@ export function PropertyForm({
   const isCommercial = propertyType === "Commercial Property";
   const isHouseLike =
     propertyType === "House" || propertyType === "Estate";
-
-  const filledCount = useMemo(
-    () =>
-      Object.entries(values).filter(
-        ([k, v]) =>
-          v &&
-          !["opportunity_type", "property_type", "currency", "status"].includes(
-            k,
-          ),
-      ).length,
-    [values],
-  );
+  const typeLabel = propertyType || "Property";
 
   function setField(name: string, value: string) {
     setValues((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function onPropertyTypeChange(nextType: string) {
+    setValues((prev) => ({
+      ...prev,
+      property_type: nextType,
+      purpose: "",
+      land_size_perch: "",
+      floor_area_sqft: "",
+      bedrooms: "",
+      bathrooms: "",
+      number_of_floors: "",
+      parking_spaces: "",
+      age_years: "",
+      apartment_complex_id: "",
+      apartment_floor: "",
+      view: "",
+      suitable_for: "",
+      built_up_area: "",
+    }));
   }
 
   function runExtract() {
@@ -179,38 +188,38 @@ export function PropertyForm({
   }
 
   const inputClass =
-    "mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm";
+    "mt-1 w-full rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-sm";
+  const sectionClass =
+    "grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--card)] p-4 sm:grid-cols-2 xl:grid-cols-3";
   const formAction = mode === "edit" ? updateProperty : createProperty;
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="w-full space-y-4">
       {mode === "create" ? (
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
-          <h2 className="font-display text-lg font-semibold">Paste listing notes</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Drop a free-form paragraph — Gemini fills only the fields it can
-            find. You can edit everything afterward.
-          </p>
-          <textarea
-            value={paragraph}
-            onChange={(e) => setParagraph(e.target.value)}
-            rows={5}
-            placeholder="e.g. 4 bed house in Kandy for sale, 12 perch, 2800 sqft, Rs 45M, contact Nimal 077…"
-            className={`${inputClass} mt-3`}
-          />
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+        <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <h2 className="font-display text-base font-semibold">
+              Paste listing notes
+            </h2>
             <button
               type="button"
               onClick={runExtract}
               disabled={pending || !paragraph.trim()}
-              className="rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+              className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
             >
               {pending ? "Extracting…" : "Fill form with AI"}
             </button>
           </div>
+          <textarea
+            value={paragraph}
+            onChange={(e) => setParagraph(e.target.value)}
+            rows={2}
+            placeholder="e.g. 4 bed house in Kandy for sale, 12 perch, 2800 sqft, Rs 45M, contact Nimal 077…"
+            className={`${inputClass} mt-2`}
+          />
           {aiMessage ? (
             <p
-              className={`mt-3 rounded-lg px-3 py-2 text-sm ${
+              className={`mt-2 rounded-lg px-3 py-1.5 text-sm ${
                 aiError
                   ? "bg-red-50 text-[var(--danger)]"
                   : "bg-[var(--bg-accent)] text-[var(--ink)]"
@@ -219,570 +228,596 @@ export function PropertyForm({
               {aiMessage}
             </p>
           ) : null}
-          {filledCount > 0 ? (
-            <p className="mt-2 text-xs text-[var(--muted)]">
-              {filledCount} non-default fields currently set
-            </p>
-          ) : null}
         </section>
       ) : null}
 
-      <form action={formAction} className="space-y-8">
+      <form action={formAction} className="space-y-4">
         {mode === "edit" && refNo ? (
           <input type="hidden" name="ref_no" value={refNo} />
         ) : null}
 
-        <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 sm:grid-cols-2">
-          <h2 className="font-display text-lg font-semibold sm:col-span-2">
-            Contact
-          </h2>
-          <label className="text-sm font-medium">
-            Contact type
-            <select
-              name="contact_type"
-              value={values.contact_type}
-              onChange={(e) => setField("contact_type", e.target.value)}
-              className={inputClass}
-            >
-              <option value="">—</option>
-              {options.contactTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium">
-            Name of contact *
-            <input
-              name="contact_name"
-              required
-              value={values.contact_name}
-              onChange={(e) => setField("contact_name", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="text-sm font-medium">
-            Contact No 1 *
-            <input
-              name="contact_phone_1"
-              required
-              value={values.contact_phone_1}
-              onChange={(e) => setField("contact_phone_1", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="text-sm font-medium">
-            Contact No 2
-            <input
-              name="contact_phone_2"
-              value={values.contact_phone_2}
-              onChange={(e) => setField("contact_phone_2", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="text-sm font-medium sm:col-span-2">
-            Email
-            <input
-              name="contact_email"
-              type="email"
-              value={values.contact_email}
-              onChange={(e) => setField("contact_email", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-        </section>
-
-        <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 sm:grid-cols-2">
-          <h2 className="font-display text-lg font-semibold sm:col-span-2">
-            Property
-          </h2>
-          <label className="text-sm font-medium">
-            Opportunity *
-            <select
-              name="opportunity_type"
-              required
-              value={values.opportunity_type}
-              onChange={(e) => setField("opportunity_type", e.target.value)}
-              className={inputClass}
-            >
-              {options.opportunityTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium">
-            Property type *
-            <select
-              name="property_type"
-              required
-              value={values.property_type}
-              onChange={(e) => setField("property_type", e.target.value)}
-              className={inputClass}
-            >
-              {options.propertyTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium">
-            Property sub-type
-            <input
-              name="property_subtype"
-              value={values.property_subtype}
-              onChange={(e) => setField("property_subtype", e.target.value)}
-              className={inputClass}
-              placeholder="e.g. Villa, Annex, Shop"
-            />
-          </label>
-          <label className="text-sm font-medium">
-            Status
-            <select
-              name="status"
-              value={values.status}
-              onChange={(e) => setField("status", e.target.value)}
-              className={inputClass}
-            >
-              {options.statuses.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium">
-            City *
-            <input
-              name="city"
-              required
-              value={values.city}
-              onChange={(e) => setField("city", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <label className="text-sm font-medium">
-            Address
-            <input
-              name="address"
-              value={values.address}
-              onChange={(e) => setField("address", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          {(isHouseLike || isCommercial) && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <section className={sectionClass}>
+            <h2 className="font-display text-base font-semibold sm:col-span-2 xl:col-span-3">
+              Contact
+            </h2>
             <label className="text-sm font-medium">
-              Purpose
+              Contact type
+              <select
+                name="contact_type"
+                value={values.contact_type}
+                onChange={(e) => setField("contact_type", e.target.value)}
+                className={inputClass}
+              >
+                <option value="">—</option>
+                {options.contactTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Name of contact *
               <input
-                name="purpose"
-                value={values.purpose}
-                onChange={(e) => setField("purpose", e.target.value)}
+                name="contact_name"
+                required
+                value={values.contact_name}
+                onChange={(e) => setField("contact_name", e.target.value)}
                 className={inputClass}
               />
             </label>
-          )}
-          {!isHouseLike && !isCommercial ? (
-            <input type="hidden" name="purpose" value={values.purpose} />
-          ) : null}
-
-          {(isHouseLike || isLand || isCommercial) && (
             <label className="text-sm font-medium">
-              Land size (perch)
+              Contact No 1 *
               <input
-                name="land_size_perch"
-                value={values.land_size_perch}
-                onChange={(e) => setField("land_size_perch", e.target.value)}
+                name="contact_phone_1"
+                required
+                value={values.contact_phone_1}
+                onChange={(e) => setField("contact_phone_1", e.target.value)}
                 className={inputClass}
               />
             </label>
-          )}
-          {!isHouseLike && !isLand && !isCommercial ? (
-            <input
-              type="hidden"
-              name="land_size_perch"
-              value={values.land_size_perch}
-            />
-          ) : null}
-
-          {(isHouseLike || isApartment || isCommercial) && (
             <label className="text-sm font-medium">
-              Floor area (sqft)
+              Contact No 2
               <input
-                name="floor_area_sqft"
-                value={values.floor_area_sqft}
-                onChange={(e) => setField("floor_area_sqft", e.target.value)}
+                name="contact_phone_2"
+                value={values.contact_phone_2}
+                onChange={(e) => setField("contact_phone_2", e.target.value)}
                 className={inputClass}
               />
             </label>
-          )}
-          {isLand ? (
-            <input
-              type="hidden"
-              name="floor_area_sqft"
-              value={values.floor_area_sqft}
-            />
-          ) : null}
+            <label className="text-sm font-medium sm:col-span-2">
+              Email
+              <input
+                name="contact_email"
+                type="email"
+                value={values.contact_email}
+                onChange={(e) => setField("contact_email", e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          </section>
 
-          {(isHouseLike || isApartment) && (
-            <>
-              <label className="text-sm font-medium">
-                Bedrooms
+          <section className={sectionClass}>
+            <h2 className="font-display text-base font-semibold sm:col-span-2 xl:col-span-3">
+              Property
+            </h2>
+            <label className="text-sm font-medium">
+              Opportunity *
+              <select
+                name="opportunity_type"
+                required
+                value={values.opportunity_type}
+                onChange={(e) => setField("opportunity_type", e.target.value)}
+                className={inputClass}
+              >
+                {options.opportunityTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Property type *
+              <select
+                name="property_type"
+                required
+                value={values.property_type}
+                onChange={(e) => onPropertyTypeChange(e.target.value)}
+                className={inputClass}
+              >
+                {options.propertyTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Property sub-type
+              <input
+                name="property_subtype"
+                value={values.property_subtype}
+                onChange={(e) => setField("property_subtype", e.target.value)}
+                className={inputClass}
+                placeholder="e.g. Villa, Annex, Shop"
+              />
+            </label>
+            <label className="text-sm font-medium">
+              Status
+              <select
+                name="status"
+                value={values.status}
+                onChange={(e) => setField("status", e.target.value)}
+                className={inputClass}
+              >
+                {options.statuses.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              City *
+              <input
+                name="city"
+                required
+                value={values.city}
+                onChange={(e) => setField("city", e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="text-sm font-medium">
+              Address
+              <input
+                name="address"
+                value={values.address}
+                onChange={(e) => setField("address", e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="text-sm font-medium">
+              Latitude
+              <input
+                name="latitude"
+                value={values.latitude}
+                onChange={(e) => setField("latitude", e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 7.2906"
+                inputMode="decimal"
+              />
+            </label>
+            <label className="text-sm font-medium">
+              Longitude
+              <input
+                name="longitude"
+                value={values.longitude}
+                onChange={(e) => setField("longitude", e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 80.6337"
+                inputMode="decimal"
+              />
+            </label>
+          </section>
+
+          <section className={sectionClass}>
+            <div className="sm:col-span-2 xl:col-span-3">
+              <h2 className="font-display text-base font-semibold">
+                {typeLabel} details
+              </h2>
+            </div>
+
+            {isHouseLike ? (
+              <>
+                <label className="text-sm font-medium">
+                  Purpose
+                  <input
+                    name="purpose"
+                    value={values.purpose}
+                    onChange={(e) => setField("purpose", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Land size (perch)
+                  <input
+                    name="land_size_perch"
+                    value={values.land_size_perch}
+                    onChange={(e) => setField("land_size_perch", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Bedrooms
+                  <input
+                    name="bedrooms"
+                    value={values.bedrooms}
+                    onChange={(e) => setField("bedrooms", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Bathrooms
+                  <input
+                    name="bathrooms"
+                    value={values.bathrooms}
+                    onChange={(e) => setField("bathrooms", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Floor area (sqft)
+                  <input
+                    name="floor_area_sqft"
+                    value={values.floor_area_sqft}
+                    onChange={(e) => setField("floor_area_sqft", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Number of floors
+                  <input
+                    name="number_of_floors"
+                    value={values.number_of_floors}
+                    onChange={(e) => setField("number_of_floors", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Parking spaces
+                  <input
+                    name="parking_spaces"
+                    value={values.parking_spaces}
+                    onChange={(e) => setField("parking_spaces", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Age of the house (years)
+                  <input
+                    name="age_years"
+                    value={values.age_years}
+                    onChange={(e) => setField("age_years", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {isLand ? (
+              <>
+                <label className="text-sm font-medium">
+                  Land size (perch)
+                  <input
+                    name="land_size_perch"
+                    value={values.land_size_perch}
+                    onChange={(e) => setField("land_size_perch", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Suitable for
+                  <input
+                    name="suitable_for"
+                    value={values.suitable_for}
+                    onChange={(e) => setField("suitable_for", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {isApartment ? (
+              <>
+                <label className="text-sm font-medium">
+                  Apartment complex
+                  <select
+                    name="apartment_complex_id"
+                    value={values.apartment_complex_id}
+                    onChange={(e) =>
+                      setField("apartment_complex_id", e.target.value)
+                    }
+                    className={inputClass}
+                  >
+                    <option value="">—</option>
+                    {complexes.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Floor
+                  <input
+                    name="apartment_floor"
+                    value={values.apartment_floor}
+                    onChange={(e) => setField("apartment_floor", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Number of rooms
+                  <input
+                    name="bedrooms"
+                    value={values.bedrooms}
+                    onChange={(e) => setField("bedrooms", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Number of bathrooms
+                  <input
+                    name="bathrooms"
+                    value={values.bathrooms}
+                    onChange={(e) => setField("bathrooms", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Floor area (sqft)
+                  <input
+                    name="floor_area_sqft"
+                    value={values.floor_area_sqft}
+                    onChange={(e) => setField("floor_area_sqft", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Dedicated parking slots
+                  <input
+                    name="parking_spaces"
+                    value={values.parking_spaces}
+                    onChange={(e) => setField("parking_spaces", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  View
+                  <input
+                    name="view"
+                    value={values.view}
+                    onChange={(e) => setField("view", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {isCommercial ? (
+              <>
+                <label className="text-sm font-medium">
+                  Purpose
+                  <input
+                    name="purpose"
+                    value={values.purpose}
+                    onChange={(e) => setField("purpose", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Size of land (perch)
+                  <input
+                    name="land_size_perch"
+                    value={values.land_size_perch}
+                    onChange={(e) => setField("land_size_perch", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Built-up area
+                  <input
+                    name="built_up_area"
+                    value={values.built_up_area}
+                    onChange={(e) => setField("built_up_area", e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {!isHouseLike && !isCommercial ? (
+              <input type="hidden" name="purpose" value="" />
+            ) : null}
+            {!isHouseLike && !isLand && !isCommercial ? (
+              <input type="hidden" name="land_size_perch" value="" />
+            ) : null}
+            {!isHouseLike && !isApartment ? (
+              <>
+                <input type="hidden" name="floor_area_sqft" value="" />
+                <input type="hidden" name="bedrooms" value="" />
+                <input type="hidden" name="bathrooms" value="" />
+                <input type="hidden" name="parking_spaces" value="" />
+              </>
+            ) : null}
+            {!isHouseLike ? (
+              <>
+                <input type="hidden" name="number_of_floors" value="" />
+                <input type="hidden" name="age_years" value="" />
+              </>
+            ) : null}
+            {!isApartment ? (
+              <>
+                <input type="hidden" name="apartment_complex_id" value="" />
+                <input type="hidden" name="apartment_floor" value="" />
+                <input type="hidden" name="view" value="" />
+              </>
+            ) : null}
+            {!isLand ? (
+              <input type="hidden" name="suitable_for" value="" />
+            ) : null}
+            {!isCommercial ? (
+              <input type="hidden" name="built_up_area" value="" />
+            ) : null}
+          </section>
+
+          <section className={sectionClass}>
+            <h2 className="font-display text-base font-semibold sm:col-span-2 xl:col-span-3">
+              Pricing
+            </h2>
+            <label className="text-sm font-medium">
+              Currency
+              <select
+                name="currency"
+                value={values.currency}
+                onChange={(e) => setField("currency", e.target.value)}
+                className={inputClass}
+              >
+                {options.currencies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Furnished
+              <select
+                name="furnished"
+                value={values.furnished}
+                onChange={(e) => setField("furnished", e.target.value)}
+                className={inputClass}
+              >
+                <option value="">—</option>
+                {options.furnished.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {(
+              [
+                ["Price per perch", "price_per_perch"],
+                ["Price per sqft", "price_per_sqft"],
+                ["Price total", "price_total"],
+                ["Budget", "budget"],
+              ] as const
+            ).map(([label, name]) => (
+              <label key={name} className="text-sm font-medium">
+                {label}
                 <input
-                  name="bedrooms"
-                  value={values.bedrooms}
-                  onChange={(e) => setField("bedrooms", e.target.value)}
+                  name={name}
+                  value={values[name]}
+                  onChange={(e) => setField(name, e.target.value)}
                   className={inputClass}
                 />
-              </label>
-              <label className="text-sm font-medium">
-                Bathrooms
-                <input
-                  name="bathrooms"
-                  value={values.bathrooms}
-                  onChange={(e) => setField("bathrooms", e.target.value)}
-                  className={inputClass}
-                />
-              </label>
-            </>
-          )}
-          {!(isHouseLike || isApartment) ? (
-            <>
-              <input type="hidden" name="bedrooms" value={values.bedrooms} />
-              <input type="hidden" name="bathrooms" value={values.bathrooms} />
-            </>
-          ) : null}
-
-          {isHouseLike && (
-            <>
-              <label className="text-sm font-medium">
-                Number of floors
-                <input
-                  name="number_of_floors"
-                  value={values.number_of_floors}
-                  onChange={(e) => setField("number_of_floors", e.target.value)}
-                  className={inputClass}
-                />
-              </label>
-              <label className="text-sm font-medium">
-                Age (years)
-                <input
-                  name="age_years"
-                  value={values.age_years}
-                  onChange={(e) => setField("age_years", e.target.value)}
-                  className={inputClass}
-                />
-              </label>
-            </>
-          )}
-          {!isHouseLike ? (
-            <>
-              <input
-                type="hidden"
-                name="number_of_floors"
-                value={values.number_of_floors}
-              />
-              <input type="hidden" name="age_years" value={values.age_years} />
-            </>
-          ) : null}
-
-          {(isHouseLike || isApartment) && (
-            <label className="text-sm font-medium">
-              Parking spaces
-              <input
-                name="parking_spaces"
-                value={values.parking_spaces}
-                onChange={(e) => setField("parking_spaces", e.target.value)}
-                className={inputClass}
-              />
-            </label>
-          )}
-          {!(isHouseLike || isApartment) ? (
-            <input
-              type="hidden"
-              name="parking_spaces"
-              value={values.parking_spaces}
-            />
-          ) : null}
-
-          {isApartment && (
-            <>
-              <label className="text-sm font-medium">
-                Apartment complex
-                <select
-                  name="apartment_complex_id"
-                  value={values.apartment_complex_id}
-                  onChange={(e) =>
-                    setField("apartment_complex_id", e.target.value)
-                  }
-                  className={inputClass}
-                >
-                  <option value="">—</option>
-                  {complexes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                Floor
-                <input
-                  name="apartment_floor"
-                  value={values.apartment_floor}
-                  onChange={(e) => setField("apartment_floor", e.target.value)}
-                  className={inputClass}
-                />
-              </label>
-            </>
-          )}
-          {!isApartment ? (
-            <>
-              <input
-                type="hidden"
-                name="apartment_complex_id"
-                value={values.apartment_complex_id}
-              />
-              <input
-                type="hidden"
-                name="apartment_floor"
-                value={values.apartment_floor}
-              />
-            </>
-          ) : null}
-
-          {(isApartment || isHouseLike) && (
-            <label className="text-sm font-medium">
-              View
-              <input
-                name="view"
-                value={values.view}
-                onChange={(e) => setField("view", e.target.value)}
-                className={inputClass}
-              />
-            </label>
-          )}
-          {!(isApartment || isHouseLike) ? (
-            <input type="hidden" name="view" value={values.view} />
-          ) : null}
-
-          {isLand && (
-            <label className="text-sm font-medium">
-              Suitable for
-              <input
-                name="suitable_for"
-                value={values.suitable_for}
-                onChange={(e) => setField("suitable_for", e.target.value)}
-                className={inputClass}
-              />
-            </label>
-          )}
-          {!isLand ? (
-            <input
-              type="hidden"
-              name="suitable_for"
-              value={values.suitable_for}
-            />
-          ) : null}
-
-          {isCommercial && (
-            <label className="text-sm font-medium">
-              Built-up area
-              <input
-                name="built_up_area"
-                value={values.built_up_area}
-                onChange={(e) => setField("built_up_area", e.target.value)}
-                className={inputClass}
-              />
-            </label>
-          )}
-          {!isCommercial ? (
-            <input
-              type="hidden"
-              name="built_up_area"
-              value={values.built_up_area}
-            />
-          ) : null}
-
-          <label className="text-sm font-medium">
-            Latitude
-            <input
-              name="latitude"
-              value={values.latitude}
-              onChange={(e) => setField("latitude", e.target.value)}
-              className={inputClass}
-              placeholder="e.g. 7.2906"
-              inputMode="decimal"
-            />
-          </label>
-          <label className="text-sm font-medium">
-            Longitude
-            <input
-              name="longitude"
-              value={values.longitude}
-              onChange={(e) => setField("longitude", e.target.value)}
-              className={inputClass}
-              placeholder="e.g. 80.6337"
-              inputMode="decimal"
-            />
-          </label>
-        </section>
-
-        <section className="grid gap-4 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 sm:grid-cols-2">
-          <h2 className="font-display text-lg font-semibold sm:col-span-2">
-            Pricing
-          </h2>
-          <label className="text-sm font-medium">
-            Currency
-            <select
-              name="currency"
-              value={values.currency}
-              onChange={(e) => setField("currency", e.target.value)}
-              className={inputClass}
-            >
-              {options.currencies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium">
-            Furnished
-            <select
-              name="furnished"
-              value={values.furnished}
-              onChange={(e) => setField("furnished", e.target.value)}
-              className={inputClass}
-            >
-              <option value="">—</option>
-              {options.furnished.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          {(
-            [
-              ["Price per perch", "price_per_perch"],
-              ["Price per sqft", "price_per_sqft"],
-              ["Price total", "price_total"],
-              ["Budget", "budget"],
-            ] as const
-          ).map(([label, name]) => (
-            <label key={name} className="text-sm font-medium">
-              {label}
-              <input
-                name={name}
-                value={values[name]}
-                onChange={(e) => setField(name, e.target.value)}
-                className={inputClass}
-              />
-            </label>
-          ))}
-        </section>
-
-        <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
-          <h2 className="font-display text-lg font-semibold">Amenities</h2>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {options.amenities.map((a) => (
-              <label key={a} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  name="amenity"
-                  value={a}
-                  checked={Boolean(amenityChecks[a])}
-                  onChange={(e) =>
-                    setAmenityChecks((prev) => ({
-                      ...prev,
-                      [a]: e.target.checked,
-                    }))
-                  }
-                />
-                {a}
               </label>
             ))}
-          </div>
-          <label className="mt-4 block text-sm font-medium">
-            Other amenities (comma-separated)
-            <input
-              name="amenities"
-              value={values.amenities}
-              onChange={(e) => setField("amenities", e.target.value)}
-              className={inputClass}
-              placeholder="Any extras not listed above"
-            />
-          </label>
-          <label className="mt-3 block text-sm font-medium">
-            Comments / other information
-            <textarea
-              name="comments"
-              rows={4}
-              value={values.comments}
-              onChange={(e) => setField("comments", e.target.value)}
-              className={inputClass}
-            />
-          </label>
-        </section>
+          </section>
+        </div>
 
-        {mode === "create" ? (
-          <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
-            <h2 className="font-display text-lg font-semibold">Publish</h2>
-            <label className="mt-3 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="do_not_publish"
-                checked={doNotPublish}
-                onChange={(e) => setDoNotPublish(e.target.checked)}
-              />
-              Do not publish (record only — no activity log)
-            </label>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {options.platforms.map((p) => (
-                <label
-                  key={p}
-                  className="flex items-center gap-2 rounded-full border border-[var(--line)] px-3 py-1.5 text-sm"
-                >
+        <div className="grid gap-4 xl:grid-cols-2">
+          <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+            <h2 className="font-display text-base font-semibold">Amenities</h2>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+              {options.amenities.map((a) => (
+                <label key={a} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    name={`platform_${p}`}
-                    checked={Boolean(platforms[p])}
+                    name="amenity"
+                    value={a}
+                    checked={Boolean(amenityChecks[a])}
                     onChange={(e) =>
-                      setPlatforms((prev) => ({
+                      setAmenityChecks((prev) => ({
                         ...prev,
-                        [p]: e.target.checked,
+                        [a]: e.target.checked,
                       }))
                     }
                   />
-                  {p}
+                  {a}
                 </label>
               ))}
             </div>
-          </section>
-        ) : (
-          <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
-            <h2 className="font-display text-lg font-semibold">Visibility</h2>
-            <label className="mt-3 flex items-center gap-2 text-sm">
+            <label className="mt-3 block text-sm font-medium">
+              Other amenities (comma-separated)
               <input
-                type="checkbox"
-                name="do_not_publish"
-                checked={doNotPublish}
-                onChange={(e) => setDoNotPublish(e.target.checked)}
+                name="amenities"
+                value={values.amenities}
+                onChange={(e) => setField("amenities", e.target.value)}
+                className={inputClass}
+                placeholder="Any extras not listed above"
               />
-              Do not publish
             </label>
           </section>
-        )}
 
-        <button
-          type="submit"
-          className="rounded-full bg-[var(--brand)] px-6 py-3 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
-        >
-          {mode === "edit" ? "Save changes" : "Save listing"}
-        </button>
+          <div className="space-y-4">
+            <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+              <label className="block text-sm font-medium">
+                Comments / other information
+                <textarea
+                  name="comments"
+                  rows={3}
+                  value={values.comments}
+                  onChange={(e) => setField("comments", e.target.value)}
+                  className={inputClass}
+                />
+              </label>
+            </section>
+
+            {mode === "create" ? (
+              <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+                <h2 className="font-display text-base font-semibold">Publish</h2>
+                <label className="mt-2 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="do_not_publish"
+                    checked={doNotPublish}
+                    onChange={(e) => setDoNotPublish(e.target.checked)}
+                  />
+                  Do not publish (record only)
+                </label>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {options.platforms.map((p) => (
+                    <label
+                      key={p}
+                      className="flex items-center gap-2 rounded-full border border-[var(--line)] px-3 py-1 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name={`platform_${p}`}
+                        checked={Boolean(platforms[p])}
+                        onChange={(e) =>
+                          setPlatforms((prev) => ({
+                            ...prev,
+                            [p]: e.target.checked,
+                          }))
+                        }
+                      />
+                      {p}
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+                <h2 className="font-display text-base font-semibold">
+                  Visibility
+                </h2>
+                <label className="mt-2 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="do_not_publish"
+                    checked={doNotPublish}
+                    onChange={(e) => setDoNotPublish(e.target.checked)}
+                  />
+                  Do not publish
+                </label>
+              </section>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            className="rounded-full bg-[var(--brand)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
+          >
+            {mode === "edit" ? "Save changes" : "Save listing"}
+          </button>
+        </div>
       </form>
     </div>
   );
