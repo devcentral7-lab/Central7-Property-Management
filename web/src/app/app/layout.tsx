@@ -6,13 +6,12 @@ import { signOut } from "@/app/app/actions";
 const nav = [
   { href: "/app", label: "Home" },
   { href: "/app/properties", label: "Properties" },
-  { href: "/app/properties/new", label: "Add listing" },
+  { href: "/app/listings", label: "Listings" },
   { href: "/app/my-properties", label: "My properties" },
   { href: "/app/activity", label: "Activity log", adminOnly: true },
   { href: "/app/social-queue", label: "Social queue", socialOnly: true },
   { href: "/app/republish-queue", label: "Republish" },
-  { href: "/app/users", label: "Users", adminOnly: true },
-  { href: "/app/agents", label: "Partners", adminOnly: true },
+  { href: "/app/user-management", label: "User management", adminOnly: true },
   { href: "/app/account", label: "Account" },
 ] as const;
 

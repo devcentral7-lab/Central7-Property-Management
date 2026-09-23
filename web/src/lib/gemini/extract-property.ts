@@ -1,10 +1,9 @@
+import type { FormOptions } from "@/lib/form-options";
 import {
   CONTACT_TYPES,
   FURNISHED_LIST,
   OPPORTUNITY_TYPES,
   PROPERTY_TYPES,
-  type OpportunityType,
-  type PropertyType,
 } from "@/lib/constants";
 
 /** Partial listing fields Gemini may return. Null/omitted = leave blank. */
@@ -16,6 +15,7 @@ export type ExtractedPropertyFields = {
   contact_email?: string | null;
   opportunity_type?: string | null;
   property_type?: string | null;
+  property_subtype?: string | null;
   city?: string | null;
   address?: string | null;
   purpose?: string | null;
@@ -28,6 +28,8 @@ export type ExtractedPropertyFields = {
   age_years?: number | string | null;
   apartment_floor?: string | null;
   view?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
   suitable_for?: string | null;
   built_up_area?: number | string | null;
   currency?: string | null;
@@ -40,7 +42,7 @@ export type ExtractedPropertyFields = {
   comments?: string | null;
 };
 
-const DEFAULT_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_MODEL = "gemini-flash-lite-latest";
 
 export function getGeminiApiKey(): string | null {
   const key = process.env.GEMINI_API_KEY?.trim();
@@ -60,9 +62,28 @@ function strVal(v: unknown): string {
   return String(v).trim();
 }
 
+type EnumLists = {
+  contactTypes: string[];
+  opportunityTypes: string[];
+  propertyTypes: string[];
+  furnished: string[];
+  currencies: string[];
+};
+
+function defaultEnums(): EnumLists {
+  return {
+    contactTypes: [...CONTACT_TYPES],
+    opportunityTypes: [...OPPORTUNITY_TYPES],
+    propertyTypes: [...PROPERTY_TYPES],
+    furnished: [...FURNISHED_LIST],
+    currencies: ["LKR", "USD"],
+  };
+}
+
 /** Normalize Gemini JSON into form-safe string values (empty = skip). */
 export function normalizeExtractedFields(
   raw: ExtractedPropertyFields,
+  lists: EnumLists = defaultEnums(),
 ): Record<string, string> {
   const out: Record<string, string> = {};
 
@@ -77,34 +98,36 @@ export function normalizeExtractedFields(
   set("city", strVal(raw.city));
   set("address", strVal(raw.address));
   set("purpose", strVal(raw.purpose));
+  set("property_subtype", strVal(raw.property_subtype));
   set("apartment_floor", strVal(raw.apartment_floor));
   set("view", strVal(raw.view));
   set("suitable_for", strVal(raw.suitable_for));
   set("comments", strVal(raw.comments));
 
   const contactType = strVal(raw.contact_type);
-  if (CONTACT_TYPES.includes(contactType as (typeof CONTACT_TYPES)[number])) {
+  if (lists.contactTypes.includes(contactType)) {
     out.contact_type = contactType;
   }
 
   const opp = strVal(raw.opportunity_type);
-  if (OPPORTUNITY_TYPES.includes(opp as OpportunityType)) {
+  if (lists.opportunityTypes.includes(opp)) {
     out.opportunity_type = opp;
   }
 
   const ptype = strVal(raw.property_type);
-  if (PROPERTY_TYPES.includes(ptype as PropertyType)) {
+  if (lists.propertyTypes.includes(ptype)) {
     out.property_type = ptype;
   }
 
   const furnished = strVal(raw.furnished);
-  if (FURNISHED_LIST.includes(furnished as (typeof FURNISHED_LIST)[number])) {
+  if (lists.furnished.includes(furnished)) {
     out.furnished = furnished;
   }
 
   const currency = strVal(raw.currency).toUpperCase();
-  if (currency === "LKR" || currency === "USD") {
-    out.currency = currency;
+  if (lists.currencies.map((c) => c.toUpperCase()).includes(currency)) {
+    out.currency =
+      lists.currencies.find((c) => c.toUpperCase() === currency) || currency;
   }
 
   for (const key of [
@@ -120,6 +143,8 @@ export function normalizeExtractedFields(
     "price_per_sqft",
     "price_total",
     "budget",
+    "latitude",
+    "longitude",
   ] as const) {
     const n = strVal(raw[key]).replace(/,/g, "");
     if (n && Number.isFinite(Number(n))) out[key] = n;
@@ -135,22 +160,23 @@ export function normalizeExtractedFields(
   return out;
 }
 
-function buildPrompt(paragraph: string): string {
+function buildPrompt(paragraph: string, lists: EnumLists): string {
   return [
     "You extract structured real-estate listing fields from informal Sri Lankan property notes.",
     "Return ONLY a JSON object. Use null for any field not clearly stated — do not invent values.",
     "Paragraphs vary; extract only what is present.",
     "",
     "Allowed enums (exact strings when used):",
-    `contact_type: ${CONTACT_TYPES.join(" | ")}`,
-    `opportunity_type: ${OPPORTUNITY_TYPES.join(" | ")}`,
-    `property_type: ${PROPERTY_TYPES.join(" | ")}`,
-    `furnished: ${FURNISHED_LIST.join(" | ")}`,
-    "currency: LKR | USD (default LKR if prices in rupees / Rs / LKR)",
+    `contact_type: ${lists.contactTypes.join(" | ")}`,
+    `opportunity_type: ${lists.opportunityTypes.join(" | ")}`,
+    `property_type: ${lists.propertyTypes.join(" | ")}`,
+    `furnished: ${lists.furnished.join(" | ")}`,
+    `currency: ${lists.currencies.join(" | ")}`,
     "",
     "Numeric fields: land_size_perch, floor_area_sqft, bedrooms, bathrooms,",
     "number_of_floors, parking_spaces, age_years, built_up_area,",
-    "price_per_perch, price_per_sqft, price_total, budget — numbers only, no currency symbols.",
+    "price_per_perch, price_per_sqft, price_total, budget, latitude, longitude — numbers only.",
+    "property_subtype: free text when a more specific type is stated (villa, annex, shop…).",
     "amenities: array of short strings when mentioned.",
     "comments: leftover useful notes not mapped to other fields (optional).",
     "Map rent/lease → opportunity_type Rent Out; sale/selling → Sell.",
@@ -159,11 +185,11 @@ function buildPrompt(paragraph: string): string {
     "",
     "JSON keys:",
     "contact_type, contact_name, contact_phone_1, contact_phone_2, contact_email,",
-    "opportunity_type, property_type, city, address, purpose,",
+    "opportunity_type, property_type, property_subtype, city, address, purpose,",
     "land_size_perch, floor_area_sqft, bedrooms, bathrooms, number_of_floors,",
-    "parking_spaces, age_years, apartment_floor, view, suitable_for, built_up_area,",
-    "currency, furnished, price_per_perch, price_per_sqft, price_total, budget,",
-    "amenities, comments",
+    "parking_spaces, age_years, apartment_floor, view, latitude, longitude,",
+    "suitable_for, built_up_area, currency, furnished,",
+    "price_per_perch, price_per_sqft, price_total, budget, amenities, comments",
     "",
     "Notes:",
     paragraph,
@@ -184,6 +210,7 @@ function parseJsonObject(text: string): ExtractedPropertyFields {
 
 export async function extractPropertyFieldsWithGemini(
   paragraph: string,
+  formOptions?: FormOptions,
 ): Promise<Record<string, string>> {
   const key = getGeminiApiKey();
   if (!key) {
@@ -198,6 +225,16 @@ export async function extractPropertyFieldsWithGemini(
     throw new Error("Paragraph is too long (max ~8000 characters).");
   }
 
+  const lists: EnumLists = formOptions
+    ? {
+        contactTypes: formOptions.contactTypes,
+        opportunityTypes: formOptions.opportunityTypes,
+        propertyTypes: formOptions.propertyTypes,
+        furnished: formOptions.furnished,
+        currencies: formOptions.currencies,
+      }
+    : defaultEnums();
+
   const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
@@ -208,7 +245,7 @@ export async function extractPropertyFieldsWithGemini(
       "x-goog-api-key": key,
     },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: buildPrompt(input) }] }],
+      contents: [{ parts: [{ text: buildPrompt(input, lists) }] }],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 2048,
@@ -236,5 +273,5 @@ export async function extractPropertyFieldsWithGemini(
   if (!text) throw new Error("Gemini returned an empty response.");
 
   const parsed = parseJsonObject(text);
-  return normalizeExtractedFields(parsed);
+  return normalizeExtractedFields(parsed, lists);
 }

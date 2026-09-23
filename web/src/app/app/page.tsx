@@ -89,7 +89,7 @@ export default async function AppHomePage() {
       </div>
       <div className="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/app/properties/new"
+          href="/app/listings"
           className="rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white"
         >
           Add listing
