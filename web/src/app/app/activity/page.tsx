@@ -38,7 +38,7 @@ const CATEGORIES = [
   { id: "partner", label: "Partners" },
   { id: "settings", label: "Settings" },
   { id: "workflow", label: "Workflow" },
-  { id: "social", label: "Social media queue" },
+  { id: "social", label: "Social approvals" },
 ] as const;
 
 function formatDetails(details: unknown): string[] {
@@ -102,6 +102,8 @@ export default async function ActivityPage({
       .select(
         "id, ref_no, approved_action, approved_by, approved_at, requested_platforms, completed_at, created_at, updated_at",
       )
+      .is("approved_at", null)
+      .is("completed_at", null)
       .order("created_at", { ascending: false })
       .limit(100),
   ]);
@@ -177,21 +179,15 @@ export default async function ActivityPage({
       id: `smq-${row.id}`,
       occurred_at: occurred,
       category: "social",
-      action: status,
-      actor_name: row.approved_by,
-      actor_kind: row.approved_by ? "staff" : null,
+      action: "awaiting_approval",
+      actor_name: null,
+      actor_kind: null,
       subject_label: row.ref_no,
       subject_href: `/app/properties/${row.ref_no}`,
       summary: `${row.ref_no} · ${platforms}`,
       detail_lines: [
-        `status: ${status}`,
+        "Needs approval before it appears on the Social media queue",
         row.approved_action ? `intent: ${row.approved_action}` : null,
-        row.approved_at
-          ? `approved_at: ${new Date(row.approved_at).toLocaleString()}`
-          : null,
-        row.completed_at
-          ? `published_at: ${new Date(row.completed_at).toLocaleString()}`
-          : null,
       ].filter(Boolean) as string[],
       queue_id: row.id,
       queue_status: status,
@@ -366,6 +362,7 @@ export default async function ActivityPage({
                       <SocialQueueActions
                         id={e.queue_id}
                         status={e.queue_status}
+                        mode="activity"
                       />
                     </div>
                   ) : (

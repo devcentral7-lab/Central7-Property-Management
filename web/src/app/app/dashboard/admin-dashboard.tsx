@@ -100,36 +100,14 @@ export function AdminDashboard({
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-[var(--brand)]">Admin</p>
-          <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
-            Operations overview
-          </h1>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/app/properties?tab=add"
-            className="rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white"
-          >
-            Add listing
-          </Link>
-          <Link
-            href="/app/properties"
-            className="rounded-full border border-[var(--line)] px-5 py-2.5 text-sm font-semibold"
-          >
-            Search
-          </Link>
-          <Link
-            href="/app/activity"
-            className="rounded-full border border-[var(--line)] px-5 py-2.5 text-sm font-semibold"
-          >
-            Activity
-          </Link>
-        </div>
+      <div>
+        <p className="text-sm font-medium text-[var(--brand)]">Admin</p>
+        <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
+          Operations overview
+        </h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Kpi label="Total listings" value={kpis.total} href="/app/properties" />
         <Kpi
           label="Active"
@@ -141,11 +119,6 @@ export function AdminDashboard({
           label="Social queue"
           value={kpis.socialOpen}
           href="/app/social-queue"
-        />
-        <Kpi
-          label="Republish queue"
-          value={kpis.republishOpen}
-          href="/app/republish-queue"
         />
         <Kpi
           label="Drop / Lost / Closed"

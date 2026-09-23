@@ -33,8 +33,12 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 space-y-4" suppressHydrationWarning>
-      <label className="block text-sm font-medium" suppressHydrationWarning>
+    <form
+      onSubmit={onSubmit}
+      className="mt-8 space-y-5"
+      suppressHydrationWarning
+    >
+      <label className="block text-sm font-medium text-[var(--ink)]" suppressHydrationWarning>
         Email
         <input
           type="email"
@@ -43,11 +47,11 @@ function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="username"
           suppressHydrationWarning
-          className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[var(--brand)] focus:ring-2"
-          placeholder="keerthie@central7.lk"
+          className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 text-[15px] outline-none transition focus:border-[var(--brand)] focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/25"
+          placeholder="you@central7.lk"
         />
       </label>
-      <label className="block text-sm font-medium" suppressHydrationWarning>
+      <label className="block text-sm font-medium text-[var(--ink)]" suppressHydrationWarning>
         Password
         <input
           type="password"
@@ -56,11 +60,14 @@ function LoginForm() {
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
           suppressHydrationWarning
-          className="mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[var(--brand)] focus:ring-2"
+          className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 text-[15px] outline-none transition focus:border-[var(--brand)] focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/25"
         />
       </label>
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
+        <p
+          role="alert"
+          className="rounded-xl border border-[var(--danger)]/20 bg-[var(--danger)]/8 px-3.5 py-2.5 text-sm text-[var(--danger)]"
+        >
           {error}
         </p>
       ) : null}
@@ -68,7 +75,7 @@ function LoginForm() {
         type="submit"
         disabled={loading}
         suppressHydrationWarning
-        className="w-full rounded-full bg-[var(--brand)] py-3 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+        className="mt-1 w-full rounded-xl bg-[var(--brand)] py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--brand-deep)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)] disabled:opacity-60"
       >
         {loading ? "Signing in…" : "Sign in"}
       </button>
@@ -78,15 +85,53 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-3xl border border-[var(--line)] bg-[var(--card)] p-8 shadow-[0_20px_60px_rgba(20,34,27,0.08)]">
-        <Link href="/" className="font-display text-2xl font-semibold text-[var(--brand-deep)]">
-          Central7 Pulse
-        </Link>
-        <h1 className="mt-6 font-display text-3xl font-semibold">Sign in</h1>
-        <Suspense>
-          <LoginForm />
-        </Suspense>
+    <main className="login-page relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[var(--bg)]"
+      />
+      <div
+        aria-hidden
+        className="login-wash pointer-events-none absolute inset-0"
+      />
+      <div
+        aria-hidden
+        className="login-grid pointer-events-none absolute inset-0 opacity-[0.4]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-black/20 backdrop-blur-[2px]"
+      />
+
+      <div className="login-panel relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_24px_64px_rgba(28,25,23,0.18)]">
+        <div className="border-b border-[var(--line)] bg-[var(--card)] px-7 py-5 sm:px-8">
+          <Link
+            href="/"
+            className="font-display text-2xl font-semibold tracking-tight text-[var(--brand-deep)] sm:text-3xl"
+          >
+            Central7 Pulse
+          </Link>
+        </div>
+        <div className="px-7 py-7 sm:px-8 sm:py-8">
+          <h1 className="font-display text-3xl font-semibold text-[var(--ink)]">
+            Sign in
+          </h1>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Use your Central 7 staff email and password.
+          </p>
+          <Suspense>
+            <LoginForm />
+          </Suspense>
+          <p className="mt-8 text-center text-sm text-[var(--muted)]">
+            Looking for public listings?{" "}
+            <Link
+              href="/search"
+              className="font-semibold text-[var(--brand-deep)] underline-offset-2 hover:underline"
+            >
+              Browse search
+            </Link>
+          </p>
+        </div>
       </div>
     </main>
   );

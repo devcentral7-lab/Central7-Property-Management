@@ -35,40 +35,51 @@ export default async function SocialQueuePage({
   }
 
   const sp = await searchParams;
-  const tab = one(sp.tab).toLowerCase() === "past" ? "past" : "active";
+  const tab =
+    one(sp.tab).toLowerCase() === "published" ? "published" : "pending";
   const isAdmin = profile.role === "Admin";
   const supabase = await createClient();
 
+  // Only approved (or published) items appear here — pending approval stays on Activity.
   let query = supabase
     .from("social_media_queue")
     .select("*")
+    .not("approved_at", "is", null)
     .limit(100);
 
-  if (tab === "past") {
+  if (tab === "published") {
     query = query
       .not("completed_at", "is", null)
       .order("completed_at", { ascending: false });
   } else {
     query = query
       .is("completed_at", null)
-      .order("created_at", { ascending: false });
+      .order("approved_at", { ascending: false });
   }
 
   const { data, error } = await query;
   if (error) return <p className="text-[var(--danger)]">{error.message}</p>;
 
   const tabs = [
-    { id: "active" as const, label: "Active", href: "/app/social-queue" },
     {
-      id: "past" as const,
-      label: "Past queue",
-      href: "/app/social-queue?tab=past",
+      id: "pending" as const,
+      label: "Pending",
+      href: "/app/social-queue",
+    },
+    {
+      id: "published" as const,
+      label: "Published",
+      href: "/app/social-queue?tab=published",
     },
   ];
 
   return (
     <div>
       <h1 className="font-display text-3xl font-semibold">Social media queue</h1>
+      <p className="mt-2 text-sm text-[var(--muted)]">
+        Items appear here after approval on the Activity log. Mark them published
+        when posted.
+      </p>
 
       <div className="mt-6 flex flex-wrap gap-2 border-b border-[var(--line)] pb-3">
         {tabs.map((t) => {
@@ -116,14 +127,16 @@ export default async function SocialQueuePage({
                 </p>
               </div>
               {isAdmin ? (
-                <SocialQueueActions id={row.id} status={status} />
+                <SocialQueueActions id={row.id} status={status} mode="smq" />
               ) : null}
             </li>
           );
         })}
         {!data?.length ? (
           <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-            {tab === "past" ? "No past queue items." : "Queue empty."}
+            {tab === "published"
+              ? "No published items yet."
+              : "No pending items. Approve requests from the Activity log first."}
           </li>
         ) : null}
       </ul>

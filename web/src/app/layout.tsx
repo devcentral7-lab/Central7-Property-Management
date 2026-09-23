@@ -19,6 +19,9 @@ export const metadata: Metadata = {
   description: "Central 7 opportunity register — property CRM",
 };
 
+/** Run serverless functions in Mumbai (India). */
+export const preferredRegion = "bom1";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {

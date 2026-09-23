@@ -30,19 +30,12 @@ export default async function AppLayout({
       icon: "check",
       match: "exact",
     },
-    { href: "/app/republish-queue", label: "Published Items", icon: "publish" },
     ...(isAdmin
       ? ([
           {
             href: "/app/user-management",
             label: "Users",
             icon: "users",
-            match: "exact",
-          },
-          {
-            href: "/app/user-management?tab=partners",
-            label: "Agents",
-            icon: "agents",
             match: "exact",
           },
           { href: "/app/activity", label: "Activity Log", icon: "activity" },

@@ -40,3 +40,83 @@ h3,
 .font-display {
   font-family: var(--font-display), Georgia, serif;
 }
+
+/* Login page atmosphere + motion */
+.login-wash {
+  background:
+    radial-gradient(ellipse 70% 55% at 12% 18%, rgba(200, 16, 46, 0.14), transparent 60%),
+    radial-gradient(ellipse 55% 45% at 88% 82%, rgba(159, 12, 36, 0.1), transparent 55%),
+    linear-gradient(145deg, #f7f5f3 0%, #eeeef0 48%, #f3f0ee 100%);
+  animation: login-wash-shift 14s ease-in-out infinite alternate;
+}
+
+.login-grid {
+  background-image:
+    linear-gradient(rgba(28, 25, 23, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 25, 23, 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 75% 70% at 30% 40%, #000 20%, transparent 75%);
+  animation: login-grid-drift 22s linear infinite;
+}
+
+.login-rise {
+  animation: login-rise 0.7s ease-out both;
+}
+
+.login-rise-delay {
+  animation: login-rise 0.75s ease-out 0.15s both;
+}
+
+.login-panel {
+  animation: login-panel-in 0.65s ease-out 0.08s both;
+}
+
+@keyframes login-wash-shift {
+  from {
+    transform: scale(1) translate(0, 0);
+  }
+  to {
+    transform: scale(1.04) translate(-1.5%, 1%);
+  }
+}
+
+@keyframes login-grid-drift {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 48px 24px;
+  }
+}
+
+@keyframes login-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wash,
+  .login-grid,
+  .login-rise,
+  .login-rise-delay,
+  .login-panel {
+    animation: none;
+  }
+}
