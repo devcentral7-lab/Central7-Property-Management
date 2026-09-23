@@ -84,10 +84,6 @@ export default function LoginPage() {
           Central7 Pulse
         </Link>
         <h1 className="mt-6 font-display text-3xl font-semibold">Sign in</h1>
-        <p className="mt-2 text-sm text-[var(--muted)]">
-          Staff and approved partners use the same login. You are routed by
-          account type after sign-in.
-        </p>
         <Suspense>
           <LoginForm />
         </Suspense>

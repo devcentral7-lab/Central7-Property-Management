@@ -7,14 +7,12 @@ import type { FormListKey } from "@/lib/form-options";
 type Props = {
   listKey: FormListKey;
   title: string;
-  description: string;
   initialItems: string[];
 };
 
 export function FormListEditor({
   listKey,
   title,
-  description,
   initialItems,
 }: Props) {
   const [items, setItems] = useState(initialItems);
@@ -70,7 +68,6 @@ export function FormListEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold">{title}</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">{description}</p>
         </div>
         <button
           type="button"

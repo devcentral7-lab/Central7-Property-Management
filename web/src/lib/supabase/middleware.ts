@@ -32,10 +32,17 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isLogin = path === "/login" || path.startsWith("/login/");
   const isAuthContinue = path.startsWith("/auth/");
+  const isHome = path === "/";
   const isPublic =
-    path === "/" || path.startsWith("/search") || path.startsWith("/p/");
+    path.startsWith("/search") || path.startsWith("/p/");
   const isStaffApp = path.startsWith("/app");
   const isAgentApp = path.startsWith("/agent");
+
+  if (isHome) {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/auth/continue" : "/login";
+    return NextResponse.redirect(url);
+  }
 
   if (!user && (isStaffApp || isAgentApp || isAuthContinue)) {
     const url = request.nextUrl.clone();

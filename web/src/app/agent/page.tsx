@@ -41,9 +41,6 @@ export default async function AgentHomePage({
       <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
         Partner search
       </h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">
-        Active listings only · contact details hidden
-      </p>
 
       <form className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 md:grid-cols-4">
         <input

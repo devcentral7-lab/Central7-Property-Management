@@ -48,9 +48,6 @@ export default async function PublicSearchPage({
         </Link>
       </div>
       <h1 className="mt-8 font-display text-4xl font-semibold">Search listings</h1>
-      <p className="mt-2 text-sm text-[var(--muted)]">
-        Public Active listings only · contacts hidden · paginated (never full DB)
-      </p>
 
       <form className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 md:grid-cols-4">
         <input name="q" defaultValue={q} placeholder="Ref or keyword" className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm" />

@@ -59,9 +59,6 @@ export default async function PublicPropertyPage({
           {data.comments}
         </p>
       ) : null}
-      <p className="mt-6 text-xs text-[var(--muted)]">
-        Contact details are not available on the public view.
-      </p>
     </main>
   );
 }
