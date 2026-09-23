@@ -2,8 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updatePropertyStatus } from "@/app/app/actions";
 import { requireProfile } from "@/lib/auth";
-import { STATUS_CHANGE_OPTIONS } from "@/lib/constants";
+import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
+
+function display(v: unknown): string {
+  if (v == null || v === "") return "—";
+  return String(v);
+}
 
 export default async function PropertyDetailPage({
   params,
@@ -27,49 +32,120 @@ export default async function PropertyDetailPage({
     property.created_by === profile.id ||
     (!property.created_by &&
       property.created_by_name === profile.display_name);
-  const canChangeStatus = profile.role === "Admin" || isOwner;
+  const canEdit = profile.role === "Admin" || isOwner;
+  const canChangeStatus = canEdit;
 
-  const { data: events } = await supabase
-    .from("property_status_events")
-    .select("id, occurred_at, actor_name, action, comment, assigned_to, requested_platforms")
-    .eq("ref_no", refNo)
-    .is("archived_at", null)
-    .order("occurred_at", { ascending: false })
-    .limit(20);
+  const [{ data: events }, { data: coords }, { data: complex }, options] =
+    await Promise.all([
+      supabase
+        .from("property_status_events")
+        .select(
+          "id, occurred_at, actor_name, action, comment, assigned_to, requested_platforms",
+        )
+        .eq("ref_no", refNo)
+        .is("archived_at", null)
+        .order("occurred_at", { ascending: false })
+        .limit(20),
+      supabase.rpc("get_property_location", { p_property_id: property.id }),
+      property.apartment_complex_id
+        ? supabase
+            .from("apartment_complexes")
+            .select("name")
+            .eq("id", property.apartment_complex_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      loadFormOptions(),
+    ]);
+
+  const coord = Array.isArray(coords) ? coords[0] : coords;
+  const attrs = (property.type_attributes || {}) as Record<string, unknown>;
+  const amenities = (property.amenities || []) as string[];
+
+  const fields: [string, unknown][] = [
+    ["Contact type", property.contact_type],
+    ["Contact", property.contact_name],
+    ["Phone 1", property.contact_phone_1],
+    ["Phone 2", property.contact_phone_2],
+    ["Email", property.contact_email],
+    ["Opportunity", property.opportunity_type],
+    ["Property type", property.property_type],
+    ["Sub-type", property.property_subtype],
+    ["Purpose", property.purpose],
+    ["Status", property.status],
+    ["City", property.city],
+    ["Address", property.address],
+    [
+      "Coordinates",
+      coord?.lat != null && coord?.lng != null
+        ? `${coord.lat}, ${coord.lng}`
+        : null,
+    ],
+    ["Land (perch)", property.land_size_perch],
+    ["Floor area (sqft)", property.floor_area_sqft],
+    ["Bedrooms", property.bedrooms],
+    ["Bathrooms", property.bathrooms],
+    ["Floors", property.number_of_floors],
+    ["Parking", property.parking_spaces],
+    ["Age (years)", property.age_years],
+    ["Apartment complex", complex?.name],
+    ["Apartment floor", property.apartment_floor],
+    ["View", property.view],
+    ["Suitable for", attrs.suitable_for],
+    ["Built-up area", attrs.built_up_area],
+    ["Currency", property.currency],
+    ["Price per perch", property.price_per_perch],
+    ["Price per sqft", property.price_per_sqft],
+    [
+      "Price total",
+      property.price_total != null
+        ? `${property.currency} ${property.price_total}`
+        : null,
+    ],
+    ["Budget", property.budget],
+    ["Furnished", property.furnished],
+    ["Do not publish", property.do_not_publish ? "Yes" : "No"],
+    ["Amenities", amenities.length ? amenities.join(", ") : null],
+    ["Created by", property.created_by_name],
+    ["Created", property.created_at],
+    ["Updated", property.updated_at],
+  ];
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
       <div>
-        <Link href="/app/properties" className="text-sm text-[var(--muted)] hover:underline">
+        <Link
+          href="/app/properties"
+          className="text-sm text-[var(--muted)] hover:underline"
+        >
           ← Properties
         </Link>
-        <h1 className="mt-3 font-display text-4xl font-semibold text-[var(--brand-deep)]">
-          {property.ref_no}
-        </h1>
-        <p className="mt-1 text-[var(--muted)]">
-          {property.property_type} · {property.opportunity_type} · {property.status}
-        </p>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
+              {property.ref_no}
+            </h1>
+            <p className="mt-1 text-[var(--muted)]">
+              {property.property_type} · {property.opportunity_type} ·{" "}
+              {property.status}
+            </p>
+          </div>
+          {canEdit ? (
+            <Link
+              href={`/app/properties/${property.ref_no}/edit`}
+              className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
+            >
+              Edit listing
+            </Link>
+          ) : null}
+        </div>
 
         <dl className="mt-8 grid gap-4 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-6 sm:grid-cols-2">
-          {[
-            ["Contact", property.contact_name],
-            ["Phone", property.contact_phone_1],
-            ["City", property.city],
-            ["Address", property.address],
-            ["Land (perch)", property.land_size_perch],
-            ["Floor area", property.floor_area_sqft],
-            ["Beds / Baths", `${property.bedrooms ?? "—"} / ${property.bathrooms ?? "—"}`],
-            ["Parking", property.parking_spaces],
-            ["View", property.view],
-            ["Price total", property.price_total ? `${property.currency} ${property.price_total}` : null],
-            ["Agent", property.created_by_name],
-            ["Amenities", (property.amenities || []).join(", ")],
-          ].map(([label, value]) => (
+          {fields.map(([label, value]) => (
             <div key={String(label)}>
               <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                 {label}
               </dt>
-              <dd className="mt-1 text-sm">{value || "—"}</dd>
+              <dd className="mt-1 text-sm">{display(value)}</dd>
             </div>
           ))}
         </dl>
@@ -98,7 +174,7 @@ export default async function PropertyDetailPage({
               className="mt-3 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
               defaultValue="Data Change"
             >
-              {STATUS_CHANGE_OPTIONS.map((o) => (
+              {options.statusChangeOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
@@ -127,13 +203,18 @@ export default async function PropertyDetailPage({
           <h2 className="font-display text-lg font-semibold">Recent activity</h2>
           <ul className="mt-3 space-y-3">
             {(events ?? []).map((e) => (
-              <li key={e.id} className="border-b border-[var(--line)] pb-3 text-sm last:border-0">
+              <li
+                key={e.id}
+                className="border-b border-[var(--line)] pb-3 text-sm last:border-0"
+              >
                 <p className="font-semibold">{e.action}</p>
                 <p className="text-xs text-[var(--muted)]">
                   {e.actor_name || "—"}
                   {e.assigned_to ? ` → ${e.assigned_to}` : ""}
                 </p>
-                {e.comment ? <p className="mt-1 text-[var(--muted)]">{e.comment}</p> : null}
+                {e.comment ? (
+                  <p className="mt-1 text-[var(--muted)]">{e.comment}</p>
+                ) : null}
               </li>
             ))}
             {!events?.length ? (

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 import { generateTempPassword } from "@/lib/auth-password";
 
 export type PartnerApprovalStatus = "Pending" | "Approved" | "Rejected";
@@ -143,7 +144,20 @@ export async function registerPartner(
       return { ok: false, error: error.message };
     }
 
-    revalidatePath("/app/agents");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "partner",
+      action: "create",
+      subjectType: "partner",
+      subjectLabel: fields.username,
+      summary: `Created partner ${fields.company_name || fields.username} (${fields.status})`,
+      details: {
+        username: fields.username,
+        status: fields.status,
+        active: fields.active,
+        login_created: Boolean(authUserId),
+      },
+    });
     return {
       ok: true,
       username: fields.username,
@@ -224,7 +238,19 @@ export async function updatePartner(
       if (authErr) return { ok: false, error: authErr.message };
     }
 
-    revalidatePath("/app/agents");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "partner",
+      action: "update",
+      subjectType: "partner",
+      subjectId: id,
+      subjectLabel: fields.username,
+      summary: `Updated partner ${fields.company_name || fields.username}`,
+      details: {
+        status: fields.status,
+        active: fields.active,
+      },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -266,7 +292,7 @@ export async function resetPartnerPassword(
     );
     if (upErr) return { ok: false, error: upErr.message };
 
-    revalidatePath("/app/agents");
+    revalidatePath("/app/user-management");
     return { ok: true, tempPassword, email };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -319,7 +345,7 @@ export async function createPartnerLogin(
       return { ok: false, error: linkErr.message };
     }
 
-    revalidatePath("/app/agents");
+    revalidatePath("/app/user-management");
     return { ok: true, tempPassword, email: partner.email };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -348,7 +374,15 @@ export async function deletePartner(
       await admin.auth.admin.deleteUser(partner.auth_user_id);
     }
 
-    revalidatePath("/app/agents");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "partner",
+      action: "delete",
+      subjectType: "partner",
+      subjectId: partnerId,
+      summary: "Deleted partner",
+      details: { partner_id: partnerId },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };

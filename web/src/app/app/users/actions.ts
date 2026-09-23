@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 import { generateTempPassword } from "@/lib/auth-password";
 import type { StaffRole } from "@/lib/constants";
 
@@ -143,7 +144,16 @@ export async function registerStaffUser(
     return { ok: false, error: profileErr.message };
   }
 
-  revalidatePath("/app/users");
+  revalidatePath("/app/user-management");
+  await logAudit({
+    category: "staff",
+    action: "create",
+    subjectType: "profile",
+    subjectId: created.user.id,
+    subjectLabel: display_name,
+    summary: `Created staff ${display_name} (${role})`,
+    details: { email, role, active },
+  });
   return {
     ok: true,
     email,
@@ -168,7 +178,15 @@ export async function setStaffActive(
       .update({ active })
       .eq("id", userId);
     if (error) return { ok: false, error: error.message };
-    revalidatePath("/app/users");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "staff",
+      action: active ? "activate" : "deactivate",
+      subjectType: "profile",
+      subjectId: userId,
+      summary: `${active ? "Activated" : "Deactivated"} staff account`,
+      details: { user_id: userId, active },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -190,7 +208,15 @@ export async function setStaffRole(
       .update({ role })
       .eq("id", userId);
     if (error) return { ok: false, error: error.message };
-    revalidatePath("/app/users");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "staff",
+      action: "set_role",
+      subjectType: "profile",
+      subjectId: userId,
+      summary: `Set staff role to ${role}`,
+      details: { user_id: userId, role },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -250,7 +276,16 @@ export async function updateStaffUser(
     });
     if (authErr) return { ok: false, error: authErr.message };
 
-    revalidatePath("/app/users");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "staff",
+      action: "update",
+      subjectType: "profile",
+      subjectId: userId,
+      subjectLabel: display_name,
+      summary: `Updated staff ${display_name}`,
+      details: { email, role, active },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -283,7 +318,7 @@ export async function resetStaffPassword(
     });
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath("/app/users");
+    revalidatePath("/app/user-management");
     return {
       ok: true,
       tempPassword,
@@ -309,7 +344,15 @@ export async function deleteStaffUser(
     const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath("/app/users");
+    revalidatePath("/app/user-management");
+    await logAudit({
+      category: "staff",
+      action: "delete",
+      subjectType: "profile",
+      subjectId: userId,
+      summary: `Deleted staff account`,
+      details: { user_id: userId },
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
@@ -369,5 +412,13 @@ export async function changePassword(
     return { ok: false, error: updateErr.message };
   }
 
+  await logAudit({
+    category: "auth",
+    action: "password_change",
+    subjectType: "session",
+    subjectLabel: user.email,
+    summary: "Changed account password",
+    details: { auth_user_id: user.id },
+  });
   return { ok: true };
 }

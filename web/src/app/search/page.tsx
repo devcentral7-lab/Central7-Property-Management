@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PAGE_SIZE, PROPERTY_TYPES } from "@/lib/constants";
+import { PAGE_SIZE } from "@/lib/constants";
+import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyCard } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export default async function PublicSearchPage({
   const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
+  const options = await loadFormOptions();
   let query = supabase
     .from("property_public_cards")
     .select("*", { count: "exact" })
@@ -54,7 +56,7 @@ export default async function PublicSearchPage({
         <input name="q" defaultValue={q} placeholder="Ref or keyword" className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm" />
         <select name="property_type" defaultValue={propertyType} className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm">
           <option value="">All types</option>
-          {PROPERTY_TYPES.map((t) => (
+          {options.propertyTypes.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
         </select>

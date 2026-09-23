@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PAGE_SIZE, PROPERTY_TYPES, STATUS_LIST } from "@/lib/constants";
+import { PAGE_SIZE } from "@/lib/constants";
+import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyCard } from "@/lib/types";
 
@@ -30,6 +31,7 @@ export default async function PropertiesPage({
   const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
+  const options = await loadFormOptions();
   let query = supabase
     .from("property_list_cards")
     .select("*", { count: "exact" })
@@ -77,7 +79,7 @@ export default async function PropertiesPage({
           </p>
         </div>
         <Link
-          href="/app/properties/new"
+          href="/app/listings"
           className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white"
         >
           Add listing
@@ -97,7 +99,7 @@ export default async function PropertiesPage({
           className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
         >
           <option value="">All statuses</option>
-          {STATUS_LIST.map((s) => (
+          {options.statuses.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -109,7 +111,7 @@ export default async function PropertiesPage({
           className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
         >
           <option value="">All types</option>
-          {PROPERTY_TYPES.map((t) => (
+          {options.propertyTypes.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
