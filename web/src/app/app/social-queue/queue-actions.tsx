@@ -11,7 +11,7 @@ export type SocialQueueStatus = "pending" | "approved" | "published";
 
 export function queueStatusLabel(status: SocialQueueStatus) {
   if (status === "pending") return "Pending approval";
-  if (status === "approved") return "Approved";
+  if (status === "approved") return "Pending publish";
   return "Published";
 }
 
@@ -31,12 +31,15 @@ export function SocialQueueStatusBadge({ status }: { status: SocialQueueStatus }
   );
 }
 
+/** Activity = approve only. SMQ = publish / revert publish. */
 export function SocialQueueActions({
   id,
   status,
+  mode,
 }: {
   id: string;
   status: SocialQueueStatus;
+  mode: "activity" | "smq";
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -50,37 +53,33 @@ export function SocialQueueActions({
     });
   }
 
-  return (
-    <div className="flex flex-wrap gap-2">
-      {status === "pending" ? (
+  if (mode === "activity") {
+    if (status !== "pending") return null;
+    return (
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={pending}
           onClick={() => run("approve")}
           className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
         >
-          {pending ? "Saving…" : "Mark approved"}
+          {pending ? "Saving…" : "Approve"}
         </button>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
       {status === "approved" ? (
-        <>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => run("publish")}
-            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-accent)] disabled:opacity-60"
-          >
-            {pending ? "Saving…" : "Mark published"}
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => run("revert")}
-            className="rounded-full px-3 py-1.5 text-xs font-semibold text-[var(--muted)] hover:underline disabled:opacity-60"
-          >
-            Revert to pending
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => run("publish")}
+          className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+        >
+          {pending ? "Saving…" : "Mark published"}
+        </button>
       ) : null}
       {status === "published" ? (
         <button
@@ -89,7 +88,7 @@ export function SocialQueueActions({
           onClick={() => run("revert")}
           className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-accent)] disabled:opacity-60"
         >
-          {pending ? "Saving…" : "Revert to approved"}
+          {pending ? "Saving…" : "Revert to pending"}
         </button>
       ) : null}
     </div>

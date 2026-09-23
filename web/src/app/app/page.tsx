@@ -42,6 +42,7 @@ export default async function AppHomePage() {
         ? supabase
             .from("social_media_queue")
             .select("*", { count: "exact", head: true })
+            .not("approved_at", "is", null)
             .is("completed_at", null)
         : Promise.resolve({ count: null }),
     ]);

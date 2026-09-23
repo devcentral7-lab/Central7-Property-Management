@@ -44,7 +44,7 @@ export async function approveSocialQueueItem(formData: FormData) {
   if (error) throw error;
 
   await logAudit({
-    category: "social",
+    category: "queue",
     action: "approve",
     actorName: profile.display_name,
     actorKind: "staff",
@@ -88,7 +88,7 @@ export async function publishSocialQueueItem(formData: FormData) {
   if (error) throw error;
 
   await logAudit({
-    category: "social",
+    category: "queue",
     action: "publish",
     actorName: profile.display_name,
     actorKind: "staff",
@@ -127,7 +127,7 @@ export async function revertSocialQueueItem(formData: FormData) {
     if (error) throw error;
 
     await logAudit({
-      category: "social",
+      category: "queue",
       action: "revert_publish",
       actorName: profile.display_name,
       actorKind: "staff",
@@ -148,7 +148,7 @@ export async function revertSocialQueueItem(formData: FormData) {
     if (error) throw error;
 
     await logAudit({
-      category: "social",
+      category: "queue",
       action: "revert_approve",
       actorName: profile.display_name,
       actorKind: "staff",
