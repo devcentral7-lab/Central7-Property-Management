@@ -55,12 +55,12 @@ export default async function UserManagementPage({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
-        <h1 className="font-display text-3xl font-semibold">User management</h1>
+        <h1 className="font-display text-2xl font-semibold sm:text-3xl">User management</h1>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-[var(--line)] pb-3">
+      <div className="tab-scroll -mx-4 border-b border-[var(--line)] px-4 pb-3 sm:mx-0 sm:px-0">
         {tabs.map((t) => {
           const active = t.id === tab;
           return (

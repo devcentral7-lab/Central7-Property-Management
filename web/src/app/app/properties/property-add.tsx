@@ -16,10 +16,16 @@ export async function PropertyAddPanel({ isAdmin, section }: Props) {
   }
 
   const supabase = await createClient();
-  const [{ data: complexes }, options] = await Promise.all([
+  const [{ data: complexes }, options, { data: refRow }] = await Promise.all([
     supabase.from("apartment_complexes").select("id, name").order("name"),
     loadFormOptions(),
+    section === "add"
+      ? supabase.rpc("next_property_ref")
+      : Promise.resolve({ data: null }),
   ]);
+  const nextRef =
+    ((Array.isArray(refRow) ? refRow[0] : refRow) as { ref_no?: string } | null)
+      ?.ref_no ?? null;
 
   const subTabs = [
     { id: "add" as const, label: "Add listing", href: "/app/properties?tab=add" },
@@ -37,7 +43,7 @@ export async function PropertyAddPanel({ isAdmin, section }: Props) {
   return (
     <div className="w-full">
       {subTabs.length > 1 ? (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="tab-scroll -mx-4 mb-4 px-4 sm:mx-0 sm:px-0">
           {subTabs.map((t) => {
             const active = t.id === section;
             return (
@@ -58,7 +64,11 @@ export async function PropertyAddPanel({ isAdmin, section }: Props) {
       ) : null}
 
       {section === "add" ? (
-        <PropertyForm complexes={complexes ?? []} options={options} />
+        <PropertyForm
+          complexes={complexes ?? []}
+          options={options}
+          nextRef={nextRef}
+        />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {FORM_LIST_META.map((meta) => (

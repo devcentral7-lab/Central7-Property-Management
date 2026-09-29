@@ -134,8 +134,8 @@ export function StaffTable({ rows, currentAdminId }: Props) {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)]">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)]">
+        <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/50 text-[var(--muted)]">
             <tr>
               <th className="px-4 py-3">Name</th>

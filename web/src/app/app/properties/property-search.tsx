@@ -56,7 +56,12 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (filters.property_subtype) {
     query = query.ilike("property_subtype", `%${filters.property_subtype}%`);
   }
-  if (filters.purpose) query = query.ilike("purpose", `%${filters.purpose}%`);
+  if (filters.purpose) {
+    const p = filters.purpose.replace(/[%_,()]/g, " ");
+    query = query.or(
+      `purpose.ilike.%${p}%,type_attributes->>suitable_for.ilike.%${p}%`,
+    );
+  }
   if (filters.view) query = query.ilike("view", `%${filters.view}%`);
   if (filters.agent) {
     query = query.ilike("created_by_name", `%${filters.agent}%`);
@@ -114,7 +119,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (filters.q) {
     const q = filters.q.replace(/[%_,]/g, " ");
     query = query.or(
-      `ref_no.ilike.%${q}%,contact_name.ilike.%${q}%,address.ilike.%${q}%,city.ilike.%${q}%,contact_phone_1.ilike.%${q}%,comments.ilike.%${q}%`,
+      `ref_no.ilike.%${q}%,contact_name.ilike.%${q}%,address.ilike.%${q}%,city.ilike.%${q}%,contact_phone_1.ilike.%${q}%,comments.ilike.%${q}%,internal_comments.ilike.%${q}%`,
     );
   }
 
@@ -150,7 +155,37 @@ export async function PropertySearchPanel({ filters, page }: Props) {
         · {PAGE_SIZE} per page
       </p>
 
-      <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)]">
+      <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] md:hidden">
+        {rows.map((r) => (
+          <li key={r.id} className="px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
+              <span className="shrink-0 rounded-full bg-[var(--bg-accent)] px-2.5 py-0.5 text-xs font-semibold">
+                {r.status}
+              </span>
+            </div>
+            <p className="mt-1 text-sm">
+              {r.property_type} · {r.opportunity_type} · {r.city || "—"}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
+              <span className="font-semibold">
+                {formatMoney(r.price_total, r.currency)}
+              </span>
+              <span className="text-xs text-[var(--muted)]">
+                {r.bedrooms ?? "—"} bd / {r.bathrooms ?? "—"} ba ·{" "}
+                {r.created_by_name || "—"}
+              </span>
+            </div>
+          </li>
+        ))}
+        {!rows.length ? (
+          <li className="px-4 py-10 text-center text-sm text-[var(--muted)]">
+            No properties match these filters.
+          </li>
+        ) : null}
+      </ul>
+
+      <div className="hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)] md:block">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/60 text-[var(--muted)]">
             <tr>
@@ -206,13 +241,13 @@ export async function PropertySearchPanel({ filters, page }: Props) {
       <div className="flex items-center justify-between">
         <Link
           href={hrefFor(Math.max(1, page - 1))}
-          className={`text-sm font-medium ${page <= 1 ? "pointer-events-none opacity-40" : ""}`}
+          className={`-ml-2 rounded-lg px-2 py-2 text-sm font-medium ${page <= 1 ? "pointer-events-none opacity-40" : ""}`}
         >
           ← Previous
         </Link>
         <Link
           href={hrefFor(Math.min(totalPages, page + 1))}
-          className={`text-sm font-medium ${page >= totalPages ? "pointer-events-none opacity-40" : ""}`}
+          className={`-mr-2 rounded-lg px-2 py-2 text-sm font-medium ${page >= totalPages ? "pointer-events-none opacity-40" : ""}`}
         >
           Next →
         </Link>

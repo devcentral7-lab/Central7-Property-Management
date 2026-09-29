@@ -33,10 +33,9 @@ function typeSpecificKeys(propertyType: string): Set<string> {
     ]);
   }
   if (propertyType === "Commercial Property") {
-    return new Set(["purpose", "land_size_perch", "built_up_area"]);
+    return new Set(["suitable_for", "land_size_perch", "built_up_area"]);
   }
   return new Set([
-    "purpose",
     "land_size_perch",
     "bedrooms",
     "bathrooms",
@@ -61,6 +60,7 @@ export type PropertyModalData = {
   refNo: string;
   headline: string;
   comments: string | null;
+  internalComments: string | null;
   fields: PropertyModalField[];
   events: PropertyModalEvent[];
   canEdit: boolean;
@@ -228,6 +228,7 @@ export async function getPropertyModalData(
         refNo: property.ref_no,
         headline: `${property.property_type} · ${property.opportunity_type} · ${property.status}`,
         comments: property.comments,
+        internalComments: property.internal_comments,
         fields,
         events: (events ?? []).map((e) => ({
           id: e.id,
@@ -283,6 +284,7 @@ export async function getPropertyModalData(
           budget: s(property.budget),
           amenities: customAmenities,
           comments: s(property.comments),
+          internal_comments: s(property.internal_comments),
         },
       },
     };

@@ -223,15 +223,15 @@ export default async function ActivityPage({
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Activity log</h1>
+      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Activity log</h1>
 
-      <form className="mt-6 flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
+      <form className="mt-5 flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="text-sm font-medium">
           Category
           <select
             name="category"
             defaultValue={category}
-            className="mt-1 block rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm sm:w-auto"
           >
             {CATEGORIES.map((c) => (
               <option key={c.id} value={c.id}>
@@ -240,7 +240,7 @@ export default async function ActivityPage({
             ))}
           </select>
         </label>
-        <label className="min-w-[12rem] flex-1 text-sm font-medium">
+        <label className="text-sm font-medium sm:min-w-[12rem] sm:flex-1">
           Search
           <input
             name="q"
@@ -257,7 +257,7 @@ export default async function ActivityPage({
         </button>
       </form>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="tab-scroll -mx-4 mt-4 px-4 sm:mx-0 sm:px-0">
         {CATEGORIES.map((c) => {
           const href =
             c.id === "all"
@@ -289,8 +289,81 @@ export default async function ActivityPage({
         first).
       </p>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)]">
-        <table className="w-full text-left text-sm">
+      <ul className="mt-4 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] md:hidden">
+        {visible.map((e) => (
+          <li key={e.id} className="px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">{e.action}</p>
+                <p className="text-xs capitalize text-[var(--muted)]">
+                  {e.category === "social" ? "Social media" : e.category}
+                  {" · "}
+                  {e.occurred_at
+                    ? new Date(e.occurred_at).toLocaleString()
+                    : "—"}
+                </p>
+              </div>
+              {e.subject_href && e.subject_label ? (
+                <div className="shrink-0 text-sm">
+                  {e.subject_href.startsWith("/app/properties/") ? (
+                    <PropertyLink refNo={e.subject_label}>
+                      {e.subject_label}
+                    </PropertyLink>
+                  ) : (
+                    <Link
+                      href={e.subject_href}
+                      className="font-semibold text-[var(--brand-deep)] hover:underline"
+                    >
+                      {e.subject_label}
+                    </Link>
+                  )}
+                </div>
+              ) : e.subject_label ? (
+                <span className="shrink-0 text-sm">{e.subject_label}</span>
+              ) : null}
+            </div>
+            {e.actor_name ? (
+              <p className="mt-1 text-sm">
+                {e.actor_name}
+                {e.actor_kind ? (
+                  <span className="text-xs text-[var(--muted)]">
+                    {" "}
+                    · {e.actor_kind}
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+            {e.summary ? (
+              <p className="mt-1 break-words text-sm">{e.summary}</p>
+            ) : null}
+            {e.detail_lines.length ? (
+              <ul className="mt-1 space-y-0.5 break-words text-xs text-[var(--muted)]">
+                {e.detail_lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
+            {e.queue_id && e.queue_status ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <SocialQueueStatusBadge status={e.queue_status} />
+                <SocialQueueActions
+                  id={e.queue_id}
+                  status={e.queue_status}
+                  mode="activity"
+                />
+              </div>
+            ) : null}
+          </li>
+        ))}
+        {!visible.length ? (
+          <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
+            No events yet.
+          </li>
+        ) : null}
+      </ul>
+
+      <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)] md:block">
+        <table className="w-full min-w-[860px] text-left text-sm">
           <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/50 text-[var(--muted)]">
             <tr>
               <th className="px-4 py-3">When</th>

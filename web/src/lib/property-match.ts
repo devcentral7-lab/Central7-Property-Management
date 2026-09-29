@@ -22,6 +22,7 @@ export type MatchableProperty = {
   parking_spaces: number | null;
   age_years: number | null;
   purpose: string | null;
+  type_attributes?: Record<string, unknown> | null;
   view: string | null;
   furnished: string | null;
   contact_type: string | null;
@@ -80,6 +81,11 @@ export function scorePropertyMatch(
 ): ScoredProperty {
   const c = criteria;
   const checks: Criterion[] = [];
+  const suitableFor =
+    typeof property.type_attributes?.suitable_for === "string"
+      ? property.type_attributes.suitable_for
+      : null;
+  const useText = [property.purpose, suitableFor].filter(Boolean).join(" ");
 
   const addEnum = (
     key: string,
@@ -135,7 +141,8 @@ export function scorePropertyMatch(
   addEnum("currency", property.currency, 1, "currency");
   addEnum("contact_type", property.contact_type, 1, "contact type");
   addContains("property_subtype", property.property_subtype, 1.5, "subtype");
-  addContains("purpose", property.purpose, 1.5, "purpose");
+  addContains("purpose", useText, 1.5, "purpose");
+  addContains("suitable_for", useText, 1.5, "suitable for");
   addContains("view", property.view, 1.2, "view");
   addContains("address", property.address, 1.5, "address");
   addContains("contact_name", property.contact_name, 1, "contact");
@@ -172,7 +179,7 @@ export function scorePropertyMatch(
     const blob = [
       property.comments,
       property.address,
-      property.purpose,
+      useText,
       property.view,
       ...(property.amenities ?? []),
     ]

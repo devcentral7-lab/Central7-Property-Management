@@ -58,11 +58,10 @@ export function StatusDonut({ data }: { data: NamedCount[] }) {
     .filter(Boolean);
 
   return (
-    <div className="flex h-[260px] items-center justify-center gap-6">
+    <div className="flex h-[220px] items-center justify-center gap-6 sm:h-[260px]">
       <svg
-        width="240"
-        height="240"
         viewBox="0 0 240 240"
+        className="h-full max-h-[240px] w-auto max-w-full"
         role="img"
         aria-label={`Status mix, ${total.toLocaleString()} listings`}
       >
@@ -121,7 +120,7 @@ export function TypeBars({ data }: { data: NamedCount[] }) {
       {data.map((d, i) => (
         <div
           key={d.name}
-          className="grid grid-cols-[110px_1fr_48px] items-center gap-2"
+          className="grid grid-cols-[88px_1fr_44px] items-center gap-2 sm:grid-cols-[110px_1fr_48px]"
         >
           <span className="truncate text-xs text-[var(--muted)]">{d.name}</span>
           <div className="h-3 overflow-hidden rounded-full bg-[var(--bg-accent)]">
@@ -164,7 +163,7 @@ export function ListingsTrend({ data }: { data: DayCount[] }) {
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}
-      className="h-[260px] w-full"
+      className="h-[200px] w-full sm:h-[260px]"
       role="img"
       aria-label="Listings added over the last 30 days"
     >
@@ -220,7 +219,7 @@ export function CreatorBars({ data }: { data: NamedCount[] }) {
       {data.map((d) => (
         <div
           key={d.name}
-          className="grid grid-cols-[100px_1fr_40px] items-center gap-2"
+          className="grid grid-cols-[84px_1fr_40px] items-center gap-2 sm:grid-cols-[100px_1fr_40px]"
         >
           <span className="truncate text-xs text-[var(--muted)]">{d.name}</span>
           <div className="h-3.5 overflow-hidden rounded-full bg-[var(--bg-accent)]">

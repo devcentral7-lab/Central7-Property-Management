@@ -16,6 +16,7 @@ import {
   getPropertyModalData,
   type PropertyModalData,
 } from "@/app/app/properties/modal-actions";
+import { PropertyPhotosPanel } from "@/app/app/properties/property-photos-panel";
 
 type Mode = "view" | "edit";
 
@@ -69,7 +70,7 @@ function ModalShell({
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center sm:items-start sm:overflow-y-auto sm:p-6">
       <button
         type="button"
         aria-label="Close"
@@ -80,21 +81,21 @@ function ModalShell({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative z-10 my-4 w-full overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--bg)] shadow-2xl ${
-          wide ? "max-w-6xl" : "max-w-5xl"
+        className={`relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-[var(--bg)] shadow-2xl sm:my-4 sm:h-auto sm:rounded-2xl sm:border sm:border-[var(--line)] ${
+          wide ? "sm:max-w-6xl" : "sm:max-w-5xl"
         }`}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--line)] bg-[var(--card)] px-4 py-3 sm:px-5">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--line)] bg-[var(--card)] px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-3">
           <p className="text-sm font-semibold text-[var(--muted)]">{title}</p>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-semibold hover:bg-[var(--bg-accent)]"
+            className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)] sm:px-3 sm:py-1.5"
           >
             Close
           </button>
         </div>
-        <div className="max-h-[min(85vh,900px)] overflow-y-auto p-4 sm:p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:max-h-[min(85vh,900px)] sm:flex-none sm:p-5">
           {children}
         </div>
       </div>
@@ -111,10 +112,10 @@ function ViewBody({
 }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[1.35fr_0.75fr]">
-      <div>
+      <div className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-semibold text-[var(--brand-deep)] sm:text-3xl">
               {data.refNo}
             </h1>
             <p className="mt-1 text-sm text-[var(--muted)]">{data.headline}</p>
@@ -135,13 +136,13 @@ function ViewBody({
           </div>
         </div>
 
-        <dl className="mt-5 grid gap-3 rounded-xl border border-[var(--line)] bg-[var(--card)] p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-[var(--line)] bg-[var(--card)] p-4 lg:grid-cols-3">
           {data.fields.map((f) => (
-            <div key={f.label}>
+            <div key={f.label} className="min-w-0">
               <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                 {f.label}
               </dt>
-              <dd className="mt-0.5 text-sm">{f.value}</dd>
+              <dd className="mt-0.5 break-words text-sm">{f.value}</dd>
             </div>
           ))}
         </dl>
@@ -154,6 +155,22 @@ function ViewBody({
             </p>
           </div>
         ) : null}
+
+        {data.internalComments ? (
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--line)] bg-[var(--bg)]/60 p-4">
+            <h2 className="font-display text-base font-semibold">
+              Internal comments
+              <span className="ml-2 align-middle text-xs font-normal text-[var(--muted)]">
+                Staff only
+              </span>
+            </h2>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">
+              {data.internalComments}
+            </p>
+          </div>
+        ) : null}
+
+        <PropertyPhotosPanel refNo={data.refNo} canEdit={data.canEdit} />
       </div>
 
       <aside className="space-y-4">
@@ -365,6 +382,7 @@ export function PropertyLink({
   return (
     <a
       href={href}
+      data-nav-skip
       className={
         className ??
         "font-semibold text-[var(--brand-deep)] hover:underline"

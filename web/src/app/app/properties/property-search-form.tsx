@@ -113,6 +113,146 @@ export function PropertySearchForm({ options, filters }: Props) {
 
   return (
     <div className="space-y-4">
+      <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="font-display text-base font-semibold">
+            Paragraph search
+          </h2>
+          <button
+            type="button"
+            onClick={runParagraphSearch}
+            disabled={pending || !paragraph.trim()}
+            className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+          >
+            {pending ? "Matching…" : "Find matches"}
+          </button>
+        </div>
+        <textarea
+          value={paragraph}
+          onChange={(e) => setParagraph(e.target.value)}
+          rows={3}
+          placeholder="Paste a property description — results are ranked by match %"
+          className={`${inputClass} mt-2`}
+        />
+        {paraError ? (
+          <p className="mt-2 text-sm text-[var(--danger)]">{paraError}</p>
+        ) : null}
+        {usedCriteria ? (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Matched on:{" "}
+            {Object.entries(usedCriteria)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(" · ")}
+          </p>
+        ) : null}
+
+        {paraResults ? (
+          <div className="mt-4 overflow-hidden rounded-xl border border-[var(--line)]">
+            <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-accent)]/50 px-4 py-2">
+              <p className="text-sm font-medium">
+                {paraResults.length} ranked match
+                {paraResults.length === 1 ? "" : "es"}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setParaResults(null);
+                  setUsedCriteria(null);
+                }}
+                className="text-xs font-semibold text-[var(--muted)] hover:underline"
+              >
+                Clear matches
+              </button>
+            </div>
+            <ul className="divide-y divide-[var(--line)] md:hidden">
+              {paraResults.map((r) => (
+                <li key={r.id} className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
+                    <span className="shrink-0 font-semibold tabular-nums text-[var(--brand-deep)]">
+                      {r.match_percent}%
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm">
+                    {r.property_type} · {r.opportunity_type} · {r.city || "—"}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    <span className="font-semibold">
+                      {formatMoney(r.price_total, r.currency || "LKR")}
+                    </span>
+                    <span className="text-[var(--muted)]"> · {r.status}</span>
+                  </p>
+                  {r.match_hits.length ? (
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      {r.match_hits.slice(0, 4).join(", ")}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+              {!paraResults.length ? (
+                <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
+                  No matching properties found.
+                </li>
+              ) : null}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-[var(--line)] text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Match</th>
+                  <th className="px-4 py-2 font-medium">Ref</th>
+                  <th className="px-4 py-2 font-medium">Type</th>
+                  <th className="px-4 py-2 font-medium">City</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Price</th>
+                  <th className="px-4 py-2 font-medium">Hits</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paraResults.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="border-b border-[var(--line)] last:border-0"
+                  >
+                    <td className="px-4 py-2 font-semibold tabular-nums text-[var(--brand-deep)]">
+                      {r.match_percent}%
+                    </td>
+                    <td className="px-4 py-2">
+                      <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
+                    </td>
+                    <td className="px-4 py-2">
+                      {r.property_type}
+                      <span className="block text-xs text-[var(--muted)]">
+                        {r.opportunity_type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">{r.city || "—"}</td>
+                    <td className="px-4 py-2">{r.status}</td>
+                    <td className="px-4 py-2">
+                      {formatMoney(r.price_total, r.currency || "LKR")}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-[var(--muted)]">
+                      {r.match_hits.slice(0, 4).join(", ") || "—"}
+                    </td>
+                  </tr>
+                ))}
+                {!paraResults.length ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-4 py-8 text-center text-[var(--muted)]"
+                    >
+                      No matching properties found.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <form
         method="get"
         action="/app/properties"
@@ -120,8 +260,8 @@ export function PropertySearchForm({ options, filters }: Props) {
       >
         {showAdvanced ? <input type="hidden" name="advanced" value="1" /> : null}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="text-sm font-medium xl:col-span-2">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <label className="col-span-2 text-sm font-medium">
             Quick search
             <input
               name="q"
@@ -209,7 +349,7 @@ export function PropertySearchForm({ options, filters }: Props) {
         </div>
 
         {showAdvanced ? (
-          <div className="mt-4 grid gap-3 border-t border-[var(--line)] pt-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 xl:grid-cols-4">
             <label className="text-sm font-medium">
               Sub-type
               <input
@@ -272,10 +412,11 @@ export function PropertySearchForm({ options, filters }: Props) {
               />
             </label>
             <label className="text-sm font-medium">
-              Purpose
+              Purpose / suitable for
               <input
                 name="purpose"
                 defaultValue={filters.purpose}
+                placeholder="e.g. Office, Retail"
                 className={`${inputClass} mt-1`}
               />
             </label>
@@ -443,7 +584,7 @@ export function PropertySearchForm({ options, filters }: Props) {
                 className={`${inputClass} mt-1`}
               />
             </label>
-            <label className="text-sm font-medium md:col-span-2 xl:col-span-4">
+            <label className="col-span-2 text-sm font-medium xl:col-span-4">
               Amenities contain
               <input
                 name="amenities"
@@ -455,113 +596,6 @@ export function PropertySearchForm({ options, filters }: Props) {
           </div>
         ) : null}
       </form>
-
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 className="font-display text-base font-semibold">
-            Paragraph search
-          </h2>
-          <button
-            type="button"
-            onClick={runParagraphSearch}
-            disabled={pending || !paragraph.trim()}
-            className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
-          >
-            {pending ? "Matching…" : "Find matches"}
-          </button>
-        </div>
-        <textarea
-          value={paragraph}
-          onChange={(e) => setParagraph(e.target.value)}
-          rows={3}
-          placeholder="Paste a property description — results are ranked by match %"
-          className={`${inputClass} mt-2`}
-        />
-        {paraError ? (
-          <p className="mt-2 text-sm text-[var(--danger)]">{paraError}</p>
-        ) : null}
-        {usedCriteria ? (
-          <p className="mt-2 text-xs text-[var(--muted)]">
-            Matched on:{" "}
-            {Object.entries(usedCriteria)
-              .map(([k, v]) => `${k}=${v}`)
-              .join(" · ")}
-          </p>
-        ) : null}
-
-        {paraResults ? (
-          <div className="mt-4 overflow-hidden rounded-xl border border-[var(--line)]">
-            <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-accent)]/50 px-4 py-2">
-              <p className="text-sm font-medium">
-                {paraResults.length} ranked match
-                {paraResults.length === 1 ? "" : "es"}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setParaResults(null);
-                  setUsedCriteria(null);
-                }}
-                className="text-xs font-semibold text-[var(--muted)] hover:underline"
-              >
-                Clear matches
-              </button>
-            </div>
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-[var(--line)] text-[var(--muted)]">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Match</th>
-                  <th className="px-4 py-2 font-medium">Ref</th>
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 font-medium">City</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Price</th>
-                  <th className="px-4 py-2 font-medium">Hits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paraResults.map((r) => (
-                  <tr
-                    key={r.id}
-                    className="border-b border-[var(--line)] last:border-0"
-                  >
-                    <td className="px-4 py-2 font-semibold tabular-nums text-[var(--brand-deep)]">
-                      {r.match_percent}%
-                    </td>
-                    <td className="px-4 py-2">
-                      <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
-                    </td>
-                    <td className="px-4 py-2">
-                      {r.property_type}
-                      <span className="block text-xs text-[var(--muted)]">
-                        {r.opportunity_type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2">{r.city || "—"}</td>
-                    <td className="px-4 py-2">{r.status}</td>
-                    <td className="px-4 py-2">
-                      {formatMoney(r.price_total, r.currency || "LKR")}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-[var(--muted)]">
-                      {r.match_hits.slice(0, 4).join(", ") || "—"}
-                    </td>
-                  </tr>
-                ))}
-                {!paraResults.length ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-8 text-center text-[var(--muted)]"
-                    >
-                      No matching properties found.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </section>
     </div>
   );
 }
