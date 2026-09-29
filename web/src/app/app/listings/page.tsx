@@ -16,5 +16,5 @@ export default async function ListingsRedirectPage({
   if (tab === "options") {
     redirect("/app/properties?tab=options");
   }
-  redirect("/app/properties?tab=add");
+  redirect("/app/add-property");
 }

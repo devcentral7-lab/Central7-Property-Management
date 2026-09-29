@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
@@ -86,25 +87,21 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <main className="login-page relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[var(--bg)]"
-      />
-      <div
-        aria-hidden
-        className="login-wash pointer-events-none absolute inset-0"
-      />
-      <div
-        aria-hidden
-        className="login-grid pointer-events-none absolute inset-0 opacity-[0.4]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-black/20 backdrop-blur-[2px]"
-      />
+    <main className="login-page relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--sidebar)] px-4 py-10">
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <Image
+          src="/login-background.jpg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="login-photo object-cover grayscale contrast-[1.15]"
+        />
+        <div className="absolute inset-0 bg-[var(--brand)] opacity-85 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/45" />
+      </div>
 
-      <div className="login-panel relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_24px_64px_rgba(28,25,23,0.18)]">
+      <div className="login-panel relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/20 bg-[var(--card)] shadow-[0_32px_80px_rgba(0,0,0,0.45)]">
         <div className="border-b border-[var(--line)] bg-[var(--card)] px-7 py-5 sm:px-8">
           <Link
             href="/"

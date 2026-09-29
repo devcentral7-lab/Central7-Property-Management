@@ -16,47 +16,46 @@ export default async function AgentLayout({
     redirect("/auth/continue");
   }
 
+  const name = agent.company_name || agent.contact_person || agent.username;
+
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-[var(--card)]/90 pt-[env(safe-area-inset-top)] backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link href="/agent" className="shrink-0" aria-label="Central7 Pulse home">
-              <BrandLogo size={38} />
-            </Link>
-            <div className="min-w-0">
-              <Link
-                href="/agent"
-                className="font-display text-lg font-semibold text-[var(--brand-deep)] sm:text-xl"
-              >
+    <div className="min-h-screen bg-[var(--bg)]">
+      <div className="mx-auto max-w-7xl px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-6 sm:pt-6 lg:px-8">
+        <div className="mb-6 flex items-center justify-between gap-3 sm:mb-8">
+          <Link href="/agent" className="flex min-w-0 items-center gap-3" aria-label="Central7 Pulse home">
+            <BrandLogo size={40} />
+            <span className="min-w-0">
+              <span className="block truncate font-display text-lg font-semibold text-[var(--brand-deep)] sm:text-xl">
                 Central7 Pulse
-              </Link>
-              <p className="truncate text-xs text-[var(--muted)]">
-                {agent.company_name || agent.username} · Partner
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <nav className="hidden gap-1 sm:flex">
-              <Link
-                href="/agent"
-                className="rounded-full px-3 py-1.5 text-sm font-medium text-[var(--muted)] hover:bg-[var(--bg-accent)] hover:text-[var(--ink)]"
+              </span>
+              <span className="block truncate text-xs text-[var(--muted)]">{name} · Partner</span>
+            </span>
+          </Link>
+          <form action={signOut} className="shrink-0">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-4 w-4"
+                aria-hidden
               >
-                Search
-              </Link>
-            </nav>
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="rounded-full border border-[var(--line)] px-3 py-2 text-sm font-medium sm:py-1.5"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l5-5-5-5M15 12H3"
+                />
+              </svg>
+              Log out
+            </button>
+          </form>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-8">{children}</main>
+        <main>{children}</main>
+      </div>
     </div>
   );
 }

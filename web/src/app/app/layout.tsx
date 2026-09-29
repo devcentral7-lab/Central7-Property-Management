@@ -26,9 +26,17 @@ export default async function AppLayout({
   const isAdmin = profile.role === "Admin";
   const socialOk = isAdmin || (await canAccessSocialQueue(profile));
 
+  const propertyNav: SidebarNavItem[] = isAdmin
+    ? [{ href: "/app/properties", label: "Properties", icon: "folder" }]
+    : [
+        { href: "/app/properties", label: "Search Property", icon: "search" },
+        { href: "/app/add-property", label: "Add Property", icon: "plus" },
+        { href: "/app/my-properties", label: "My Properties", icon: "folder" },
+      ];
+
   const nav: SidebarNavItem[] = [
     { href: "/app", label: "My Dashboard", icon: "home", match: "exact" },
-    { href: "/app/properties", label: "Properties", icon: "folder" },
+    ...propertyNav,
     ...(isAdmin
       ? ([
           {
@@ -49,7 +57,7 @@ export default async function AppLayout({
           },
         ] as SidebarNavItem[])
       : []),
-    { href: "/app/account", label: "Account", icon: "account" },
+    { href: "/app/account", label: "Profile", icon: "account" },
   ];
 
   return (

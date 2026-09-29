@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { PropertyAddPanel } from "@/app/app/properties/property-add";
 import { PropertyMinePanel } from "@/app/app/properties/property-mine";
@@ -70,6 +71,25 @@ export default async function PropertiesPage({
 
   const outerTab = tab === "options" || tab === "add" ? "add" : tab;
 
+  const filters = filtersFromParams(sp);
+  const page = Math.max(1, Number(one(sp.page) || "1") || 1);
+
+  if (!isAdmin) {
+    if (outerTab === "add") redirect("/app/add-property");
+    if (outerTab === "mine") redirect(page > 1 ? `/app/my-properties?page=${page}` : "/app/my-properties");
+    return (
+      <div>
+        <h1 className="font-display text-2xl font-semibold sm:text-3xl">Search properties</h1>
+        <p className="mt-1 text-sm text-[var(--muted)]">
+          Find any listing by keyword, location, type, price or features.
+        </p>
+        <div className="mt-5 sm:mt-6">
+          <PropertySearchPanel filters={filters} page={page} />
+        </div>
+      </div>
+    );
+  }
+
   const tabs = [
     { id: "search" as const, label: "Search & Filter", href: "/app/properties" },
     {
@@ -84,8 +104,6 @@ export default async function PropertiesPage({
     },
   ];
 
-  const filters = filtersFromParams(sp);
-  const page = Math.max(1, Number(one(sp.page) || "1") || 1);
   const target =
     isAdmin && one(sp.user) ? one(sp.user) : profile.display_name;
 

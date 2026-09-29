@@ -313,9 +313,11 @@ export async function createProperty(formData: FormData) {
   });
 
   revalidatePath("/app/properties");
+  revalidatePath("/app/my-properties");
+  revalidatePath("/app");
   revalidatePath("/app/activity");
   revalidatePath("/app/social-queue");
-  redirect("/app/properties");
+  redirect("/app/my-properties");
 }
 
 export async function updateProperty(formData: FormData) {

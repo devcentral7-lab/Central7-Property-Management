@@ -1,5 +1,5 @@
-import { PublicSearchSkeleton } from "@/components/skeletons";
+import { PartnerSearchSkeleton } from "@/components/skeletons";
 
 export default function Loading() {
-  return <PublicSearchSkeleton />;
+  return <PartnerSearchSkeleton />;
 }
