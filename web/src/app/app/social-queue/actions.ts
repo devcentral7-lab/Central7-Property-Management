@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireProfile } from "@/lib/auth";
+import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { createClient } from "@/lib/supabase/server";
 
@@ -12,9 +12,32 @@ function str(v: FormDataEntryValue | null): string {
 async function requireAdmin() {
   const profile = await requireProfile();
   if (profile.role !== "Admin") {
-    throw new Error("Only Admin can update the social media queue");
+    throw new Error("Only Admin can approve social media queue items");
   }
   return profile;
+}
+
+/** Admins plus anyone on the social media queue allow-list. */
+async function requireQueueOperator() {
+  const profile = await requireProfile();
+  if (!(await canAccessSocialQueue(profile))) {
+    throw new Error("You don't have access to the social media queue");
+  }
+  return profile;
+}
+
+function revalidateQueue() {
+  revalidatePath("/app/social-queue");
+  revalidatePath("/app/activity");
+  revalidatePath("/app");
+}
+
+function missingPlatforms(
+  requested: string[] | null,
+  dates: Record<string, unknown> | null,
+): string[] {
+  const done = dates ?? {};
+  return (requested ?? []).filter((p) => !(p in done));
 }
 
 export async function approveSocialQueueItem(formData: FormData) {
@@ -38,7 +61,6 @@ export async function approveSocialQueueItem(formData: FormData) {
     .update({
       approved_by: profile.display_name,
       approved_at: new Date().toISOString(),
-      approved_action: "Approved",
     })
     .eq("id", id);
   if (error) throw error;
@@ -54,36 +76,75 @@ export async function approveSocialQueueItem(formData: FormData) {
     summary: `Approved social media queue item ${row.ref_no}`,
   });
 
+  revalidateQueue();
+}
+
+export async function setSocialQueuePlatform(
+  id: string,
+  platform: string,
+  done: boolean,
+) {
+  const profile = await requireQueueOperator();
+  if (!id || !platform) throw new Error("Missing queue item or platform");
+  const supabase = await createClient();
+
+  const { data: row, error: findErr } = await supabase
+    .from("social_media_queue")
+    .select("id, ref_no")
+    .eq("id", id)
+    .single();
+  if (findErr || !row) throw findErr ?? new Error("Queue item not found");
+
+  const { error } = await supabase.rpc("set_smq_platform_done", {
+    p_id: id,
+    p_platform: platform,
+    p_done: done,
+  });
+  if (error) throw new Error(error.message);
+
+  await logAudit({
+    category: "queue",
+    action: done ? "platform_done" : "platform_undone",
+    actorName: profile.display_name,
+    actorKind: "staff",
+    subjectType: "property",
+    subjectId: row.id,
+    subjectLabel: row.ref_no,
+    summary: done
+      ? `Posted ${row.ref_no} on ${platform}`
+      : `Unticked ${platform} for ${row.ref_no}`,
+    details: { platform },
+  });
+
   revalidatePath("/app/social-queue");
-  revalidatePath("/app/activity");
-  revalidatePath("/app");
 }
 
 export async function publishSocialQueueItem(formData: FormData) {
-  const profile = await requireAdmin();
+  const profile = await requireQueueOperator();
   const supabase = await createClient();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Missing queue item");
 
   const { data: row, error: findErr } = await supabase
     .from("social_media_queue")
-    .select("id, ref_no, completed_at, approved_at")
+    .select("id, ref_no, completed_at, approved_at, approved_action, requested_platforms, platform_dates")
     .eq("id", id)
     .single();
   if (findErr || !row) throw findErr ?? new Error("Queue item not found");
   if (!row.approved_at) {
-    throw new Error("Approve this item before marking it published");
+    throw new Error("Approve this item before marking it done");
   }
   if (row.completed_at) {
-    throw new Error("Already published");
+    throw new Error("Already done");
+  }
+  const missing = missingPlatforms(row.requested_platforms, row.platform_dates);
+  if (missing.length) {
+    throw new Error(`Tick ${missing.join(", ")} before marking done`);
   }
 
   const { error } = await supabase
     .from("social_media_queue")
-    .update({
-      completed_at: new Date().toISOString(),
-      approved_action: "Published",
-    })
+    .update({ completed_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
 
@@ -95,16 +156,18 @@ export async function publishSocialQueueItem(formData: FormData) {
     subjectType: "property",
     subjectId: row.id,
     subjectLabel: row.ref_no,
-    summary: `Marked social media queue item ${row.ref_no} as published`,
+    summary: `Marked social media queue item ${row.ref_no} as done`,
+    details: {
+      queue_action: row.approved_action,
+      platforms: row.requested_platforms,
+    },
   });
 
-  revalidatePath("/app/social-queue");
-  revalidatePath("/app/activity");
-  revalidatePath("/app");
+  revalidateQueue();
 }
 
 export async function revertSocialQueueItem(formData: FormData) {
-  const profile = await requireAdmin();
+  const profile = await requireQueueOperator();
   const supabase = await createClient();
   const id = str(formData.get("id"));
   if (!id) throw new Error("Missing queue item");
@@ -119,10 +182,7 @@ export async function revertSocialQueueItem(formData: FormData) {
   if (row.completed_at) {
     const { error } = await supabase
       .from("social_media_queue")
-      .update({
-        completed_at: null,
-        approved_action: row.approved_at ? "Approved" : "Publish",
-      })
+      .update({ completed_at: null })
       .eq("id", id);
     if (error) throw error;
 
@@ -134,15 +194,17 @@ export async function revertSocialQueueItem(formData: FormData) {
       subjectType: "property",
       subjectId: row.id,
       subjectLabel: row.ref_no,
-      summary: `Reverted published status for ${row.ref_no}`,
+      summary: `Reopened ${row.ref_no} on the social media queue`,
     });
   } else if (row.approved_at) {
+    if (profile.role !== "Admin") {
+      throw new Error("Only Admin can revert an approval");
+    }
     const { error } = await supabase
       .from("social_media_queue")
       .update({
         approved_at: null,
         approved_by: null,
-        approved_action: "Publish",
       })
       .eq("id", id);
     if (error) throw error;
@@ -161,7 +223,5 @@ export async function revertSocialQueueItem(formData: FormData) {
     throw new Error("Nothing to revert");
   }
 
-  revalidatePath("/app/social-queue");
-  revalidatePath("/app/activity");
-  revalidatePath("/app");
+  revalidateQueue();
 }

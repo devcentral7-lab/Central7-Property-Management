@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   createPartnerLogin,
   deletePartner,
@@ -9,26 +9,93 @@ import {
   updatePartner,
   type PartnerListItem,
 } from "@/app/app/agents/actions";
+import { PartnerFields } from "@/app/app/agents/register-form";
+import { ClickableRow } from "@/components/clickable-row";
+import { PopupDialog } from "@/components/popup-dialog";
+import { StatusBadge } from "@/components/status-badge";
+import {
+  ConfirmDialog,
+  CredentialsDialog,
+  type ConfirmRequest,
+  type Credentials,
+} from "@/app/app/user-management/dialogs";
+import {
+  Avatar,
+  FilterChip,
+  Icon,
+  Pill,
+  SearchBox,
+  Toggle,
+  dangerIconButtonClass,
+  formatJoined,
+  iconButtonClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from "@/app/app/user-management/ui";
 
-const fieldClass =
-  "mt-1 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm";
+type Filter = "all" | PartnerListItem["status"] | "nologin";
+
+const APPROVAL_TONE = {
+  Approved: "green",
+  Pending: "amber",
+  Rejected: "red",
+} as const;
+
+function partnerName(u: PartnerListItem) {
+  return u.company_name || u.contact_person || u.username;
+}
 
 export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [editing, setEditing] = useState<PartnerListItem | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cred, setCred] = useState<{ email: string; tempPassword: string } | null>(
-    null,
+  const [creds, setCreds] = useState<Credentials | null>(null);
+  const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
+
+  const counts = useMemo(
+    () => ({
+      all: rows.length,
+      Approved: rows.filter((u) => u.status === "Approved").length,
+      Pending: rows.filter((u) => u.status === "Pending").length,
+      Rejected: rows.filter((u) => u.status === "Rejected").length,
+      nologin: rows.filter((u) => !u.auth_user_id).length,
+    }),
+    [rows],
   );
-  const [copied, setCopied] = useState(false);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((u) => {
+      if (filter === "nologin" && u.auth_user_id) return false;
+      if ((filter === "Approved" || filter === "Pending" || filter === "Rejected") && u.status !== filter) {
+        return false;
+      }
+      if (!q) return true;
+      return [u.company_name, u.contact_person, u.contact_number, u.email, u.username, u.address]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [rows, query, filter]);
 
   function run(fn: () => Promise<void>) {
     setError(null);
     startTransition(async () => {
-      await fn();
-      router.refresh();
+      try {
+        await fn();
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Something went wrong.");
+      }
     });
+  }
+
+  function openEdit(u: PartnerListItem) {
+    if (pending) return;
+    setError(null);
+    setEditing(u);
   }
 
   function onSave(e: React.FormEvent<HTMLFormElement>, id: string) {
@@ -41,271 +108,243 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
         setError(res.error);
         return;
       }
-      setEditingId(null);
+      setEditing(null);
     });
   }
 
-  function onReset(id: string) {
-    if (!confirm("Reset this partner’s password? A new 10-digit password will be shown once.")) {
-      return;
-    }
+  function showCreds(u: PartnerListItem, title: string, res: { email: string; tempPassword: string }) {
+    setCreds({
+      title,
+      subtitle: partnerName(u),
+      details: [
+        ["Username", u.username],
+        ["Email", res.email],
+      ],
+      email: res.email,
+      password: res.tempPassword,
+    });
+  }
+
+  function onReset(u: PartnerListItem) {
+    setConfirmReq({
+      title: "Reset password?",
+      body: `${partnerName(u)} will need the new 10-digit temporary password to sign in. It is shown only once.`,
+      confirmLabel: "Reset password",
+      onConfirm: () =>
+        run(async () => {
+          const res = await resetPartnerPassword(u.id);
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          showCreds(u, "Password reset", res);
+        }),
+    });
+  }
+
+  function onCreateLogin(u: PartnerListItem) {
     run(async () => {
-      const res = await resetPartnerPassword(id);
+      const res = await createPartnerLogin(u.id);
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      setCred({ email: res.email, tempPassword: res.tempPassword });
+      showCreds(u, "Login created", res);
     });
   }
 
-  function onCreateLogin(id: string) {
-    run(async () => {
-      const res = await createPartnerLogin(id);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setCred({ email: res.email, tempPassword: res.tempPassword });
+  function onDelete(u: PartnerListItem) {
+    setConfirmReq({
+      title: `Delete ${partnerName(u)}?`,
+      body: "This removes the partner and their login. It cannot be undone.",
+      confirmLabel: "Delete partner",
+      danger: true,
+      onConfirm: () =>
+        run(async () => {
+          const res = await deletePartner(u.id);
+          if (!res.ok) {
+            setError(res.error);
+            return;
+          }
+          if (editing?.id === u.id) setEditing(null);
+        }),
     });
   }
 
-  function onDelete(id: string, label: string) {
-    if (!confirm(`Delete partner ${label}? This cannot be undone.`)) return;
-    run(async () => {
-      const res = await deletePartner(id);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      if (editingId === id) setEditingId(null);
-    });
-  }
-
-  async function copyCred() {
-    if (!cred) return;
-    await navigator.clipboard.writeText(
-      `Email: ${cred.email}\nTemporary password: ${cred.tempPassword}`,
+  function actions(u: PartnerListItem) {
+    const name = partnerName(u);
+    return (
+      <div className="flex items-center justify-end gap-0.5" data-row-ignore>
+        <button type="button" disabled={pending} onClick={() => openEdit(u)} title="Edit" aria-label={`Edit ${name}`} className={iconButtonClass}>
+          <Icon name="edit" className="h-4 w-4" />
+        </button>
+        {u.auth_user_id ? (
+          <button type="button" disabled={pending} onClick={() => onReset(u)} title="Reset password" aria-label={`Reset password for ${name}`} className={iconButtonClass}>
+            <Icon name="key" className="h-4 w-4" />
+          </button>
+        ) : (
+          <button type="button" disabled={pending} onClick={() => onCreateLogin(u)} title="Create login" aria-label={`Create login for ${name}`} className={iconButtonClass}>
+            <Icon name="userPlus" className="h-4 w-4" />
+          </button>
+        )}
+        <button type="button" disabled={pending} onClick={() => onDelete(u)} title="Delete partner" aria-label={`Delete ${name}`} className={dangerIconButtonClass}>
+          <Icon name="trash" className="h-4 w-4" />
+        </button>
+      </div>
     );
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
+
+  function identity(u: PartnerListItem) {
+    return (
+      <div className="flex min-w-0 items-center gap-3">
+        <Avatar name={partnerName(u)} square />
+        <div className="min-w-0">
+          <p className="truncate font-semibold">{partnerName(u)}</p>
+          <p className="truncate font-mono text-xs text-[var(--muted)]">@{u.username}</p>
+        </div>
+      </div>
+    );
+  }
+
+  function contact(u: PartnerListItem) {
+    const sub = [u.contact_number, u.email].filter(Boolean).join(" · ");
+    return (
+      <div className="min-w-0">
+        <p className="truncate">{u.contact_person || <span className="text-[var(--muted)]">—</span>}</p>
+        {sub ? <p className="truncate text-xs text-[var(--muted)]">{sub}</p> : null}
+      </div>
+    );
+  }
+
+  const loginPill = (u: PartnerListItem) =>
+    u.auth_user_id ? (
+      <Pill tone="green">
+        <Icon name="link" className="h-3.5 w-3.5" />
+        Linked
+      </Pill>
+    ) : (
+      <Pill>No login</Pill>
+    );
 
   return (
-    <div className="space-y-4">
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
-          {error}
-        </p>
-      ) : null}
-
-      {cred ? (
-        <div className="rounded-2xl border border-[var(--brand)] bg-[var(--bg-accent)] p-5">
-          <h3 className="font-display text-lg font-semibold text-[var(--brand-deep)]">
-            Login credentials — copy now
-          </h3>
-          <p className="mt-2 text-sm">Email: {cred.email}</p>
-          <p className="mt-1 font-mono text-base font-semibold tracking-wider">
-            {cred.tempPassword}
-          </p>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={copyCred}
-              className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium"
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCred(null)}
-              className="rounded-full px-4 py-2 text-sm text-[var(--muted)]"
-            >
-              Dismiss
-            </button>
+    <>
+      <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+        <div className="flex flex-col gap-3 border-b border-[var(--line)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Partner directory</h2>
+            <p className="text-xs text-[var(--muted)]">Agencies and brokers who list through Central7.</p>
           </div>
+          <SearchBox value={query} onChange={setQuery} placeholder="Search company, contact or username" />
         </div>
-      ) : null}
 
-      <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)]">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/50 text-[var(--muted)]">
+        <div className="tab-scroll flex gap-2 border-b border-[var(--line)] px-4 py-3 sm:px-5">
+          <FilterChip active={filter === "all"} count={counts.all} onClick={() => setFilter("all")}>All</FilterChip>
+          <FilterChip active={filter === "Approved"} count={counts.Approved} onClick={() => setFilter("Approved")}>Approved</FilterChip>
+          <FilterChip active={filter === "Pending"} count={counts.Pending} onClick={() => setFilter("Pending")}>Pending</FilterChip>
+          <FilterChip active={filter === "Rejected"} count={counts.Rejected} onClick={() => setFilter("Rejected")}>Rejected</FilterChip>
+          <FilterChip active={filter === "nologin"} count={counts.nologin} onClick={() => setFilter("nologin")}>No login</FilterChip>
+        </div>
+
+        {error && !editing ? (
+          <p className="mx-4 mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:mx-5">{error}</p>
+        ) : null}
+
+        <table className="hidden w-full text-left text-sm md:table">
+          <thead className="bg-[var(--bg)]/60 text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
-              <th className="px-4 py-3">Company</th>
-              <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Username</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Login</th>
-              <th className="px-4 py-3">Actions</th>
+              <th className="px-5 py-3 font-semibold">Partner</th>
+              <th className="px-4 py-3 font-semibold">Contact</th>
+              <th className="px-4 py-3 font-semibold">Approval</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold">Login</th>
+              <th className="px-5 py-3 text-right font-semibold">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((u) => {
-              const isEditing = editingId === u.id;
-              return (
-                <tr key={u.id} className="border-b border-[var(--line)] last:border-0 align-top">
-                  {isEditing ? (
-                    <td colSpan={6} className="px-4 py-4">
-                      <form
-                        onSubmit={(e) => onSave(e, u.id)}
-                        className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-                        suppressHydrationWarning
-                      >
-                        {(
-                          [
-                            ["Company", "company_name", u.company_name],
-                            ["Contact person", "contact_person", u.contact_person],
-                            ["Contact number", "contact_number", u.contact_number],
-                            ["Email", "email", u.email],
-                            ["Username", "username", u.username],
-                          ] as const
-                        ).map(([label, name, value]) => (
-                          <label key={name} className="text-sm font-medium">
-                            {label}
-                            <input
-                              name={name}
-                              required={name === "username"}
-                              type={name === "email" ? "email" : "text"}
-                              defaultValue={value ?? ""}
-                              suppressHydrationWarning
-                              className={fieldClass}
-                            />
-                          </label>
-                        ))}
-                        <label className="text-sm font-medium sm:col-span-2 lg:col-span-3">
-                          Address
-                          <textarea
-                            name="address"
-                            rows={2}
-                            defaultValue={u.address ?? ""}
-                            suppressHydrationWarning
-                            className={fieldClass}
-                          />
-                        </label>
-                        <label className="text-sm font-medium">
-                          Status
-                          <select
-                            name="status"
-                            defaultValue={u.status}
-                            suppressHydrationWarning
-                            className={fieldClass}
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Approved">Approved</option>
-                            <option value="Rejected">Rejected</option>
-                          </select>
-                        </label>
-                        <label className="mt-6 flex items-center gap-2 text-sm font-medium">
-                          <input
-                            type="checkbox"
-                            name="active"
-                            value="true"
-                            defaultChecked={u.active}
-                            suppressHydrationWarning
-                          />
-                          Active
-                        </label>
-                        <div className="flex flex-wrap items-end gap-2">
-                          <button
-                            type="submit"
-                            disabled={pending}
-                            className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(null)}
-                            className="rounded-full border border-[var(--line)] px-4 py-2 text-sm"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    </td>
-                  ) : (
-                    <>
-                      <td className="px-4 py-3">{u.company_name || "—"}</td>
-                      <td className="px-4 py-3">
-                        {u.contact_person || "—"}
-                        <span className="block text-xs text-[var(--muted)]">
-                          {[u.contact_number, u.email].filter(Boolean).join(" · ")}
-                        </span>
-                        {u.address ? (
-                          <span className="mt-1 block text-xs text-[var(--muted)]">
-                            {u.address}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">{u.username}</td>
-                      <td className="px-4 py-3">
-                        {u.status}
-                        <span className="block text-xs text-[var(--muted)]">
-                          {u.active ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-[var(--muted)]">
-                        {u.auth_user_id ? "Linked" : "No login"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => {
-                              setError(null);
-                              setEditingId(u.id);
-                            }}
-                            className="text-sm font-medium text-[var(--brand-deep)] hover:underline"
-                          >
-                            Edit
-                          </button>
-                          {u.auth_user_id ? (
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => onReset(u.id)}
-                              className="text-sm font-medium text-[var(--muted)] hover:underline"
-                            >
-                              Reset password
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => onCreateLogin(u.id)}
-                              className="text-sm font-medium text-[var(--muted)] hover:underline"
-                            >
-                              Create login
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() =>
-                              onDelete(u.id, u.company_name || u.username)
-                            }
-                            className="text-sm font-medium text-[var(--danger)] hover:underline"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-            {!rows.length ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-[var(--muted)]">
-                  No partners yet.
+            {visible.map((u) => (
+              <ClickableRow key={u.id} className="border-t border-[var(--line)]" onActivate={() => openEdit(u)}>
+                <td className="max-w-[16rem] px-5 py-3">{identity(u)}</td>
+                <td className="max-w-[18rem] px-4 py-3">{contact(u)}</td>
+                <td className="px-4 py-3">
+                  <Pill tone={APPROVAL_TONE[u.status]}>{u.status}</Pill>
                 </td>
-              </tr>
-            ) : null}
+                <td className="px-4 py-3">
+                  <StatusBadge status={u.active ? "Active" : "Inactive"} className={u.active ? "" : "text-[var(--muted)]"} />
+                </td>
+                <td className="px-4 py-3">{loginPill(u)}</td>
+                <td className="px-5 py-2">{actions(u)}</td>
+              </ClickableRow>
+            ))}
           </tbody>
         </table>
-      </div>
-    </div>
+
+        <ul className="divide-y divide-[var(--line)] md:hidden">
+          {visible.map((u) => (
+            <ClickableRow key={u.id} as="li" className="px-4 py-3" onActivate={() => openEdit(u)}>
+              <div className="flex items-start justify-between gap-3">
+                {identity(u)}
+                <Pill tone={APPROVAL_TONE[u.status]}>{u.status}</Pill>
+              </div>
+              <div className="mt-2 pl-12 text-sm">{contact(u)}</div>
+              <div className="mt-2 flex items-center justify-between gap-3 pl-12">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <StatusBadge status={u.active ? "Active" : "Inactive"} className={u.active ? "" : "text-[var(--muted)]"} />
+                  {loginPill(u)}
+                </div>
+                {actions(u)}
+              </div>
+            </ClickableRow>
+          ))}
+        </ul>
+
+        {!visible.length ? (
+          <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--bg-accent)] text-[var(--muted)]">
+              <Icon name="building" />
+            </span>
+            <p className="text-sm font-semibold">{rows.length ? "No matching partners" : "No partners yet"}</p>
+            <p className="text-xs text-[var(--muted)]">
+              {rows.length ? "Try a different search or filter." : "Register a partner agency to get started."}
+            </p>
+          </div>
+        ) : null}
+      </section>
+
+      <PopupDialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing ? `Edit ${partnerName(editing)}` : ""}
+        subtitle={editing ? `Registered ${formatJoined(editing.created_at)}` : undefined}
+        busy={pending}
+        size="lg"
+      >
+        {editing ? (
+          <form key={editing.id} onSubmit={(e) => onSave(e, editing.id)} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
+            <PartnerFields values={editing} />
+            <div className="sm:col-span-2">
+              <Toggle name="active" defaultChecked={editing.active} label="Active" description="Inactive partners can’t use the portal." />
+            </div>
+
+            {error ? (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p>
+            ) : null}
+
+            <div className="flex gap-2 sm:col-span-2 sm:justify-end">
+              <button type="button" onClick={() => setEditing(null)} disabled={pending} className={`flex-1 sm:flex-none ${secondaryButtonClass}`}>
+                Cancel
+              </button>
+              <button type="submit" disabled={pending} className={`flex-1 sm:flex-none ${primaryButtonClass}`}>
+                {pending ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </PopupDialog>
+
+      <CredentialsDialog creds={creds} onClose={() => setCreds(null)} />
+      <ConfirmDialog request={confirmReq} onClose={() => setConfirmReq(null)} />
+    </>
   );
 }

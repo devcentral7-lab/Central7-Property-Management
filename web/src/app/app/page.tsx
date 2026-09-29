@@ -1,28 +1,43 @@
 import Link from "next/link";
 import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { loadAdminAnalytics } from "@/lib/analytics";
+import { parseDashboardPeriod } from "@/lib/dashboard-period";
 import { createClient } from "@/lib/supabase/server";
 import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
 
-export default async function AppHomePage() {
+export default async function AppHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const profile = await requireProfile();
 
   if (profile.role === "Admin") {
-    try {
-      const data = await loadAdminAnalytics();
-      return <AdminDashboard data={data} name={profile.display_name} />;
-    } catch (e) {
-      return (
-        <div>
-          <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
-            Operations overview
-          </h1>
-          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
-            {e instanceof Error ? e.message : "Could not load analytics."}
-          </p>
-        </div>
-      );
+    const sp = await searchParams;
+    const first = (v: string | string[] | undefined) =>
+      Array.isArray(v) ? v[0] : v;
+    const view = first(sp.view) === "visuals" ? "visuals" : "stats";
+    const period = parseDashboardPeriod(first(sp.period));
+    const result = await loadAdminAnalytics(period).then(
+      (data) => ({ data, error: null }),
+      (e: unknown) => ({
+        data: null,
+        error: e instanceof Error ? e.message : "Could not load analytics.",
+      }),
+    );
+    if (result.data) {
+      return <AdminDashboard data={result.data} view={view} />;
     }
+    return (
+      <div>
+        <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
+          Operations overview
+        </h1>
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
+          {result.error}
+        </p>
+      </div>
+    );
   }
 
   const supabase = await createClient();

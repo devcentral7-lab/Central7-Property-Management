@@ -18,7 +18,7 @@ Next.js App Router rebuild of the Google Apps Script Pulse app.
    ```
    Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the **new** Supabase project (same values as root `.env`).
 
-2. Apply latest SQL migrations in order (through `0025_property_internal_comments.sql`).
+2. Apply latest SQL migrations in order (through `0028_dashboard_inventory_breakdowns.sql`).
 
 3. Create staff Auth users in Supabase Auth, then matching `profiles` rows (`id` = auth user uuid, `display_name`, `role`).
 

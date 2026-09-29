@@ -1,6 +1,5 @@
 node_modules/
 dist/
-web/.env.local
 web/.next
 TEST_CREDENTIALS.txt
 *.log
@@ -12,3 +11,18 @@ data/rejected/**
 !data/rejected/.gitkeep
 .DS_Store
 Thumbs.db
+
+# Secrets: never commit real env files; templates only
+.env
+.env.*
+!.env.example
+*.pem
+.vercel
+
+# Supabase CLI local state (linked project, CLI cache, temp scripts)
+supabase/.temp/
+supabase/.branches/
+
+# Python caches from helper scripts
+__pycache__/
+*.pyc

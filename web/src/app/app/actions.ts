@@ -284,6 +284,7 @@ export async function createProperty(formData: FormData) {
           approved_by: null,
           approved_at: null,
           requested_platforms: platforms,
+          platform_dates: {},
           completed_at: null,
         },
         { onConflict: "ref_no" },
@@ -461,10 +462,45 @@ export async function updatePropertyStatus(formData: FormData) {
         approved_action: action,
         approved_by: null,
         approved_at: null,
+        platform_dates: {},
         completed_at: null,
       },
       { onConflict: "ref_no" },
     );
+  } else if (action === "Republish") {
+    const { data: existing } = await supabase
+      .from("social_media_queue")
+      .select("requested_platforms")
+      .eq("ref_no", property.ref_no)
+      .maybeSingle();
+    let platforms = (existing?.requested_platforms ?? []) as string[];
+    if (!platforms.length) {
+      const { data: lastRequest } = await supabase
+        .from("property_status_events")
+        .select("requested_platforms")
+        .eq("ref_no", property.ref_no)
+        .neq("requested_platforms", "{}")
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      platforms = (lastRequest?.requested_platforms ?? []) as string[];
+    }
+    if (!platforms.length) platforms = options.platforms;
+
+    const { error: queueErr } = await supabase.from("social_media_queue").upsert(
+      {
+        property_id: property.id,
+        ref_no: property.ref_no,
+        approved_action: "Republish",
+        approved_by: null,
+        approved_at: null,
+        requested_platforms: platforms,
+        platform_dates: {},
+        completed_at: null,
+      },
+      { onConflict: "ref_no" },
+    );
+    if (queueErr) throw queueErr;
   }
 
   revalidatePath(`/app/properties/${refNo}`);

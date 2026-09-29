@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import {
   SocialQueueActions,
   SocialQueueStatusBadge,
   type SocialQueueStatus,
 } from "@/app/app/social-queue/queue-actions";
-import { PropertyLink } from "@/app/app/properties/property-modal";
+import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
+import { LinkRow } from "@/components/clickable-row";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,6 +31,38 @@ type FeedRow = {
   queue_id?: string;
   queue_status?: SocialQueueStatus;
 };
+
+function EventRow({
+  e,
+  as,
+  className,
+  children,
+}: {
+  e: FeedRow;
+  as: "tr" | "li";
+  className: string;
+  children: ReactNode;
+}) {
+  if (e.subject_href && e.subject_label) {
+    if (e.subject_href.startsWith("/app/properties/")) {
+      return (
+        <PropertyRow refNo={e.subject_label} as={as} className={className}>
+          {children}
+        </PropertyRow>
+      );
+    }
+    return (
+      <LinkRow href={e.subject_href} as={as} className={className}>
+        {children}
+      </LinkRow>
+    );
+  }
+  return as === "li" ? (
+    <li className={className}>{children}</li>
+  ) : (
+    <tr className={className}>{children}</tr>
+  );
+}
 
 const CATEGORIES = [
   { id: "all", label: "All" },
@@ -291,7 +325,7 @@ export default async function ActivityPage({
 
       <ul className="mt-4 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] md:hidden">
         {visible.map((e) => (
-          <li key={e.id} className="px-4 py-3">
+          <EventRow key={e.id} e={e} as="li" className="px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-medium">{e.action}</p>
@@ -353,7 +387,7 @@ export default async function ActivityPage({
                 />
               </div>
             ) : null}
-          </li>
+          </EventRow>
         ))}
         {!visible.length ? (
           <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
@@ -377,8 +411,10 @@ export default async function ActivityPage({
           </thead>
           <tbody>
             {visible.map((e) => (
-              <tr
+              <EventRow
                 key={e.id}
+                e={e}
+                as="tr"
                 className="border-b border-[var(--line)] align-top last:border-0"
               >
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--muted)]">
@@ -442,7 +478,7 @@ export default async function ActivityPage({
                     "—"
                   )}
                 </td>
-              </tr>
+              </EventRow>
             ))}
             {!visible.length ? (
               <tr>
