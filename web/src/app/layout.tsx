@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Manrope } from "next/font/google";
 import "./globals.css";
 
@@ -17,6 +17,13 @@ const body = Manrope({
 export const metadata: Metadata = {
   title: "Central7 Pulse",
   description: "Central 7 opportunity register — property CRM",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#1f1f1f",
 };
 
 export default function RootLayout({

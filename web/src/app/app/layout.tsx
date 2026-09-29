@@ -1,8 +1,11 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { signOut } from "@/app/app/actions";
 import { PropertyModalProvider } from "@/app/app/properties/property-modal";
 import { AppSidebar, type SidebarNavItem } from "./app-sidebar";
+import { NavigationPendingProvider, PendingMain } from "./navigation-pending";
+import { SIDEBAR_COOKIE } from "./sidebar-cookie";
 
 export default async function AppLayout({
   children,
@@ -18,18 +21,14 @@ export default async function AppLayout({
     redirect("/auth/continue");
   }
 
+  const sidebarCollapsed =
+    (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   const isAdmin = profile.role === "Admin";
   const socialOk = isAdmin || (await canAccessSocialQueue(profile));
 
   const nav: SidebarNavItem[] = [
     { href: "/app", label: "My Dashboard", icon: "home", match: "exact" },
     { href: "/app/properties", label: "Properties", icon: "folder" },
-    {
-      href: "/app/properties?status=Active",
-      label: "Active Properties",
-      icon: "check",
-      match: "exact",
-    },
     ...(isAdmin
       ? ([
           {
@@ -55,19 +54,22 @@ export default async function AppLayout({
 
   return (
     <PropertyModalProvider>
-      <div className="flex min-h-screen bg-[var(--bg)]">
-        <AppSidebar
-          items={nav}
-          displayName={profile.display_name}
-          role={profile.role}
-          signOutAction={signOut}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <main className="flex-1 overflow-auto px-6 py-6 lg:px-8">
-            {children}
-          </main>
+      <NavigationPendingProvider>
+        <div className="flex min-h-screen flex-col bg-[var(--bg)] lg:flex-row">
+          <AppSidebar
+            items={nav}
+            displayName={profile.display_name}
+            role={profile.role}
+            signOutAction={signOut}
+            initialCollapsed={sidebarCollapsed}
+          />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <PendingMain className="flex-1 px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:overflow-auto lg:px-8">
+              {children}
+            </PendingMain>
+          </div>
         </div>
-      </div>
+      </NavigationPendingProvider>
       {modal}
     </PropertyModalProvider>
   );

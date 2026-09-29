@@ -91,9 +91,9 @@ export default async function PropertiesPage({
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Properties</h1>
+      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Properties</h1>
 
-      <div className="mt-6 flex flex-wrap gap-2 border-b border-[var(--line)] pb-3">
+      <div className="tab-scroll -mx-4 mt-5 border-b border-[var(--line)] px-4 pb-3 sm:mx-0 sm:mt-6 sm:px-0">
         {tabs.map((t) => {
           const active = t.id === outerTab;
           return (
@@ -112,7 +112,7 @@ export default async function PropertiesPage({
         })}
       </div>
 
-      <div className="mt-8">
+      <div className="mt-5 sm:mt-8">
         {outerTab === "search" ? (
           <PropertySearchPanel filters={filters} page={page} />
         ) : null}

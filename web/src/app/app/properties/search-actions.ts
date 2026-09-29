@@ -24,7 +24,7 @@ export type ParagraphSearchResult =
   | { ok: false; error: string };
 
 const SELECT_COLS =
-  "id, ref_no, created_at, created_by_name, opportunity_type, property_type, property_subtype, city, address, status, currency, price_total, budget, land_size_perch, floor_area_sqft, bedrooms, bathrooms, number_of_floors, parking_spaces, age_years, purpose, view, furnished, contact_type, contact_name, amenities, comments";
+  "id, ref_no, created_at, created_by_name, opportunity_type, property_type, property_subtype, city, address, status, currency, price_total, budget, land_size_perch, floor_area_sqft, bedrooms, bathrooms, number_of_floors, parking_spaces, age_years, purpose, type_attributes, view, furnished, contact_type, contact_name, amenities, comments";
 
 export async function searchPropertiesByParagraph(
   paragraph: string,

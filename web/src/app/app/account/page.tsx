@@ -7,7 +7,7 @@ export default async function AccountPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-3xl font-semibold">Account</h1>
+        <h1 className="font-display text-2xl font-semibold sm:text-3xl">Account</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {profile.display_name} · {profile.role}
           {profile.mobile_number ? ` · ${profile.mobile_number}` : ""}

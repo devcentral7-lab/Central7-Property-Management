@@ -76,13 +76,13 @@ export default async function SocialQueuePage({
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Social media queue</h1>
+      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Social media queue</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
         Items appear here after approval on the Activity log. Mark them published
         when posted.
       </p>
 
-      <div className="mt-6 flex flex-wrap gap-2 border-b border-[var(--line)] pb-3">
+      <div className="tab-scroll -mx-4 mt-5 border-b border-[var(--line)] px-4 pb-3 sm:mx-0 sm:mt-6 sm:px-0">
         {tabs.map((t) => {
           const active = t.id === tab;
           return (
@@ -101,7 +101,7 @@ export default async function SocialQueuePage({
         })}
       </div>
 
-      <ul className="mt-6 divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--card)]">
+      <ul className="mt-5 divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--card)] sm:mt-6">
         {(data ?? []).map((row) => {
           const status = statusOf(row);
           const platforms =
@@ -114,7 +114,7 @@ export default async function SocialQueuePage({
               key={row.id}
               className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
             >
-              <div>
+              <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <PropertyLink refNo={row.ref_no}>{row.ref_no}</PropertyLink>
                   <SocialQueueStatusBadge status={status} />

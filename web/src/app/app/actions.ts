@@ -107,7 +107,7 @@ async function buildPropertyPayload(formData: FormData) {
   ];
 
   const type_attributes: Record<string, unknown> = {};
-  if (propertyType === "Land") {
+  if (propertyType === "Land" || propertyType === "Commercial Property") {
     type_attributes.suitable_for = str(formData.get("suitable_for")) || null;
   }
 
@@ -178,6 +178,7 @@ async function buildPropertyPayload(formData: FormData) {
       do_not_publish: formData.get("do_not_publish") === "on",
       amenities,
       comments: str(formData.get("comments")) || null,
+      internal_comments: str(formData.get("internal_comments")) || null,
       type_attributes,
     },
     lat,
@@ -222,22 +223,34 @@ export async function createProperty(formData: FormData) {
     throw new Error("Select at least one platform, or mark Do Not Publish.");
   }
 
-  const { data: refRow, error: refErr } = await supabase.rpc("next_property_ref");
-  if (refErr) throw refErr;
-  const ref = Array.isArray(refRow) ? refRow[0] : refRow;
+  // Ref numbers are max+1, so two simultaneous saves can pick the same one;
+  // the unique constraint rejects the loser and we retry with the next number.
+  let property: { id: string; ref_no: string } | null = null;
+  for (let attempt = 0; attempt < 5 && !property; attempt++) {
+    const { data: refRow, error: refErr } = await supabase.rpc("next_property_ref");
+    if (refErr) throw refErr;
+    const ref = Array.isArray(refRow) ? refRow[0] : refRow;
 
-  const { data: property, error } = await supabase
-    .from("properties")
-    .insert({
-      ...row,
-      ref_no: ref?.ref_no as string,
-      ref_seq: ref?.ref_seq as number,
-      created_by: profile.id,
-      created_by_name: profile.display_name,
-    })
-    .select("id, ref_no")
-    .single();
-  if (error) throw error;
+    const { data, error } = await supabase
+      .from("properties")
+      .insert({
+        ...row,
+        ref_no: ref?.ref_no as string,
+        ref_seq: ref?.ref_seq as number,
+        created_by: profile.id,
+        created_by_name: profile.display_name,
+      })
+      .select("id, ref_no")
+      .single();
+    if (error) {
+      if (error.code === "23505" && /ref_(no|seq)/.test(error.message)) continue;
+      throw error;
+    }
+    property = data;
+  }
+  if (!property) {
+    throw new Error("Could not assign a reference number. Please try again.");
+  }
 
   await applyLocation(supabase, property.id, lat, lng);
 

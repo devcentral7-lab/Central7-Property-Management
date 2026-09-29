@@ -67,15 +67,15 @@ export default async function AppHomePage() {
 
   return (
     <div>
-      <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
+      <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)] sm:text-4xl">
         Welcome, {profile.display_name}
       </h1>
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
         {cards.map((c) => (
           <Link
             key={c.label}
             href={c.href}
-            className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 transition hover:border-[var(--brand)]"
+            className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 transition hover:border-[var(--brand)] sm:p-5"
           >
             <p className="text-sm text-[var(--muted)]">{c.label}</p>
             <p className="mt-2 font-display text-3xl font-semibold">

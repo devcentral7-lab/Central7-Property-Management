@@ -95,6 +95,7 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
             budget: s(property.budget),
             amenities: customAmenities,
             comments: s(property.comments),
+            internal_comments: s(property.internal_comments),
           }}
         />
       </div>

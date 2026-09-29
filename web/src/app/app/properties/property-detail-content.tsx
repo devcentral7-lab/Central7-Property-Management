@@ -37,11 +37,10 @@ function typeSpecificKeys(propertyType: string): Set<string> {
     ]);
   }
   if (propertyType === "Commercial Property") {
-    return new Set(["purpose", "land_size_perch", "built_up_area"]);
+    return new Set(["suitable_for", "land_size_perch", "built_up_area"]);
   }
   // House, Estate, and unknown types
   return new Set([
-    "purpose",
     "land_size_perch",
     "bedrooms",
     "bathrooms",
@@ -258,6 +257,20 @@ export async function PropertyDetailContent({ refNo, compact }: DetailProps) {
             <h2 className="font-display text-base font-semibold">Comments</h2>
             <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">
               {property.comments}
+            </p>
+          </div>
+        ) : null}
+
+        {property.internal_comments ? (
+          <div className="mt-4 rounded-xl border border-dashed border-[var(--line)] bg-[var(--bg)]/60 p-4">
+            <h2 className="font-display text-base font-semibold">
+              Internal comments
+              <span className="ml-2 align-middle text-xs font-normal text-[var(--muted)]">
+                Staff only
+              </span>
+            </h2>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">
+              {property.internal_comments}
             </p>
           </div>
         ) : null}

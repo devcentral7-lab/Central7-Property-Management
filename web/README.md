@@ -18,7 +18,7 @@ Next.js App Router rebuild of the Google Apps Script Pulse app.
    ```
    Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from the **new** Supabase project (same values as root `.env`).
 
-2. Apply latest SQL migrations (through `0013_public_property_read.sql`).
+2. Apply latest SQL migrations in order (through `0025_property_internal_comments.sql`).
 
 3. Create staff Auth users in Supabase Auth, then matching `profiles` rows (`id` = auth user uuid, `display_name`, `role`).
 
@@ -46,9 +46,18 @@ Next.js App Router rebuild of the Google Apps Script Pulse app.
 
 ## Deferred (next iterations)
 
-- Drive photo upload UI
 - Social platform date marking / Excel queue upload
 - Invoice Sheets adapter
 - Partner Auth login + signup
 - Bulk import
 - PDF generation
+
+## Drive property photos (optional)
+
+Photos live in Google Drive (folder per property ref under `PHOTOS_ROOT_FOLDER_ID`). The app works without Drive env vars; when set, property modal and public Active pages show a Photos gallery with upload/rename/delete for owners/Admins.
+
+1. Enable Google Drive API and create a service account JSON key.
+2. Share the photos root folder with the service account as Editor.
+3. Set in `.env.local` / Vercel:
+   - `GOOGLE_SERVICE_ACCOUNT_JSON` — full JSON string
+   - `PHOTOS_ROOT_FOLDER_ID` — Drive folder id (default root is documented in `.env.example`)

@@ -21,14 +21,14 @@ function Kpi({
   const inner = (
     <>
       <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="mt-2 font-display text-3xl font-semibold tabular-nums">
+      <p className="mt-2 font-display text-2xl font-semibold tabular-nums sm:text-3xl">
         {value.toLocaleString()}
       </p>
       {hint ? <p className="mt-1 text-xs text-[var(--muted)]">{hint}</p> : null}
     </>
   );
   const className =
-    "rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 transition hover:border-[var(--brand)]";
+    "min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 transition hover:border-[var(--brand)] sm:p-5";
   if (href) {
     return (
       <Link href={href} className={className}>
@@ -51,7 +51,7 @@ function Panel({
   legend?: { name: string; value: number; color: string }[];
 }) {
   return (
-    <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
+    <section className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
         <div>
           <h2 className="font-display text-lg font-semibold">{title}</h2>
@@ -99,15 +99,15 @@ export function AdminDashboard({
     kpis.dropped + kpis.lost + kpis.closed + kpis.republishEvents;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
         <p className="text-sm font-medium text-[var(--brand)]">Admin</p>
-        <h1 className="font-display text-4xl font-semibold text-[var(--brand-deep)]">
+        <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)] sm:text-4xl">
           Operations overview
         </h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <Kpi label="Total listings" value={kpis.total} href="/app/properties" />
         <Kpi
           label="Active"
@@ -152,8 +152,8 @@ export function AdminDashboard({
         </Panel>
       </div>
 
-      <section className="grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 sm:grid-cols-4">
-        <h2 className="font-display text-lg font-semibold sm:col-span-4">
+      <section className="grid grid-cols-2 gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:grid-cols-4 sm:p-5">
+        <h2 className="col-span-2 font-display text-lg font-semibold sm:col-span-4">
           Status outcomes · {data.rangeLabel}
         </h2>
         {(

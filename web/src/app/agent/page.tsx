@@ -38,21 +38,21 @@ export default async function AgentHomePage({
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
+      <h1 className="font-display text-2xl font-semibold text-[var(--brand-deep)] sm:text-3xl">
         Partner search
       </h1>
 
-      <form className="mt-6 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 md:grid-cols-4">
+      <form className="mt-5 grid grid-cols-2 gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 md:grid-cols-4">
         <input
           name="q"
           defaultValue={q}
           placeholder="Ref or keyword"
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+          className="col-span-2 min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm md:col-span-1"
         />
         <select
           name="property_type"
           defaultValue={propertyType}
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+          className="min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
         >
           <option value="">All types</option>
           {options.propertyTypes.map((t) => (
@@ -65,9 +65,9 @@ export default async function AgentHomePage({
           name="city"
           defaultValue={city}
           placeholder="City"
-          className="rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+          className="min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
         />
-        <button className="rounded-xl bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white">
+        <button className="col-span-2 rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-white md:col-span-1">
           Search
         </button>
       </form>
@@ -103,11 +103,13 @@ export default async function AgentHomePage({
       <div className="mt-6 flex justify-between text-sm">
         <Link
           href={page > 1 ? `/agent?page=${page - 1}` : "#"}
-          className={page <= 1 ? "opacity-40" : ""}
+          className={`-ml-2 rounded-lg px-2 py-2 ${page <= 1 ? "opacity-40" : ""}`}
         >
           ← Previous
         </Link>
-        <Link href={`/agent?page=${page + 1}`}>Next →</Link>
+        <Link href={`/agent?page=${page + 1}`} className="-mr-2 rounded-lg px-2 py-2">
+          Next →
+        </Link>
       </div>
     </div>
   );

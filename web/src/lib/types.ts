@@ -48,5 +48,6 @@ export type Property = PropertyCard & {
   furnished: string | null;
   amenities: string[];
   comments: string | null;
+  internal_comments: string | null;
   type_attributes: Record<string, unknown>;
 };

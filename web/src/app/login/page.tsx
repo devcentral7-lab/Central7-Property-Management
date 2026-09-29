@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
+import { BrandLogo } from "@/components/brand-logo";
 import { createClient } from "@/lib/supabase/client";
 
 function LoginForm() {
@@ -107,8 +108,9 @@ export default function LoginPage() {
         <div className="border-b border-[var(--line)] bg-[var(--card)] px-7 py-5 sm:px-8">
           <Link
             href="/"
-            className="font-display text-2xl font-semibold tracking-tight text-[var(--brand-deep)] sm:text-3xl"
+            className="flex items-center gap-3 font-display text-2xl font-semibold tracking-tight text-[var(--brand-deep)] sm:text-3xl"
           >
+            <BrandLogo size={44} className="rounded-lg" />
             Central7 Pulse
           </Link>
         </div>
