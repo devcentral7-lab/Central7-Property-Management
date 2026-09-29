@@ -1,6 +1,6 @@
 import { typeSpecificKeys } from "@/lib/property-fields";
 
-export type DetailField = { label: string; value: string; href?: string };
+export type DetailField = { label: string; value: string; href?: string; phone?: boolean };
 
 export type DetailSectionId = "property" | "location" | "pricing" | "contact" | "record";
 
@@ -125,7 +125,7 @@ export function buildPropertyDetails(
     ["Phone 1", phone1, true, phone1 ? telHref(phone1) : undefined],
     ["Phone 2", phone2, true, phone2 ? telHref(phone2) : undefined],
     ["Email", email, true, email ? `mailto:${email}` : undefined],
-  ]);
+  ]).map((f) => (f.href?.startsWith("tel:") ? { ...f, phone: true } : f));
 
   const record = collect([
     ["Created by", p.created_by_name],

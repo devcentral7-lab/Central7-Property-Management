@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { signOut } from "@/app/app/actions";
 import { ChangePasswordForm } from "@/app/app/account/change-password-form";
 import { Avatar, Icon, Pill, type IconName } from "@/app/app/user-management/ui";
+import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -93,7 +94,11 @@ export default async function AccountPage() {
                 {user?.email ?? <span className="text-[var(--muted)]">—</span>}
               </DetailRow>
               <DetailRow icon="phone" label="Mobile">
-                {profile.mobile_number || <span className="text-[var(--muted)]">Not set</span>}
+                {profile.mobile_number ? (
+                  <PhoneWithWhatsApp phone={profile.mobile_number} />
+                ) : (
+                  <span className="text-[var(--muted)]">Not set</span>
+                )}
               </DetailRow>
               {memberSince ? (
                 <DetailRow icon="calendar" label="Member since">

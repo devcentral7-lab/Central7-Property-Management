@@ -13,6 +13,7 @@ import { PartnerFields } from "@/app/app/agents/register-form";
 import { ClickableRow } from "@/components/clickable-row";
 import { PopupDialog } from "@/components/popup-dialog";
 import { StatusBadge } from "@/components/status-badge";
+import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import {
   ConfirmDialog,
   CredentialsDialog,
@@ -207,11 +208,16 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
   }
 
   function contact(u: PartnerListItem) {
-    const sub = [u.contact_number, u.email].filter(Boolean).join(" · ");
     return (
       <div className="min-w-0">
         <p className="truncate">{u.contact_person || <span className="text-[var(--muted)]">—</span>}</p>
-        {sub ? <p className="truncate text-xs text-[var(--muted)]">{sub}</p> : null}
+        {u.contact_number || u.email ? (
+          <p className="flex min-w-0 items-center gap-1 text-xs text-[var(--muted)]">
+            {u.contact_number ? <PhoneWithWhatsApp phone={u.contact_number} className="shrink-0" /> : null}
+            {u.contact_number && u.email ? <span aria-hidden>·</span> : null}
+            {u.email ? <span className="min-w-0 truncate">{u.email}</span> : null}
+          </p>
+        ) : null}
       </div>
     );
   }

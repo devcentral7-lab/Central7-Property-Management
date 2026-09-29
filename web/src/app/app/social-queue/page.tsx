@@ -4,6 +4,7 @@ import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { StatusBadge } from "@/components/status-badge";
+import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import {
   QueueItemCard,
   type PlatformDates,
@@ -188,13 +189,15 @@ export default async function SocialQueuePage({
                       ) : null}
                       {property?.contact_name && property?.contact_phone_1 ? " · " : ""}
                       {property?.contact_phone_1 ? (
-                        <a
-                          href={`tel:${property.contact_phone_1}`}
-                          data-nav-skip
-                          className="font-semibold text-[var(--brand)] hover:underline"
-                        >
-                          {property.contact_phone_1}
-                        </a>
+                        <PhoneWithWhatsApp phone={property.contact_phone_1}>
+                          <a
+                            href={`tel:${property.contact_phone_1}`}
+                            data-nav-skip
+                            className="font-semibold text-[var(--brand)] hover:underline"
+                          >
+                            {property.contact_phone_1}
+                          </a>
+                        </PhoneWithWhatsApp>
                       ) : null}
                     </p>
                   ) : null}

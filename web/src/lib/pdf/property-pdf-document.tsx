@@ -1,6 +1,7 @@
 import {
   Document,
   Image,
+  Link,
   Page,
   Path,
   Rect,
@@ -11,6 +12,7 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
+import { WHATSAPP_PATH, whatsappHref } from "@/lib/whatsapp";
 import type {
   GlanceIcon,
   PdfField,
@@ -239,6 +241,24 @@ const s = StyleSheet.create({
   footText: { fontSize: 8, color: "#ffffffd9", marginTop: 3 },
   footPhoneLabel: { fontSize: 7, color: "#ffffffb3", letterSpacing: 1.2, textAlign: "right" },
   footPhone: { fontFamily: "Helvetica-Bold", fontSize: 12, color: C.white, marginTop: 2, textAlign: "right" },
+  footPhoneLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    textDecoration: "none",
+  },
+  waLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "center",
+    marginTop: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 8,
+    backgroundColor: "#ffffff26",
+    textDecoration: "none",
+  },
+  waText: { fontSize: 7, color: C.white, marginLeft: 3, letterSpacing: 0.3 },
 
   galleryHead: {
     flexDirection: "row",
@@ -330,9 +350,35 @@ function Footer({ data }: { data: PropertyPdfData }) {
       </View>
       <View>
         <Text style={s.footPhoneLabel}>TELEPHONE</Text>
-        <Text style={s.footPhone}>{data.company.phone}</Text>
+        <FooterPhone phone={data.company.phone} />
       </View>
     </View>
+  );
+}
+
+function FooterPhone({ phone }: { phone: string }) {
+  const href = whatsappHref(phone);
+  if (!href) return <Text style={s.footPhone}>{phone}</Text>;
+  return (
+    <Link src={href} style={s.footPhoneLink}>
+      <Svg width={10} height={10} viewBox="0 0 24 24" style={{ marginRight: 5, marginTop: 2 }}>
+        <Path d={WHATSAPP_PATH} fill={C.white} />
+      </Svg>
+      <Text style={s.footPhone}>{phone}</Text>
+    </Link>
+  );
+}
+
+function WhatsAppPdfLink({ phone }: { phone: string | null | undefined }) {
+  const href = whatsappHref(phone);
+  if (!href) return null;
+  return (
+    <Link src={href} style={s.waLink}>
+      <Svg width={8} height={8} viewBox="0 0 24 24">
+        <Path d={WHATSAPP_PATH} fill={C.white} />
+      </Svg>
+      <Text style={s.waText}>Chat on WhatsApp</Text>
+    </Link>
   );
 }
 
@@ -411,6 +457,7 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
               <Text style={[s.priceLabel, { marginLeft: 5 }]}>Contact {data.contact.name}</Text>
             </View>
             <Text style={s.pricePhone}>{data.contact.phone}</Text>
+            <WhatsAppPdfLink phone={data.contact.phone} />
           </View>
         </View>
 

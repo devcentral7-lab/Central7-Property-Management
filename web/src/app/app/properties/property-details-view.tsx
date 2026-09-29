@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { StatusBadge } from "@/components/status-badge";
+import { WhatsAppLink } from "@/components/whatsapp-link";
 import type {
   DetailSection,
   DetailSectionId,
@@ -82,20 +83,23 @@ function FieldRows({ section }: { section: DetailSection }) {
       {section.fields.map((f) => (
         <div key={f.label} className="grid grid-cols-[5.25rem_minmax(0,1fr)] gap-2.5 py-2">
           <dt className="text-xs font-medium text-[var(--muted)]">{f.label}</dt>
-          <dd className="min-w-0 break-words text-sm font-medium">
+          <dd
+            className={`min-w-0 break-words text-sm font-medium ${f.phone ? "flex items-center gap-1" : ""}`}
+          >
             {f.href ? (
               <a
                 href={f.href}
                 target={f.href.startsWith("http") ? "_blank" : undefined}
                 rel={f.href.startsWith("http") ? "noreferrer" : undefined}
                 data-nav-skip
-                className="text-[var(--brand-deep)] hover:underline"
+                className="min-w-0 text-[var(--brand-deep)] hover:underline"
               >
                 {f.value}
               </a>
             ) : (
               f.value
             )}
+            {f.phone ? <WhatsAppLink phone={f.value} className="-my-1" /> : null}
           </dd>
         </div>
       ))}

@@ -11,6 +11,7 @@ import type { StaffListItem } from "@/app/app/users/actions";
 import { ClickableRow } from "@/components/clickable-row";
 import { PopupDialog } from "@/components/popup-dialog";
 import { StatusBadge } from "@/components/status-badge";
+import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import {
   ConfirmDialog,
   CredentialsDialog,
@@ -241,7 +242,11 @@ export function StaffTable({ rows, currentAdminId }: Props) {
               >
                 <td className="max-w-[20rem] px-5 py-3">{identity(u)}</td>
                 <td className="whitespace-nowrap px-4 py-3">
-                  {u.mobile_number || <span className="text-[var(--muted)]">—</span>}
+                  {u.mobile_number ? (
+                    <PhoneWithWhatsApp phone={u.mobile_number} />
+                  ) : (
+                    <span className="text-[var(--muted)]">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-3">{rolePill(u.role)}</td>
                 <td className="px-4 py-3">
@@ -265,7 +270,7 @@ export function StaffTable({ rows, currentAdminId }: Props) {
                 <div className="min-w-0 text-xs">
                   <StatusBadge status={u.active ? "Active" : "Inactive"} className={u.active ? "" : "text-[var(--muted)]"} />
                   {u.mobile_number ? (
-                    <span className="ml-3 text-[var(--muted)]">{u.mobile_number}</span>
+                    <PhoneWithWhatsApp phone={u.mobile_number} className="ml-3 text-[var(--muted)]" />
                   ) : null}
                 </div>
                 {actions(u)}
