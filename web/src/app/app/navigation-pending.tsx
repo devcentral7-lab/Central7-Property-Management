@@ -100,6 +100,8 @@ export function NavigationPendingProvider({ children }: { children: ReactNode })
 function skeletonFor(url: URL) {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   if (path === "/app") return <DashboardSkeleton />;
+  if (path.startsWith("/app/add-property")) return <PropertiesSkeleton tab="add" tabs={false} />;
+  if (path.startsWith("/app/my-properties")) return <PropertiesSkeleton tab="mine" tabs={false} />;
   if (path === "/app/properties" || path.startsWith("/app/properties/")) {
     const tab = (url.searchParams.get("tab") ?? "").toLowerCase();
     return (

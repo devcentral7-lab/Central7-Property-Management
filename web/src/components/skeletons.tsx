@@ -184,15 +184,37 @@ export function PropertiesSearchSkeleton() {
   );
 }
 
+export function PartnerSearchSkeleton() {
+  return (
+    <Shell>
+      <TitleSkeleton />
+      <Bone className="mt-2 h-4 w-72 max-w-full" />
+      <div className="mt-5 space-y-4 sm:mt-6">
+        <Card className="p-4">
+          <FieldGrid count={4} cols="grid-cols-2 xl:grid-cols-4" />
+          <div className="mt-4 flex justify-end gap-2">
+            <Bone className="h-10 w-24 rounded-full" />
+            <Bone className="h-10 w-28 rounded-full" />
+          </div>
+        </Card>
+        <Bone className="h-4 w-40" />
+        <TableSkeleton rows={8} cols={7} />
+      </div>
+    </Shell>
+  );
+}
+
 export function PropertiesSkeleton({
   tab = "search",
+  tabs = true,
 }: {
   tab?: "search" | "add" | "mine";
+  tabs?: boolean;
 }) {
   return (
     <Shell>
       <TitleSkeleton />
-      <TabsSkeleton count={3} />
+      {tabs ? <TabsSkeleton count={3} /> : <Bone className="mt-2 h-4 w-72 max-w-full" />}
       <div className="mt-5 sm:mt-8">
         {tab === "add" ? <FormSkeleton fields={12} /> : null}
         {tab === "mine" ? (

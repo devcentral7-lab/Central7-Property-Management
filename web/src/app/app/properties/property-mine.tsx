@@ -22,9 +22,11 @@ type Props = {
   target: string;
   page: number;
   isAdmin: boolean;
+  /** Standalone page instead of the Properties "mine" tab. */
+  standalone?: boolean;
 };
 
-export async function PropertyMinePanel({ target, page, isAdmin }: Props) {
+export async function PropertyMinePanel({ target, page, isAdmin, standalone = false }: Props) {
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
@@ -46,10 +48,12 @@ export async function PropertyMinePanel({ target, page, isAdmin }: Props) {
 
   function hrefFor(p: number) {
     const params = new URLSearchParams();
-    params.set("tab", "mine");
+    if (!standalone) params.set("tab", "mine");
     if (p > 1) params.set("page", String(p));
     if (isAdmin) params.set("user", target);
-    return `/app/properties?${params.toString()}`;
+    const qs = params.toString();
+    const base = standalone ? "/app/my-properties" : "/app/properties";
+    return qs ? `${base}?${qs}` : base;
   }
 
   return (
@@ -61,7 +65,7 @@ export async function PropertyMinePanel({ target, page, isAdmin }: Props) {
 
       {isAdmin ? (
         <form className="mt-4 flex gap-2">
-          <input type="hidden" name="tab" value="mine" />
+          {standalone ? null : <input type="hidden" name="tab" value="mine" />}
           <input
             name="user"
             defaultValue={target}

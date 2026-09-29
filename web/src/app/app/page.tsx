@@ -1,9 +1,9 @@
-import Link from "next/link";
-import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
+import { requireProfile } from "@/lib/auth";
 import { loadAdminAnalytics } from "@/lib/analytics";
 import { parseDashboardPeriod } from "@/lib/dashboard-period";
-import { createClient } from "@/lib/supabase/server";
+import { loadUserDashboard } from "@/lib/user-dashboard";
 import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
+import { UserDashboard } from "@/app/app/dashboard/user-dashboard";
 
 export default async function AppHomePage({
   searchParams,
@@ -40,79 +40,26 @@ export default async function AppHomePage({
     );
   }
 
-  const supabase = await createClient();
-  const socialOk = await canAccessSocialQueue(profile);
-
-  const [{ count: myCount }, { count: activeCount }, smqResult] =
-    await Promise.all([
-      supabase
-        .from("properties")
-        .select("*", { count: "exact", head: true })
-        .eq("created_by_name", profile.display_name),
-      supabase
-        .from("properties")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "Active"),
-      socialOk
-        ? supabase
-            .from("social_media_queue")
-            .select("*", { count: "exact", head: true })
-            .not("approved_at", "is", null)
-            .is("completed_at", null)
-        : Promise.resolve({ count: null }),
-    ]);
-
-  const cards = [
-    { label: "My listings", value: myCount ?? 0, href: "/app/properties?tab=mine" },
-    {
-      label: "Active inventory",
-      value: activeCount ?? 0,
-      href: "/app/properties?status=Active",
-    },
-    ...(socialOk
-      ? [
-          {
-            label: "Social queue open",
-            value: smqResult.count ?? 0,
-            href: "/app/social-queue",
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <div>
-      <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)] sm:text-4xl">
-        Welcome, {profile.display_name}
-      </h1>
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:grid-cols-3 sm:gap-4">
-        {cards.map((c) => (
-          <Link
-            key={c.label}
-            href={c.href}
-            className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 transition hover:border-[var(--brand)] sm:p-5"
-          >
-            <p className="text-sm text-[var(--muted)]">{c.label}</p>
-            <p className="mt-2 font-display text-3xl font-semibold">
-              {(c.value ?? 0).toLocaleString()}
-            </p>
-          </Link>
-        ))}
-      </div>
-      <div className="mt-8 flex flex-wrap gap-3">
-        <Link
-          href="/app/properties?tab=add"
-          className="rounded-full bg-[var(--brand)] px-5 py-2.5 text-sm font-semibold text-white"
-        >
-          Add listing
-        </Link>
-        <Link
-          href="/app/properties"
-          className="rounded-full border border-[var(--line)] px-5 py-2.5 text-sm font-semibold"
-        >
-          Search properties
-        </Link>
-      </div>
-    </div>
+  const result = await loadUserDashboard(profile.display_name).then(
+    (data) => ({ data, error: null }),
+    (e: unknown) => ({
+      data: null,
+      error: e instanceof Error ? e.message : "Could not load your dashboard.",
+    }),
   );
+
+  if (!result.data) {
+    return (
+      <div>
+        <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
+          Welcome back, {profile.display_name}
+        </h1>
+        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
+          {result.error}
+        </p>
+      </div>
+    );
+  }
+
+  return <UserDashboard name={profile.display_name} data={result.data} />;
 }
