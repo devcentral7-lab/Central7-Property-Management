@@ -1,17 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import { Arimo } from "next/font/google";
 import "./globals.css";
 
-const display = Fraunces({
-  variable: "--font-display",
+// Arial-metric fallback for devices without Arial (Android); not preloaded so
+// Windows/macOS/iOS never download it.
+const arimo = Arimo({
+  variable: "--font-arimo",
   subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
-
-const body = Manrope({
-  variable: "--font-body",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -30,7 +26,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} h-full`}>
+    <html lang="en" className={`${arimo.variable} h-full`}>
       <body className="min-h-full antialiased">{children}</body>
     </html>
   );

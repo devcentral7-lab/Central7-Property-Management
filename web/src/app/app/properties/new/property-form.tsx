@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import {
   createProperty,
   extractPropertyFromParagraph,
   updateProperty,
 } from "@/app/app/actions";
+import {
+  ConfirmDialog,
+  type ConfirmRequest,
+} from "@/app/app/user-management/dialogs";
 import type { FormOptions } from "@/lib/form-options";
 import { LocationPickerField } from "./location-picker";
 
@@ -65,7 +69,27 @@ type Props = {
   options: FormOptions;
 };
 
-export function PropertyForm({
+export function PropertyForm(props: Props) {
+  const [resetKey, setResetKey] = useState(0);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  function reset() {
+    setResetKey((k) => k + 1);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  return (
+    <div ref={topRef} className="scroll-mt-4">
+      <PropertyFormInner
+        key={resetKey}
+        {...props}
+        onReset={props.mode === "edit" ? undefined : reset}
+      />
+    </div>
+  );
+}
+
+function PropertyFormInner({
   mode = "create",
   refNo,
   nextRef,
@@ -75,7 +99,9 @@ export function PropertyForm({
   initialDoNotPublish = false,
   complexes,
   options,
-}: Props) {
+  onReset,
+}: Props & { onReset?: () => void }) {
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [values, setValues] = useState<PropertyFormValues>(() => ({
     ...EMPTY,
     opportunity_type: options.opportunityTypes[0] || "Sell",
@@ -819,10 +845,24 @@ export function PropertyForm({
           </FormSection>
         </div>
 
-        <div className="sticky bottom-3 z-10">
+        <div className="sticky bottom-3 z-10 flex gap-3">
+          {onReset ? (
+            <ResetButton
+              onClick={() =>
+                setConfirm({
+                  title: "Reset the form?",
+                  body: "This clears every field and tick box, including the AI notes and map pin. You can't undo this.",
+                  confirmLabel: "Reset form",
+                  danger: true,
+                  onConfirm: onReset,
+                })
+              }
+            />
+          ) : null}
           <SubmitButton label={mode === "edit" ? "Save changes" : "Save listing"} />
         </div>
       </form>
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
     </div>
   );
 }
@@ -967,6 +1007,34 @@ function SubmitButton({ label }: { label: string }) {
       className="flex w-full items-center justify-center rounded-xl bg-[var(--brand)] px-6 py-3.5 text-base font-semibold text-white shadow-lg transition hover:bg-[var(--brand-deep)] disabled:cursor-wait disabled:opacity-70"
     >
       {pending ? "Saving…" : label}
+    </button>
+  );
+}
+
+function ResetButton({ onClick }: { onClick: () => void }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-white px-5 py-3.5 text-base font-semibold text-[var(--ink)] shadow-lg transition hover:bg-[var(--bg-accent)] disabled:opacity-60"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="h-4 w-4"
+        aria-hidden
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5"
+        />
+      </svg>
+      Reset
     </button>
   );
 }
