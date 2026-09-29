@@ -111,9 +111,9 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
   }
 
   return (
-    <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+    <div className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-display text-base font-semibold">Photos</h2>
+        <h2 className="font-display text-sm font-semibold">Photos</h2>
         {manage ? (
           <label className="cursor-pointer rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-accent)]">
             {pending ? "Working…" : "Upload"}

@@ -132,12 +132,16 @@ export function DashboardSkeleton() {
   return (
     <Shell>
       <div className="space-y-6 sm:space-y-8">
-        <TitleSkeleton withEyebrow />
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} className="space-y-3 p-4 sm:p-5">
+        <div>
+          <TitleSkeleton withEyebrow />
+          <TabsSkeleton count={2} />
+        </div>
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="space-y-3 p-5 sm:p-6">
               <Bone className="h-3.5 w-24" />
-              <Bone className="h-8 w-16" />
+              <Bone className="h-10 w-28" />
+              <Bone className="h-3 w-32" />
             </Card>
           ))}
         </div>
@@ -241,17 +245,21 @@ export function SocialQueueSkeleton() {
 export function UserManagementSkeleton() {
   return (
     <Shell>
-      <div className="space-y-6 sm:space-y-8">
-        <TitleSkeleton />
-        <div className="tab-scroll -mx-4 border-b border-[var(--line)] px-4 pb-3 sm:mx-0 sm:px-0">
-          <Bone className="h-9 w-24 rounded-full" />
-          <Bone className="h-9 w-24 rounded-full" />
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <TitleSkeleton />
+            <Bone className="mt-2 h-4 w-72 max-w-full" />
+          </div>
+          <Bone className="h-10 w-36 rounded-full" />
         </div>
-        <FormSkeleton fields={6} />
-        <div>
-          <Bone className="mb-3 h-6 w-40" />
-          <TableSkeleton rows={6} cols={6} />
+        <Bone className="h-11 w-60 rounded-full" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, i) => (
+            <Bone key={i} className="h-[4.75rem] rounded-2xl" />
+          ))}
         </div>
+        <TableSkeleton rows={6} cols={6} />
       </div>
     </Shell>
   );
@@ -265,11 +273,22 @@ export function AccountSkeleton() {
           <TitleSkeleton />
           <Bone className="mt-2 h-4 w-52" />
         </div>
-        <Card className="max-w-md space-y-4 p-4 sm:p-6">
-          <Bone className="h-6 w-40" />
-          <FieldGrid count={3} cols="grid-cols-1" />
-          <Bone className="h-10 w-36 rounded-full" />
-        </Card>
+        <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)]">
+          <Card className="overflow-hidden">
+            <Bone className="h-24 rounded-none" />
+            <div className="space-y-4 p-5">
+              <Bone className="-mt-14 h-20 w-20 rounded-full" />
+              <Bone className="h-6 w-40" />
+              <FieldGrid count={3} cols="grid-cols-1" />
+              <Bone className="h-10 w-full rounded-full" />
+            </div>
+          </Card>
+          <Card className="space-y-4 p-5">
+            <Bone className="h-10 w-56" />
+            <FieldGrid count={3} cols="grid-cols-1" />
+            <Bone className="h-10 w-40 rounded-full" />
+          </Card>
+        </div>
       </div>
     </Shell>
   );

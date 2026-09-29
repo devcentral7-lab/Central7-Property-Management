@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
-import { PropertyLink } from "@/app/app/properties/property-modal";
+import { StatusBadge } from "@/components/status-badge";
+import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import type { FormOptions } from "@/lib/form-options";
 import type { ScoredProperty } from "@/lib/property-match";
 
@@ -166,7 +167,7 @@ export function PropertySearchForm({ options, filters }: Props) {
             </div>
             <ul className="divide-y divide-[var(--line)] md:hidden">
               {paraResults.map((r) => (
-                <li key={r.id} className="px-4 py-3">
+                <PropertyRow key={r.id} refNo={r.ref_no} as="li" className="px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
                     <span className="shrink-0 font-semibold tabular-nums text-[var(--brand-deep)]">
@@ -180,14 +181,15 @@ export function PropertySearchForm({ options, filters }: Props) {
                     <span className="font-semibold">
                       {formatMoney(r.price_total, r.currency || "LKR")}
                     </span>
-                    <span className="text-[var(--muted)]"> · {r.status}</span>
+                    <span className="text-[var(--muted)]"> · </span>
+                    <StatusBadge status={r.status} className="text-xs" />
                   </p>
                   {r.match_hits.length ? (
                     <p className="mt-1 text-xs text-[var(--muted)]">
                       {r.match_hits.slice(0, 4).join(", ")}
                     </p>
                   ) : null}
-                </li>
+                </PropertyRow>
               ))}
               {!paraResults.length ? (
                 <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
@@ -210,8 +212,9 @@ export function PropertySearchForm({ options, filters }: Props) {
               </thead>
               <tbody>
                 {paraResults.map((r) => (
-                  <tr
+                  <PropertyRow
                     key={r.id}
+                    refNo={r.ref_no}
                     className="border-b border-[var(--line)] last:border-0"
                   >
                     <td className="px-4 py-2 font-semibold tabular-nums text-[var(--brand-deep)]">
@@ -227,14 +230,16 @@ export function PropertySearchForm({ options, filters }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-2">{r.city || "—"}</td>
-                    <td className="px-4 py-2">{r.status}</td>
+                    <td className="px-4 py-2">
+                      <StatusBadge status={r.status} />
+                    </td>
                     <td className="px-4 py-2">
                       {formatMoney(r.price_total, r.currency || "LKR")}
                     </td>
                     <td className="px-4 py-2 text-xs text-[var(--muted)]">
                       {r.match_hits.slice(0, 4).join(", ") || "—"}
                     </td>
-                  </tr>
+                  </PropertyRow>
                 ))}
                 {!paraResults.length ? (
                   <tr>

@@ -9,8 +9,15 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { updatePropertyStatus } from "@/app/app/actions";
+import { ClickableRow } from "@/components/clickable-row";
 import { DeletePropertyButton } from "@/app/app/properties/[ref]/delete-property-button";
+import { ActivityButton } from "@/app/app/properties/activity-button";
+import { ExportPdfButton } from "@/app/app/properties/export-pdf-button";
+import { UpdateStatusButton } from "@/app/app/properties/update-status-button";
+import {
+  NotesCards,
+  PropertyDetailsView,
+} from "@/app/app/properties/property-details-view";
 import { PropertyForm } from "@/app/app/properties/new/property-form";
 import {
   getPropertyModalData,
@@ -106,137 +113,42 @@ function ModalShell({
 function ViewBody({
   data,
   onEdit,
+  onRefresh,
 }: {
   data: PropertyModalData;
   onEdit: () => void;
+  onRefresh: () => void;
 }) {
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.35fr_0.75fr]">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-semibold text-[var(--brand-deep)] sm:text-3xl">
-              {data.refNo}
-            </h1>
-            <p className="mt-1 text-sm text-[var(--muted)]">{data.headline}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {data.canEdit ? (
-              <button
-                type="button"
-                onClick={onEdit}
-                className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
-              >
-                Edit listing
-              </button>
-            ) : null}
-            {data.canDelete ? (
-              <DeletePropertyButton refNo={data.refNo} />
-            ) : null}
-          </div>
-        </div>
-
-        <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-[var(--line)] bg-[var(--card)] p-4 lg:grid-cols-3">
-          {data.fields.map((f) => (
-            <div key={f.label} className="min-w-0">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                {f.label}
-              </dt>
-              <dd className="mt-0.5 break-words text-sm">{f.value}</dd>
-            </div>
-          ))}
-        </dl>
-
-        {data.comments ? (
-          <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
-            <h2 className="font-display text-base font-semibold">Comments</h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">
-              {data.comments}
-            </p>
-          </div>
-        ) : null}
-
-        {data.internalComments ? (
-          <div className="mt-4 rounded-xl border border-dashed border-[var(--line)] bg-[var(--bg)]/60 p-4">
-            <h2 className="font-display text-base font-semibold">
-              Internal comments
-              <span className="ml-2 align-middle text-xs font-normal text-[var(--muted)]">
-                Staff only
-              </span>
-            </h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--muted)]">
-              {data.internalComments}
-            </p>
-          </div>
-        ) : null}
-
-        <PropertyPhotosPanel refNo={data.refNo} canEdit={data.canEdit} />
-      </div>
-
-      <aside className="space-y-4">
-        {data.canChangeStatus ? (
-          <form
-            action={updatePropertyStatus}
-            className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4"
-          >
-            <h2 className="font-display text-base font-semibold">
-              Update status
-            </h2>
-            <input type="hidden" name="ref_no" value={data.refNo} />
-            <select
-              name="action"
-              required
-              className="mt-2 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
-              defaultValue="Data Change"
-            >
-              {data.statusChangeOptions.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-            <textarea
-              name="comment"
-              rows={2}
-              placeholder="Comment"
-              className="mt-2 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
+    <PropertyDetailsView
+      model={data.details}
+      actions={
+        <>
+          {data.canChangeStatus ? (
+            <UpdateStatusButton
+              refNo={data.refNo}
+              options={data.statusChangeOptions}
+              onDone={onRefresh}
             />
+          ) : null}
+          <ActivityButton refNo={data.refNo} events={data.events} />
+          <ExportPdfButton refNo={data.refNo} />
+          {data.canEdit ? (
             <button
-              type="submit"
-              className="mt-2 w-full rounded-full bg-[var(--brand)] py-2 text-sm font-semibold text-white"
+              type="button"
+              onClick={onEdit}
+              className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
             >
-              Submit
+              Edit listing
             </button>
-          </form>
-        ) : null}
-
-        <div className="rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
-          <h2 className="font-display text-base font-semibold">
-            Recent activity
-          </h2>
-          <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto">
-            {data.events.map((e) => (
-              <li
-                key={e.id}
-                className="border-b border-[var(--line)] pb-2 text-sm last:border-0"
-              >
-                <p className="font-semibold">{e.action}</p>
-                <p className="text-xs text-[var(--muted)]">
-                  {e.actor_name || "—"}
-                  {e.assigned_to ? ` → ${e.assigned_to}` : ""}
-                </p>
-                {e.comment ? (
-                  <p className="mt-1 text-[var(--muted)]">{e.comment}</p>
-                ) : null}
-              </li>
-            ))}
-            {!data.events.length ? (
-              <li className="text-sm text-[var(--muted)]">No events yet.</li>
-            ) : null}
-          </ul>
-        </div>
-      </aside>
-    </div>
+          ) : null}
+          {data.canDelete ? <DeletePropertyButton refNo={data.refNo} /> : null}
+        </>
+      }
+    >
+      <NotesCards comments={data.comments} internalComments={data.internalComments} />
+      <PropertyPhotosPanel refNo={data.refNo} canEdit={data.canEdit} />
+    </PropertyDetailsView>
   );
 }
 
@@ -287,6 +199,17 @@ export function PropertyModalProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const refresh = useCallback(() => {
+    const refNo = state.refNo;
+    if (!refNo) return;
+    void getPropertyModalData(refNo).then((result) => {
+      if (!result.ok) return;
+      setState((prev) =>
+        prev.open && prev.refNo === refNo ? { ...prev, data: result.data } : prev,
+      );
+    });
+  }, [state.refNo]);
+
   const openView = useCallback(
     (refNo: string) => load(refNo, "view"),
     [load],
@@ -327,6 +250,7 @@ export function PropertyModalProvider({ children }: { children: ReactNode }) {
           <ViewBody
             data={state.data}
             onEdit={() => setState((prev) => ({ ...prev, mode: "edit" }))}
+            onRefresh={refresh}
           />
         ) : null}
         {state.data && state.mode === "edit" ? (
@@ -364,6 +288,36 @@ export function PropertyModalProvider({ children }: { children: ReactNode }) {
       {children}
       {mounted && dialog ? createPortal(dialog, document.body) : null}
     </PropertyModalContext.Provider>
+  );
+}
+
+/** Table row / card that opens the property popup when clicked anywhere. */
+export function PropertyRow({
+  refNo,
+  as,
+  className,
+  children,
+}: {
+  refNo: string;
+  as?: "tr" | "li" | "div";
+  className?: string;
+  children: ReactNode;
+}) {
+  const { openView } = usePropertyModal();
+  return (
+    <ClickableRow
+      as={as}
+      className={className}
+      onActivate={(newTab) => {
+        if (newTab) {
+          window.open(`/app/properties/${encodeURIComponent(refNo)}`, "_blank", "noopener");
+        } else {
+          openView(refNo);
+        }
+      }}
+    >
+      {children}
+    </ClickableRow>
   );
 }
 

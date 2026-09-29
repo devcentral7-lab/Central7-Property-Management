@@ -3,25 +3,40 @@ import Link from "next/link";
 import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PropertyLink } from "@/app/app/properties/property-modal";
+import { StatusBadge } from "@/components/status-badge";
 import {
-  SocialQueueActions,
-  SocialQueueStatusBadge,
-  type SocialQueueStatus,
+  QueueItemCard,
+  type PlatformDates,
 } from "@/app/app/social-queue/queue-actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+type QueueProperty = {
+  opportunity_type: string | null;
+  property_type: string | null;
+  city: string | null;
+  status: string | null;
+  contact_name: string | null;
+  contact_phone_1: string | null;
+} | null;
+
+const SELECT =
+  "id, ref_no, approved_action, approved_by, approved_at, completed_at, requested_platforms, platform_dates, property:properties(opportunity_type, property_type, city, status, contact_name, contact_phone_1)";
 
 function one(v: string | string[] | undefined) {
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
 }
 
-function statusOf(row: {
-  approved_at: string | null;
-  completed_at: string | null;
-}): SocialQueueStatus {
-  if (row.completed_at) return "published";
-  if (row.approved_at) return "approved";
-  return "pending";
+function formatDateTime(iso: string | null) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Colombo",
+  });
 }
 
 export default async function SocialQueuePage({
@@ -37,23 +52,22 @@ export default async function SocialQueuePage({
   const sp = await searchParams;
   const tab =
     one(sp.tab).toLowerCase() === "published" ? "published" : "pending";
-  const isAdmin = profile.role === "Admin";
   const supabase = await createClient();
 
-  // Only approved (or published) items appear here — pending approval stays on Activity.
+  // Only approved (or done) items appear here — pending approval stays on Activity.
   // Separate query chains avoid Supabase TS "excessively deep" errors.
   const { data, error } =
     tab === "published"
       ? await supabase
           .from("social_media_queue")
-          .select("*")
+          .select(SELECT)
           .not("approved_at", "is", null)
           .not("completed_at", "is", null)
           .order("completed_at", { ascending: false })
           .limit(100)
       : await supabase
           .from("social_media_queue")
-          .select("*")
+          .select(SELECT)
           .not("approved_at", "is", null)
           .is("completed_at", null)
           .order("approved_at", { ascending: false })
@@ -74,12 +88,14 @@ export default async function SocialQueuePage({
     },
   ];
 
+  const rows = data ?? [];
+
   return (
     <div>
       <h1 className="font-display text-2xl font-semibold sm:text-3xl">Social media queue</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
-        Items appear here after approval on the Activity log. Mark them published
-        when posted.
+        Items appear here after approval on the Activity log. Tick each platform
+        as you post it — Done unlocks once every platform is ticked.
       </p>
 
       <div className="tab-scroll -mx-4 mt-5 border-b border-[var(--line)] px-4 pb-3 sm:mx-0 sm:mt-6 sm:px-0">
@@ -101,40 +117,94 @@ export default async function SocialQueuePage({
         })}
       </div>
 
-      <ul className="mt-5 divide-y divide-[var(--line)] rounded-2xl border border-[var(--line)] bg-[var(--card)] sm:mt-6">
-        {(data ?? []).map((row) => {
-          const status = statusOf(row);
-          const platforms =
-            Array.isArray(row.requested_platforms) &&
-            row.requested_platforms.length
-              ? row.requested_platforms.join(", ")
-              : "No platforms";
+      <p className="mt-4 text-sm text-[var(--muted)]">
+        {rows.length} {rows.length === 1 ? "item" : "items"}
+        {rows.length === 100 ? " (showing latest 100)" : ""}
+      </p>
+
+      <ul className="mt-3 space-y-3">
+        {rows.map((row) => {
+          const property = (Array.isArray(row.property)
+            ? row.property[0]
+            : row.property) as QueueProperty;
+          const platforms = (row.requested_platforms ?? []) as string[];
+          const dates = (row.platform_dates ?? {}) as PlatformDates;
+          const summary = [
+            property?.opportunity_type,
+            property?.property_type,
+            property?.city,
+          ].filter(Boolean);
+
           return (
             <li
               key={row.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 shadow-sm sm:p-5"
             >
-              <div className="min-w-0">
+              <QueueItemCard
+                id={row.id}
+                done={Boolean(row.completed_at)}
+                platforms={platforms}
+                dates={dates}
+              >
                 <div className="flex flex-wrap items-center gap-2">
-                  <PropertyLink refNo={row.ref_no}>{row.ref_no}</PropertyLink>
-                  <SocialQueueStatusBadge status={status} />
+                  <span className="text-base font-semibold">
+                    <PropertyLink refNo={row.ref_no}>{row.ref_no}</PropertyLink>
+                  </span>
+                  {row.approved_action ? (
+                    <span className="inline-flex rounded-full border border-[var(--brand)]/50 px-2.5 py-0.5 text-xs font-semibold text-[var(--brand)]">
+                      {row.approved_action}
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-1 text-sm text-[var(--muted)]">
-                  {platforms}
-                  {row.approved_by ? ` · approved by ${row.approved_by}` : ""}
-                  {row.completed_at
-                    ? ` · published ${new Date(row.completed_at).toLocaleString()}`
-                    : ""}
-                </p>
-              </div>
-              {isAdmin ? (
-                <SocialQueueActions id={row.id} status={status} mode="smq" />
-              ) : null}
+
+                <div className="mt-2 space-y-0.5 text-sm text-[var(--muted)]">
+                  {summary.length || property?.status ? (
+                    <p>
+                      {summary.join(" · ")}
+                      {property?.status ? (
+                        <>
+                          {summary.length ? " · " : ""}Current status:{" "}
+                          <StatusBadge status={property.status} />
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
+                  {row.approved_by ? (
+                    <p>
+                      Approved by{" "}
+                      <span className="font-semibold text-[var(--ink)]">{row.approved_by}</span>
+                      {row.approved_at ? ` on ${formatDateTime(row.approved_at)}` : ""}
+                    </p>
+                  ) : null}
+                  {row.completed_at ? (
+                    <p>Done on {formatDateTime(row.completed_at)}</p>
+                  ) : null}
+                  {property?.contact_name || property?.contact_phone_1 ? (
+                    <p>
+                      {property?.contact_name ? (
+                        <span className="font-semibold text-[var(--ink)]">
+                          {property.contact_name}
+                        </span>
+                      ) : null}
+                      {property?.contact_name && property?.contact_phone_1 ? " · " : ""}
+                      {property?.contact_phone_1 ? (
+                        <a
+                          href={`tel:${property.contact_phone_1}`}
+                          data-nav-skip
+                          className="font-semibold text-[var(--brand)] hover:underline"
+                        >
+                          {property.contact_phone_1}
+                        </a>
+                      ) : null}
+                    </p>
+                  ) : null}
+                </div>
+              </QueueItemCard>
             </li>
           );
         })}
-        {!data?.length ? (
-          <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
+        {!rows.length ? (
+          <li className="rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-8 text-center text-sm text-[var(--muted)]">
             {tab === "published"
               ? "No published items yet."
               : "No pending items. Approve requests from the Activity log first."}
