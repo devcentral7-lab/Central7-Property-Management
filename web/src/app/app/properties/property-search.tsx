@@ -140,7 +140,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   function hrefFor(p: number) {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(filters)) {
-      if (v) params.set(k, v);
+      if (v || k === "status") params.set(k, v);
     }
     if (p > 1) params.set("page", String(p));
     const s = params.toString();

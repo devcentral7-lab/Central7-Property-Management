@@ -18,7 +18,8 @@ function filtersFromParams(
 ): SearchFilterValues {
   return {
     q: one(sp.q).trim(),
-    status: one(sp.status),
+    // No status param means a fresh search (default Active); an empty one means "All statuses".
+    status: sp.status === undefined ? "Active" : one(sp.status),
     opportunity_type: one(sp.opportunity_type),
     property_type: one(sp.property_type),
     property_subtype: one(sp.property_subtype).trim(),
