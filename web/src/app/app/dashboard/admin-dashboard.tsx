@@ -2,7 +2,12 @@ import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
 import { LinkRow } from "@/components/clickable-row";
 import { StatusBadge } from "@/components/status-badge";
-import type { AdminAnalytics, AgentContactSplit } from "@/lib/analytics";
+import type {
+  AdminAnalytics,
+  AgentContactSplit,
+  SocialDailyRow,
+} from "@/lib/analytics";
+import { PropertyLink } from "@/app/app/properties/property-modal";
 import { PeriodSelect } from "@/app/app/dashboard/period-select";
 import {
   ColumnChart,
@@ -22,10 +27,28 @@ import {
   statusColor,
 } from "@/app/app/dashboard/palette";
 
-type IconName = "grid" | "user" | "share" | "clock" | "table" | "chart";
+type IconName =
+  | "grid"
+  | "user"
+  | "share"
+  | "clock"
+  | "table"
+  | "chart"
+  | "trend"
+  | "calendar"
+  | "tag"
+  | "eyeOff"
+  | "pin";
 
 function Icon({ name, className = "h-4 w-4" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, string> = {
+    trend: "M3 17l6-6 4 4 8-8M15 7h6v6",
+    calendar:
+      "M8 3v4M16 3v4M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
+    tag: "M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9ZM7.5 7.5h.01",
+    eyeOff:
+      "M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10 10 0 0 1 12 5c5 0 9 4.5 10 7a13 13 0 0 1-3 4.2M6.6 6.6C4.5 8 3 10 2 12c1 2.5 5 7 10 7a10 10 0 0 0 4.4-1",
+    pin: "M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Zm0-9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
     grid: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z",
     user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4Z",
     share:
@@ -365,27 +388,35 @@ function Row({ href, children }: { href?: string; children: ReactNode }) {
 function NumberTable({
   title,
   subtitle,
+  icon = "table",
+  nameHeader = "Name",
   rows,
   hrefFor,
   colorFor,
+  scroll = false,
 }: {
   title: string;
   subtitle?: string;
+  icon?: IconName;
+  nameHeader?: string;
   rows: { name: string; value: number }[];
   hrefFor?: (name: string) => string;
   colorFor?: (name: string, index: number) => string;
+  scroll?: boolean;
 }) {
   const sum = rows.reduce((acc, r) => acc + r.value, 0);
+  const th = `pb-2 font-semibold ${scroll ? "sticky top-0 z-[1] bg-[var(--card)]" : ""}`;
   return (
-    <Section title={title} subtitle={subtitle} icon="table">
+    <Section title={title} subtitle={subtitle} icon={icon}>
       {rows.length ? (
+        <div className={scroll ? "max-h-[30rem] overflow-y-auto" : undefined}>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-[11px] uppercase tracking-wider text-[var(--muted)]">
-              <th className="pb-2 pr-3 font-semibold">Name</th>
-              <th className="hidden pb-2 pr-3 font-semibold sm:table-cell">Share</th>
-              <th className="pb-2 pr-3 text-right font-semibold">Count</th>
-              <th className="pb-2 text-right font-semibold">%</th>
+              <th className={`${th} pr-3`}>{nameHeader}</th>
+              <th className={`${th} hidden pr-3 sm:table-cell`}>Share</th>
+              <th className={`${th} pr-3 text-right`}>Count</th>
+              <th className={`${th} text-right`}>%</th>
             </tr>
           </thead>
           <tbody>
@@ -448,10 +479,317 @@ function NumberTable({
             </tr>
           </tfoot>
         </table>
+        </div>
       ) : (
         <p className="text-sm text-[var(--muted)]">No data yet.</p>
       )}
     </Section>
+  );
+}
+
+const stickyTh =
+  "sticky top-0 z-[1] whitespace-nowrap bg-[var(--card)] pb-2 pr-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]";
+
+function Num({ value, strong = false }: { value: number; strong?: boolean }) {
+  return (
+    <span
+      className={`tabular-nums ${
+        strong ? "font-semibold text-[var(--ink)]" : value ? "" : "text-[var(--muted)]/50"
+      }`}
+    >
+      {value.toLocaleString()}
+    </span>
+  );
+}
+
+function TableScroll({ tall = false, children }: { tall?: boolean; children: ReactNode }) {
+  return (
+    <div className={`overflow-x-auto ${tall ? "max-h-[30rem] overflow-y-auto" : ""}`}>
+      {children}
+    </div>
+  );
+}
+
+function EmptyNote({ children }: { children: ReactNode }) {
+  return <p className="text-sm text-[var(--muted)]">{children}</p>;
+}
+
+/** Rows × columns of counts with row, column and grand totals. */
+function MatrixTable({
+  rowHeader,
+  rows,
+  columns,
+  cell,
+  rowLabel,
+  tall = false,
+}: {
+  rowHeader: string;
+  rows: string[];
+  columns: string[];
+  cell: (row: string, column: string) => number;
+  rowLabel?: (row: string) => ReactNode;
+  tall?: boolean;
+}) {
+  const rowTotals = rows.map((r) => columns.reduce((s, c) => s + cell(r, c), 0));
+  const colTotals = columns.map((c) => rows.reduce((s, r) => s + cell(r, c), 0));
+  const grand = rowTotals.reduce((a, b) => a + b, 0);
+  return (
+    <TableScroll tall={tall}>
+      <table className="w-full min-w-max text-sm">
+        <thead>
+          <tr>
+            <th className={`${stickyTh} text-left`}>{rowHeader}</th>
+            {columns.map((c) => (
+              <th key={c} className={`${stickyTh} text-right`}>
+                {c}
+              </th>
+            ))}
+            <th className={`${stickyTh} pr-0 text-right`}>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r} className="border-t border-[var(--line)] hover:bg-[var(--bg-accent)]/40">
+              <td className="whitespace-nowrap py-2.5 pr-3 font-medium">
+                {rowLabel ? rowLabel(r) : r}
+              </td>
+              {columns.map((c) => (
+                <td key={c} className="py-2.5 pr-3 text-right">
+                  <Num value={cell(r, c)} />
+                </td>
+              ))}
+              <td className="py-2.5 text-right">
+                <Num value={rowTotals[i]} strong />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-[var(--line)]">
+            <td className="pt-2.5 pr-3 font-semibold">Total</td>
+            {colTotals.map((t, i) => (
+              <td key={columns[i]} className="pt-2.5 pr-3 text-right">
+                <Num value={t} strong />
+              </td>
+            ))}
+            <td className="pt-2.5 text-right font-semibold tabular-nums text-[var(--brand)]">
+              {grand.toLocaleString()}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </TableScroll>
+  );
+}
+
+function monthName(bucket: string) {
+  const [y, m] = bucket.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en-GB", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function shortDate(iso: string, withYear = false) {
+  return new Date(iso.length <= 10 ? `${iso}T00:00:00Z` : iso).toLocaleDateString("en-GB", {
+    ...(withYear ? {} : { weekday: "short" }),
+    day: "numeric",
+    month: "short",
+    ...(withYear ? { year: "numeric" } : {}),
+    timeZone: iso.length <= 10 ? "UTC" : "Asia/Colombo",
+  });
+}
+
+function DetailSections({ data }: { data: AdminAnalytics }) {
+  const d = data.details;
+  const period = data.rangeLabel;
+  const monthShort = d.monthLabel.split(" ")[0].slice(0, 3);
+  const social = d.socialDaily;
+  const socialCols: { key: keyof SocialDailyRow; label: string }[] = [
+    { key: "published", label: "Published" },
+    { key: "republished", label: "Republished" },
+    { key: "drop", label: "Drop" },
+    { key: "lost", label: "Lost" },
+    { key: "hold", label: "Hold" },
+    { key: "closed", label: "Closed" },
+    { key: "dataChange", label: "Data change" },
+  ];
+  const lastSocial = social[social.length - 1];
+
+  return (
+    <>
+      <Section
+        title="By agent — monthly trend"
+        subtitle={`${d.yearLabel} · listings added per month`}
+        icon="trend"
+      >
+        {d.monthlyByAgent.agents.length ? (
+          <MatrixTable
+            rowHeader="Month"
+            rows={d.monthlyByAgent.buckets}
+            columns={d.monthlyByAgent.agents}
+            cell={(r, c) => d.monthlyByAgent.values[r]?.[c] ?? 0}
+            rowLabel={monthName}
+          />
+        ) : (
+          <EmptyNote>No listings added this year.</EmptyNote>
+        )}
+      </Section>
+
+      <Section
+        title="By agent — daily"
+        subtitle={`${d.monthLabel} · days with new listings`}
+        icon="calendar"
+      >
+        {d.dailyByAgent.agents.length ? (
+          <MatrixTable
+            rowHeader="Day"
+            rows={d.dailyByAgent.buckets}
+            columns={d.dailyByAgent.agents}
+            cell={(r, c) => d.dailyByAgent.values[r]?.[c] ?? 0}
+            rowLabel={(r) => `${r} ${monthShort}`}
+            tall
+          />
+        ) : (
+          <EmptyNote>No listings added this month yet.</EmptyNote>
+        )}
+      </Section>
+
+      <Section
+        title="Status by property type"
+        subtitle={`${period} · listings added, by current status`}
+        icon="tag"
+      >
+        <MatrixTable
+          rowHeader="Property type"
+          rows={d.typeRows}
+          columns={d.statusColumns}
+          cell={(r, c) => d.statusByType[r]?.[c] ?? 0}
+        />
+      </Section>
+
+      <Section
+        title="Do not publish properties"
+        subtitle={`${period} · saved and searchable, but never sent for advertising`}
+        icon="eyeOff"
+        aside={
+          d.doNotPublish.length ? (
+            <span className="hidden rounded-full bg-[var(--bg-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--ink)] sm:inline">
+              {d.doNotPublish.length.toLocaleString()}
+            </span>
+          ) : null
+        }
+      >
+        {d.doNotPublish.length ? (
+          <TableScroll tall>
+            <table className="w-full min-w-max text-sm">
+              <thead>
+                <tr className="text-left">
+                  {["Ref no", "Agent", "Opportunity", "Property type", "City", "Added"].map((h) => (
+                    <th key={h} className={stickyTh}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {d.doNotPublish.map((r) => (
+                  <tr key={r.ref_no} className="border-t border-[var(--line)] hover:bg-[var(--bg-accent)]/40">
+                    <td className="py-2.5 pr-3">
+                      <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
+                    </td>
+                    <td className="py-2.5 pr-3">{r.agent || "—"}</td>
+                    <td className="py-2.5 pr-3">{r.opportunity}</td>
+                    <td className="py-2.5 pr-3">{r.type}</td>
+                    <td className="py-2.5 pr-3">{r.city || "—"}</td>
+                    <td className="whitespace-nowrap py-2.5 text-[var(--muted)]">
+                      {shortDate(r.created_at, true)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableScroll>
+        ) : (
+          <EmptyNote>No Do Not Publish listings were added in this period.</EmptyNote>
+        )}
+      </Section>
+
+      <NumberTable
+        title="City breakdown"
+        subtitle={`${period} · listings added`}
+        icon="pin"
+        nameHeader="City"
+        rows={d.cities}
+        hrefFor={(c) => `/app/properties?status=&city=${encodeURIComponent(c)}`}
+        colorFor={(_, i) => (i === 0 ? BRAND.red : i === 1 ? BRAND.charcoal : BRAND.stone)}
+        scroll
+      />
+
+      <Section
+        title="Social media daily activity"
+        subtitle={`${period} · items marked done on the social media queue, and what was still waiting at the end of each day`}
+        icon="share"
+      >
+        {social.length ? (
+          <TableScroll tall>
+            <table className="w-full min-w-max text-sm">
+              <thead>
+                <tr>
+                  <th className={`${stickyTh} text-left`}>Date</th>
+                  {socialCols.map((c) => (
+                    <th key={c.key} className={`${stickyTh} text-right`}>
+                      {c.label}
+                    </th>
+                  ))}
+                  <th className={`${stickyTh} text-right`}>Remaining to publish</th>
+                  <th className={`${stickyTh} pr-0 text-right`}>Remaining to republish</th>
+                </tr>
+              </thead>
+              <tbody>
+                {social.map((r) => (
+                  <tr key={r.day} className="border-t border-[var(--line)] hover:bg-[var(--bg-accent)]/40">
+                    <td className="whitespace-nowrap py-2.5 pr-3 font-medium">{shortDate(r.day)}</td>
+                    {socialCols.map((c) => (
+                      <td key={c.key} className="py-2.5 pr-3 text-right">
+                        <Num value={r[c.key] as number} />
+                      </td>
+                    ))}
+                    <td className="py-2.5 pr-3 text-right">
+                      <Num value={r.remainingPublish} />
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <Num value={r.remainingRepublish} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-[var(--line)]">
+                  <td className="pt-2.5 pr-3 font-semibold">Total</td>
+                  {socialCols.map((c) => (
+                    <td key={c.key} className="pt-2.5 pr-3 text-right">
+                      <Num value={social.reduce((s, r) => s + (r[c.key] as number), 0)} strong />
+                    </td>
+                  ))}
+                  <td className="whitespace-nowrap pt-2.5 pr-3 text-right">
+                    <span className="mr-1 text-xs text-[var(--muted)]">latest</span>
+                    <Num value={lastSocial?.remainingPublish ?? 0} strong />
+                  </td>
+                  <td className="whitespace-nowrap pt-2.5 text-right">
+                    <span className="mr-1 text-xs text-[var(--muted)]">latest</span>
+                    <Num value={lastSocial?.remainingRepublish ?? 0} strong />
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </TableScroll>
+        ) : (
+          <EmptyNote>No social media activity in this period.</EmptyNote>
+        )}
+      </Section>
+    </>
   );
 }
 
@@ -596,6 +934,8 @@ export function AdminDashboard({
           hrefFor={(t) => `/app/properties?property_type=${encodeURIComponent(t)}`}
         />
       </div>
+
+      <DetailSections data={data} />
     </div>
   );
 

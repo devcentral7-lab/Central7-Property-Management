@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Photo uploads go one file per request; Vercel rejects bodies over 4.5 MB.
+    serverActions: { bodySizeLimit: "4.5mb" },
+  },
   outputFileTracingIncludes: {
     "/api/properties/[ref]/pdf": [
       "./public/logo.jpg",

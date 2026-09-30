@@ -3,6 +3,8 @@
  * Usage: npm run migrate:clean
  */
 import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   CONTACT_TYPES,
   FURNISHED_LIST,
@@ -15,6 +17,7 @@ import {
   coerceTimestamp,
   dataPath,
   formatContactNumber,
+  parseBool,
   parseNumber,
   parseRefSeq,
   readJsonFile,
@@ -82,7 +85,22 @@ function mergeComments(row: Row): string {
     .trim();
 }
 
-function cleanProperty(row: Row): Record<string, unknown> | null {
+/** Ref No → pre-"ISO fix" sheet timestamp, from the legacy backup table. */
+export function loadOriginalTimestamps(rawDir = dataPath('raw')): Map<string, string> {
+  const file = path.join(rawDir, 'backup_timestamp_before_iso_fix_2026.json');
+  if (!fs.existsSync(file)) return new Map();
+  const rows = readJsonFile<Row[]>(file);
+  return new Map(
+    rows
+      .filter((r) => s(r['original_timestamp']))
+      .map((r) => [s(r['Ref No']).toUpperCase(), s(r['original_timestamp'])]),
+  );
+}
+
+export function cleanProperty(
+  row: Row,
+  originalTimestamps: Map<string, string> = new Map(),
+): Record<string, unknown> | null {
   const refNo = s(row['Ref No']).toUpperCase();
   const refSeq = parseRefSeq(refNo);
   if (!refNo || refSeq === null) return null;
@@ -108,11 +126,12 @@ function cleanProperty(row: Row): Record<string, unknown> | null {
   if (s(row['Suitable for'])) typeAttributes.suitable_for = s(row['Suitable for']);
   if (s(row['Built up Area'])) typeAttributes.built_up_area = parseNumber(row['Built up Area']);
   if (s(row['Apartment Complex'])) typeAttributes.apartment_complex_name = s(row['Apartment Complex']);
+  if (s(row['Agent Ref No'])) typeAttributes.agent_ref_no = s(row['Agent Ref No']);
 
   return {
     ref_no: refNo,
     ref_seq: refSeq,
-    created_at: coerceTimestamp(row['Timestamp']),
+    created_at: coerceTimestamp(originalTimestamps.get(refNo) ?? row['Timestamp']),
     created_by_name: s(row['User']) || null,
     contact_type: contactType,
     contact_name: s(row['Name of Contact']) || 'Unknown',
@@ -144,21 +163,24 @@ function cleanProperty(row: Row): Record<string, unknown> | null {
     budget: parseNumber(row['Budget']),
     furnished,
     status,
-    do_not_publish: false,
+    do_not_publish: parseBool(row['Do Not Publish']),
     amenities,
     comments: mergeComments(row) || null,
+    internal_comments: s(row['Internal Comments']) || null,
     type_attributes: typeAttributes,
   };
 }
 
-function main(): void {
-  const rawProps = loadRaw('C7_Pulse_DB_Dev');
+export function cleanProperties(
+  rawProps: Row[],
+  originalTimestamps: Map<string, string> = new Map(),
+): { cleaned: Record<string, unknown>[]; rejected: Row[] } {
   const cleaned: Record<string, unknown>[] = [];
   const rejected: Row[] = [];
   const seen = new Map<string, Record<string, unknown>>();
 
   for (const row of rawProps) {
-    const item = cleanProperty(row);
+    const item = cleanProperty(row, originalTimestamps);
     if (!item) {
       rejected.push({ reason: 'bad_ref', row });
       continue;
@@ -178,6 +200,14 @@ function main(): void {
 
   cleaned.push(...seen.values());
   cleaned.sort((a, b) => Number(a.ref_seq) - Number(b.ref_seq));
+  return { cleaned, rejected };
+}
+
+function main(): void {
+  const { cleaned, rejected } = cleanProperties(
+    loadRaw('C7_Pulse_DB_Dev'),
+    loadOriginalTimestamps(),
+  );
 
   const complexes = [
     ...new Set(
@@ -196,4 +226,7 @@ function main(): void {
   );
 }
 
-main();
+const isEntry =
+  !!process.argv[1] &&
+  import.meta.url.toLowerCase() === pathToFileURL(process.argv[1]).href.toLowerCase();
+if (isEntry) main();

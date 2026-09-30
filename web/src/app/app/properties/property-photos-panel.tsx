@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { MAX_PHOTO_BYTES } from "@/lib/drive/constants";
 import type { DrivePhoto } from "@/lib/drive/types";
 import {
   deletePropertyPhotoAction,
@@ -15,6 +16,45 @@ type Props = {
   canEdit: boolean;
 };
 
+type PhotoResult = Awaited<ReturnType<typeof listPropertyPhotosAction>>;
+
+const MAX_EDGE = 2048;
+const RESIZE_ABOVE_BYTES = 1.5 * 1024 * 1024;
+
+/** Phone photos are often 3–10 MB; send a 2048px JPEG instead. GIFs are kept as-is. */
+async function prepareForUpload(file: File): Promise<File> {
+  if (file.type === "image/gif" || file.size <= RESIZE_ABOVE_BYTES) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.85),
+    );
+    if (!blob || blob.size >= file.size) return file;
+    const name = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+    return new File([blob], name, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
+async function safely(run: () => Promise<PhotoResult>): Promise<PhotoResult> {
+  try {
+    return await run();
+  } catch (e) {
+    return {
+      ok: false,
+      configured: true,
+      error: e instanceof Error ? e.message : "Something went wrong. Try again.",
+    };
+  }
+}
+
 export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
   const [photos, setPhotos] = useState<DrivePhoto[]>([]);
   const [configured, setConfigured] = useState(true);
@@ -23,9 +63,10 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
   const [loading, setLoading] = useState(true);
   const [pending, startTransition] = useTransition();
   const [dragId, setDragId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
 
   const applyResult = useCallback(
-    (result: Awaited<ReturnType<typeof listPropertyPhotosAction>>) => {
+    (result: PhotoResult) => {
       setConfigured(result.configured);
       if (!result.ok) {
         setError(result.error);
@@ -41,7 +82,7 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void listPropertyPhotosAction(refNo).then((result) => {
+    void safely(() => listPropertyPhotosAction(refNo)).then((result) => {
       if (cancelled) return;
       applyResult(result);
       setLoading(false);
@@ -53,18 +94,37 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
 
   function onUpload(files: FileList | null) {
     if (!files?.length) return;
-    const fd = new FormData();
-    Array.from(files).forEach((f) => fd.append("files", f));
+    const picked = Array.from(files);
     startTransition(async () => {
-      const result = await uploadPropertyPhotosAction(refNo, fd);
-      applyResult(result);
+      const failures: string[] = [];
+      let last: PhotoResult | null = null;
+      for (let i = 0; i < picked.length; i++) {
+        setProgress(`Uploading ${i + 1} of ${picked.length}…`);
+        const file = await prepareForUpload(picked[i]);
+        if (file.size > MAX_PHOTO_BYTES) {
+          failures.push(`${picked[i].name} is too large (max ${MAX_PHOTO_BYTES / (1024 * 1024)} MB)`);
+          continue;
+        }
+        const fd = new FormData();
+        fd.append("files", file);
+        const result = await safely(() => uploadPropertyPhotosAction(refNo, fd));
+        if (result.ok) last = result;
+        else failures.push(`${picked[i].name}: ${result.error}`);
+      }
+      setProgress(null);
+      if (last) applyResult(last);
+      if (failures.length) {
+        setError(
+          `${failures.length} of ${picked.length} photo(s) didn't upload. ${failures.join(" · ")}`,
+        );
+      }
     });
   }
 
   function onDelete(fileId: string) {
     if (!confirm("Delete this photo from Drive?")) return;
     startTransition(async () => {
-      const result = await deletePropertyPhotoAction(refNo, fileId);
+      const result = await safely(() => deletePropertyPhotoAction(refNo, fileId));
       applyResult(result);
     });
   }
@@ -73,7 +133,7 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
     const next = window.prompt("Rename photo", current);
     if (next == null || !next.trim() || next.trim() === current) return;
     startTransition(async () => {
-      const result = await renamePropertyPhotoAction(refNo, fileId, next);
+      const result = await safely(() => renamePropertyPhotoAction(refNo, fileId, next));
       applyResult(result);
     });
   }
@@ -99,7 +159,7 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
       return next.map((id) => map.get(id)!).filter(Boolean);
     });
     startTransition(async () => {
-      const result = await reorderPropertyPhotosAction(refNo, next);
+      const result = await safely(() => reorderPropertyPhotosAction(refNo, next));
       applyResult(result);
     });
   }
@@ -116,7 +176,7 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
         <h2 className="font-display text-sm font-semibold">Photos</h2>
         {manage ? (
           <label className="cursor-pointer rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-accent)]">
-            {pending ? "Working…" : "Upload"}
+            {progress ?? (pending ? "Working…" : "Upload")}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
@@ -165,8 +225,9 @@ export function PropertyPhotosPanel({ refNo, canEdit }: Props) {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/api/photos/${encodeURIComponent(p.id)}`}
+                src={`/api/photos/${encodeURIComponent(p.id)}?w=800`}
                 alt={p.name}
+                loading="lazy"
                 className="aspect-[4/3] w-full object-cover"
               />
               <div className="space-y-1 p-2">

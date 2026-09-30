@@ -4,7 +4,7 @@
  * Requires LEGACY_SUPABASE_URL + LEGACY_SUPABASE_SERVICE_ROLE_KEY in .env
  */
 import { createClient } from '@supabase/supabase-js';
-import { LEGACY_TABLES } from './constants.js';
+import { LEGACY_OPTIONAL_TABLES, LEGACY_TABLES } from './constants.js';
 import { loadEnvFile } from './load-env.js';
 import { dataPath, writeJsonFile } from './utils.js';
 
@@ -57,6 +57,16 @@ async function main(): Promise<void> {
     const out = dataPath('raw', `${slug(table)}.json`);
     writeJsonFile(out, rows);
     console.log(`  → ${rows.length} rows → ${out}`);
+  }
+  for (const table of LEGACY_OPTIONAL_TABLES) {
+    try {
+      const rows = await fetchAll(supabase, table);
+      const out = dataPath('raw', `${slug(table)}.json`);
+      writeJsonFile(out, rows);
+      console.log(`Exporting ${table} (optional)… → ${rows.length} rows`);
+    } catch {
+      console.log(`Skipping optional ${table} (not found)`);
+    }
   }
   console.log('Export complete. Next: npm run migrate:profile');
 }

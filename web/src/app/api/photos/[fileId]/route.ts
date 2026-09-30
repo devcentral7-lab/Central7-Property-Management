@@ -6,12 +6,16 @@ import {
   isDriveConfigured,
   resolvePhotoRef,
 } from "@/lib/drive/photos";
+import { resizeToJpeg } from "@/lib/drive/resize";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
+/** `?w=` thumbnail widths; anything else serves the original file. */
+const THUMB_WIDTHS = new Set([400, 800, 1600]);
+
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ fileId: string }> },
 ) {
   try {
@@ -43,11 +47,22 @@ export async function GET(
     }
 
     const { buffer, mimeType } = await downloadPhoto(fileId);
-    return new NextResponse(new Uint8Array(buffer), {
+    const width = Number(new URL(request.url).searchParams.get("w"));
+    let body = buffer;
+    let contentType = mimeType;
+    if (THUMB_WIDTHS.has(width) && mimeType !== "image/gif") {
+      try {
+        body = await resizeToJpeg(buffer, width);
+        contentType = "image/jpeg";
+      } catch {
+        /* serve the original if it can't be decoded */
+      }
+    }
+    return new NextResponse(new Uint8Array(body), {
       status: 200,
       headers: {
-        "Content-Type": mimeType,
-        "Cache-Control": "private, max-age=300",
+        "Content-Type": contentType,
+        "Cache-Control": "private, max-age=3600",
       },
     });
   } catch (e) {

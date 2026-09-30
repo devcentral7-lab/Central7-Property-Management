@@ -51,10 +51,23 @@ export function splitAmenities(...parts: unknown[]): string[] {
   return [...set];
 }
 
+/** Legacy sheet timestamps ("M/D/YYYY H:mm[:ss]") are Sri Lanka wall-clock time. */
+const COLOMBO_OFFSET_MS = 330 * 60 * 1000;
+const SHEET_TIMESTAMP = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
+
 export function coerceTimestamp(v: unknown): string | null {
   const raw = s(v);
   if (!raw) return null;
-  const d = new Date(raw);
+  const sheet = SHEET_TIMESTAMP.exec(raw);
+  if (sheet) {
+    const [, mo, da, yr, hh = '0', mi = '0', ss = '0'] = sheet;
+    const utc = Date.UTC(+yr, +mo - 1, +da, +hh, +mi, +ss) - COLOMBO_OFFSET_MS;
+    return new Date(utc).toISOString();
+  }
+  const iso = /^\d{4}-\d{2}-\d{2} /.test(raw)
+    ? raw.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00')
+    : raw;
+  const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
