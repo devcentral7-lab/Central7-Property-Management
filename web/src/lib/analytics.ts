@@ -1,8 +1,51 @@
 import type { DashboardPeriod } from "@/lib/dashboard-period";
+import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 
 export type NamedCount = { name: string; value: number };
 export type DayCount = { day: string; count: number };
+
+/** Rows (months or days) × columns (agents) of listing counts. */
+export type AgentMatrix = {
+  buckets: string[];
+  agents: string[];
+  values: Record<string, Record<string, number>>;
+};
+
+export type DoNotPublishRow = {
+  ref_no: string;
+  agent: string | null;
+  opportunity: string;
+  type: string;
+  city: string | null;
+  created_at: string;
+};
+
+export type SocialDailyRow = {
+  day: string;
+  published: number;
+  republished: number;
+  drop: number;
+  lost: number;
+  hold: number;
+  closed: number;
+  dataChange: number;
+  remainingPublish: number;
+  remainingRepublish: number;
+};
+
+export type AdminDetails = {
+  yearLabel: string;
+  monthLabel: string;
+  monthlyByAgent: AgentMatrix;
+  dailyByAgent: AgentMatrix;
+  statusColumns: string[];
+  typeRows: string[];
+  statusByType: Record<string, Record<string, number>>;
+  cities: NamedCount[];
+  doNotPublish: DoNotPublishRow[];
+  socialDaily: SocialDailyRow[];
+};
 
 export type CompanyOverview = {
   properties_added: number;
@@ -52,6 +95,7 @@ export type AdminAnalytics = {
   activeCitiesOther: number;
   byDay: DayCount[];
   byCreator: NamedCount[];
+  details: AdminDetails;
 };
 
 function num(v: unknown): number {
@@ -79,6 +123,98 @@ function periodLabel(period: DashboardPeriod, from: Date): string {
     : String(local.getUTCFullYear());
 }
 
+type BucketRow = { bucket: string; agent: string; value: number | string };
+
+function agentMatrix(rows: BucketRow[], buckets: string[]): AgentMatrix {
+  const values: Record<string, Record<string, number>> = {};
+  const agentTotals = new Map<string, number>();
+  for (const r of rows) {
+    const v = num(r.value);
+    (values[r.bucket] ??= {})[r.agent] = v;
+    agentTotals.set(r.agent, (agentTotals.get(r.agent) ?? 0) + v);
+  }
+  const agents = [...agentTotals.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([name]) => name);
+  return { buckets, agents, values };
+}
+
+type DetailsRaw = {
+  monthly_by_agent?: BucketRow[];
+  daily_by_agent?: BucketRow[];
+  status_by_type?: { type: string; status: string; value: number | string }[];
+  cities?: { name: string; value: number | string }[];
+  do_not_publish?: DoNotPublishRow[];
+  social_done?: { day: string; action: string; value: number | string }[];
+  social_backlog?: { day: string; publish: number | string; republish: number | string }[];
+};
+
+function buildDetails(
+  raw: DetailsRaw,
+  options: { statuses: string[]; propertyTypes: string[] },
+  now: Date,
+): AdminDetails {
+  const local = new Date(now.getTime() + COLOMBO_OFFSET_MS);
+  const year = local.getUTCFullYear();
+  const months = Array.from(
+    { length: local.getUTCMonth() + 1 },
+    (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`,
+  );
+  const monthly = raw.monthly_by_agent ?? [];
+  const daily = raw.daily_by_agent ?? [];
+  const days = [...new Set(daily.map((r) => r.bucket))].sort();
+
+  const statusByType: Record<string, Record<string, number>> = {};
+  const seenStatuses = new Set<string>();
+  const seenTypes = new Set<string>();
+  for (const r of raw.status_by_type ?? []) {
+    (statusByType[r.type] ??= {})[r.status] = num(r.value);
+    seenStatuses.add(r.status);
+    seenTypes.add(r.type);
+  }
+  const withExtras = (base: string[], seen: Set<string>) => [
+    ...base,
+    ...[...seen].filter((s) => !base.includes(s)).sort(),
+  ];
+
+  const done = new Map<string, Record<string, number>>();
+  for (const r of raw.social_done ?? []) {
+    const day = String(r.day).slice(0, 10);
+    const bucket = (done.get(day) ?? {}) as Record<string, number>;
+    bucket[r.action] = (bucket[r.action] ?? 0) + num(r.value);
+    done.set(day, bucket);
+  }
+  const socialDaily: SocialDailyRow[] = (raw.social_backlog ?? []).map((b) => {
+    const day = String(b.day).slice(0, 10);
+    const d = done.get(day) ?? {};
+    return {
+      day,
+      published: (d["Publish"] ?? 0) + (d["New Ad Published"] ?? 0),
+      republished: d["Republish"] ?? 0,
+      drop: d["Drop"] ?? 0,
+      lost: d["Lost"] ?? 0,
+      hold: d["Hold"] ?? 0,
+      closed: d["Closed"] ?? 0,
+      dataChange: d["Data Change"] ?? 0,
+      remainingPublish: num(b.publish),
+      remainingRepublish: num(b.republish),
+    };
+  });
+
+  return {
+    yearLabel: String(year),
+    monthLabel: local.toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }),
+    monthlyByAgent: agentMatrix(monthly, months),
+    dailyByAgent: agentMatrix(daily, days),
+    statusColumns: withExtras(options.statuses, seenStatuses),
+    typeRows: withExtras(options.propertyTypes, seenTypes),
+    statusByType,
+    cities: (raw.cities ?? []).map((c) => ({ name: String(c.name), value: num(c.value) })),
+    doNotPublish: raw.do_not_publish ?? [],
+    socialDaily,
+  };
+}
+
 /** Aggregate-only Admin home metrics — never downloads property rows. */
 export async function loadAdminAnalytics(
   period: DashboardPeriod = "30d",
@@ -100,6 +236,8 @@ export async function loadAdminAnalytics(
     overviewRes,
     agentRes,
     breakdownRes,
+    detailsRes,
+    options,
   ] = await Promise.all([
     supabase.rpc("inventory_kpi_counts"),
     supabase.rpc("dashboard_listing_counts"),
@@ -133,6 +271,8 @@ export async function loadAdminAnalytics(
       p_limit: 12,
     }),
     supabase.rpc("dashboard_inventory_breakdowns", { p_city_limit: 11 }),
+    supabase.rpc("admin_dashboard_details", { p_from: fromIso, p_to: toIso }),
+    loadFormOptions(),
   ]);
 
   const errors = [
@@ -146,6 +286,7 @@ export async function loadAdminAnalytics(
     overviewRes.error,
     agentRes.error,
     breakdownRes.error,
+    detailsRes.error,
   ].filter(Boolean);
   if (errors.length) {
     throw new Error(errors.map((e) => e!.message).join("; "));
@@ -275,5 +416,6 @@ export async function loadAdminAnalytics(
         cnt: number | string;
       }>
     ).map((r) => ({ name: r.created_by_name, value: num(r.cnt) })),
+    details: buildDetails((detailsRes.data ?? {}) as DetailsRaw, options, to),
   };
 }

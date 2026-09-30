@@ -10,6 +10,7 @@
     "migrate:clean": "tsx scripts/migrate/clean.ts",
     "migrate:schema": "tsx scripts/migrate/apply-schema.ts",
     "migrate:load": "tsx scripts/migrate/load.ts",
+    "migrate:sync": "tsx scripts/migrate/sync-legacy.ts",
     "migrate:update-view": "tsx scripts/migrate/update-view-from-excel.ts",
     "migrate:update-parking": "tsx scripts/migrate/update-parking-from-excel.ts",
     "seed:staff": "tsx scripts/seed-staff.ts",

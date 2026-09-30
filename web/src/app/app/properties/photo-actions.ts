@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { requireProfile } from "@/lib/auth";
 import {
@@ -13,6 +14,7 @@ import {
   uploadPropertyPhotos,
   type DrivePhoto,
 } from "@/lib/drive/photos";
+import { withSavedOrder } from "@/lib/drive/saved-order";
 import { createClient } from "@/lib/supabase/server";
 
 export type PhotoListResult =
@@ -35,6 +37,13 @@ async function loadPropertyForPhotos(refNoRaw: string) {
   if (error) throw new Error(error.message);
   if (!property) throw new Error("Property not found");
   return property;
+}
+
+async function livePhotos(propertyId: string, refNo: string): Promise<DrivePhoto[]> {
+  const supabase = await createClient();
+  const photos = await withSavedOrder(supabase, propertyId, await listPropertyPhotos(refNo));
+  after(() => syncPropertyMedia(propertyId, photos));
+  return photos;
 }
 
 async function syncPropertyMedia(
@@ -107,8 +116,7 @@ export async function listPropertyPhotosAction(
       return { ok: true, configured: false, canManage, photos: [] };
     }
 
-    const photos = await listPropertyPhotos(property.ref_no);
-    void syncPropertyMedia(property.id, photos);
+    const photos = await livePhotos(property.id, property.ref_no);
     return { ok: true, configured: true, canManage, photos };
   } catch (e) {
     const message =
@@ -217,8 +225,7 @@ export async function uploadPropertyPhotosAction(
       details: { count: files.length },
     });
 
-    const photos = await listPropertyPhotos(property.ref_no);
-    void syncPropertyMedia(property.id, photos);
+    const photos = await livePhotos(property.id, property.ref_no);
     return {
       ok: true,
       configured: true,
@@ -272,8 +279,7 @@ export async function deletePropertyPhotoAction(
       details: { fileId },
     });
 
-    const photos = await listPropertyPhotos(property.ref_no);
-    void syncPropertyMedia(property.id, photos);
+    const photos = await livePhotos(property.id, property.ref_no);
     return { ok: true, configured: true, canManage: true, photos };
   } catch (e) {
     const message =
@@ -323,8 +329,7 @@ export async function renamePropertyPhotoAction(
       details: { fileId, name },
     });
 
-    const photos = await listPropertyPhotos(property.ref_no);
-    void syncPropertyMedia(property.id, photos);
+    const photos = await livePhotos(property.id, property.ref_no);
     return { ok: true, configured: true, canManage: true, photos };
   } catch (e) {
     const message =
@@ -360,15 +365,6 @@ export async function reorderPropertyPhotosAction(
       return { ok: false, error: "Not allowed", configured: true };
     }
 
-    const supabase = await createClient();
-    for (let i = 0; i < orderedFileIds.length; i++) {
-      await supabase
-        .from("property_media")
-        .update({ sort_order: i })
-        .eq("property_id", property.id)
-        .eq("drive_file_id", orderedFileIds[i]);
-    }
-
     const live = await listPropertyPhotos(property.ref_no);
     const byId = new Map(live.map((p) => [p.id, p]));
     const ordered = orderedFileIds
@@ -376,7 +372,7 @@ export async function reorderPropertyPhotosAction(
       .filter(Boolean) as DrivePhoto[];
     const rest = live.filter((p) => !orderedFileIds.includes(p.id));
     const photos = [...ordered, ...rest];
-    void syncPropertyMedia(property.id, photos);
+    await syncPropertyMedia(property.id, photos);
 
     return { ok: true, configured: true, canManage: true, photos };
   } catch (e) {

@@ -35,8 +35,6 @@ type GeocodingLibrary = {
 const CITY_ALIASES: Record<string, string> = {
   "mount lavinia": "Mt. Lavinia",
   "dehiwala-mount lavinia": "Dehiwala",
-  negombo: "Negambo",
-  battaramulla: "Battramulla",
   "ja-ela": "Ja-ela",
   "sri jayawardenepura kotte": "Kotte",
 };

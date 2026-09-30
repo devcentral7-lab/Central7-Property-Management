@@ -66,6 +66,8 @@ export const LEGACY_TABLES = [
   'Social Media Queue',
   'Messages',
 ] as const;
+/** Exported when present; `original_timestamp` restores pre-"ISO fix" Timestamp values. */
+export const LEGACY_OPTIONAL_TABLES = ['_backup_timestamp_before_iso_fix_2026'] as const;
 
 export const PROPERTY_COLUMN_NAMES = [
   'Ref No',

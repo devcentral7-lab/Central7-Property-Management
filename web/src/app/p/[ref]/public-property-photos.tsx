@@ -10,13 +10,17 @@ export function PublicPropertyPhotos({ refNo }: { refNo: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void listPublicPropertyPhotosAction(refNo).then((result) => {
-      if (cancelled) return;
-      if (result.ok && result.configured && result.photos.length) {
-        setPhotos(result.photos);
-      }
-      setReady(true);
-    });
+    void listPublicPropertyPhotosAction(refNo)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.ok && result.configured && result.photos.length) {
+          setPhotos(result.photos);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -35,8 +39,9 @@ export function PublicPropertyPhotos({ refNo }: { refNo: string }) {
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`/api/photos/${encodeURIComponent(p.id)}`}
+              src={`/api/photos/${encodeURIComponent(p.id)}?w=800`}
               alt={p.name}
+              loading="lazy"
               className="aspect-[4/3] w-full object-cover"
             />
           </li>

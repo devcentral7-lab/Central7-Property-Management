@@ -1,5 +1,8 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { COMPANY } from "@/lib/company";
 import { downloadPhoto, isDriveConfigured, listPropertyPhotos } from "@/lib/drive/photos";
+import { resizeToJpeg } from "@/lib/drive/resize";
+import { withSavedOrder } from "@/lib/drive/saved-order";
 import type { Profile } from "@/lib/types";
 import { typeSpecificKeys } from "@/lib/property-fields";
 import { createClient } from "@/lib/supabase/server";
@@ -92,18 +95,30 @@ function amenityName(raw: string) {
   return raw.replace(/\s*\(room for games\)/i, "").trim();
 }
 
-async function loadPhotos(refNo: string): Promise<PdfPhoto[]> {
+/** Downscaled so eight photos stay well under Vercel's 4.5 MB response limit. */
+const PDF_PHOTO_EDGE = 1400;
+
+async function pdfPhoto(fileId: string): Promise<PdfPhoto> {
+  const { buffer, mimeType } = await downloadPhoto(fileId);
+  try {
+    return { data: await resizeToJpeg(buffer, PDF_PHOTO_EDGE, 72), format: "jpg" };
+  } catch (e) {
+    if (/webp/i.test(mimeType)) throw e;
+    return { data: buffer, format: /png/i.test(mimeType) ? "png" : "jpg" };
+  }
+}
+
+async function loadPhotos(
+  supabase: SupabaseClient,
+  propertyId: string,
+  refNo: string,
+): Promise<PdfPhoto[]> {
   if (!isDriveConfigured()) return [];
   try {
-    const list = (await listPropertyPhotos(refNo))
-      .filter((p) => /jpe?g|png/i.test(p.mimeType))
-      .slice(0, MAX_PHOTOS);
-    const settled = await Promise.allSettled(list.map((p) => downloadPhoto(p.id)));
-    return settled.flatMap((r) =>
-      r.status === "fulfilled"
-        ? [{ data: r.value.buffer, format: /png/i.test(r.value.mimeType) ? "png" : "jpg" } as PdfPhoto]
-        : [],
-    );
+    const ordered = await withSavedOrder(supabase, propertyId, await listPropertyPhotos(refNo));
+    const list = ordered.filter((p) => /jpe?g|png|webp/i.test(p.mimeType)).slice(0, MAX_PHOTOS);
+    const settled = await Promise.allSettled(list.map((p) => pdfPhoto(p.id)));
+    return settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
   } catch {
     return [];
   }
@@ -136,7 +151,7 @@ export async function loadPropertyPdfData(
     copy === "full"
       ? supabase.rpc("get_property_location", { p_property_id: p.id })
       : Promise.resolve({ data: null }),
-    loadPhotos(p.ref_no),
+    loadPhotos(supabase, p.id, p.ref_no),
   ]);
 
   const propertyType = String(p.property_type || "Property");
