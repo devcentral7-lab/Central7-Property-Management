@@ -118,8 +118,6 @@ function makeStyles(C: Palette) {
     priceLabel: { fontSize: 7.5, color: "#ffffffcc", letterSpacing: 1.4, textTransform: "uppercase" },
     price: { fontFamily: "Helvetica-Bold", fontSize: 19, color: C.white, lineHeight: 1.1, marginTop: 5 },
     priceNote: { fontSize: 8, color: "#ffffffcc", marginTop: 4 },
-    priceDivider: { alignSelf: "stretch", height: 1, backgroundColor: "#ffffff40", marginVertical: 7 },
-    pricePhone: { fontFamily: "Helvetica-Bold", fontSize: 12, color: C.white, marginTop: 3 },
 
     section: { marginTop: 12 },
     sectionHead: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
@@ -188,8 +186,6 @@ function makeStyles(C: Palette) {
     amenityName: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: C.ink },
     paragraph: { fontSize: 10, color: C.ink, paddingVertical: 7, lineHeight: 1.45 },
 
-    contactRow: { flexDirection: "row", alignItems: "center" },
-
     footer: {
       position: "absolute",
       left: 0,
@@ -232,18 +228,6 @@ function makeStyles(C: Palette) {
       backgroundColor: C.line,
     },
     plainFooterText: { fontSize: 7.5, color: C.muted, letterSpacing: 0.4 },
-    waLink: {
-      flexDirection: "row",
-      alignItems: "center",
-      alignSelf: "center",
-      marginTop: 5,
-      paddingVertical: 3,
-      paddingHorizontal: 7,
-      borderRadius: 8,
-      backgroundColor: "#ffffff26",
-      textDecoration: "none",
-    },
-    waText: { fontSize: 7, color: C.white, marginLeft: 3, letterSpacing: 0.3 },
 
     galleryHead: {
       flexDirection: "row",
@@ -384,20 +368,6 @@ function FooterPhone({ phone, t }: { phone: string; t: Theme }) {
   );
 }
 
-function WhatsAppPdfLink({ phone, t }: { phone: string | null | undefined; t: Theme }) {
-  const { s, C } = t;
-  const href = whatsappHref(phone);
-  if (!href) return null;
-  return (
-    <Link src={href} style={s.waLink}>
-      <Svg width={8} height={8} viewBox="0 0 24 24">
-        <Path d={WHATSAPP_PATH} fill={C.white} />
-      </Svg>
-      <Text style={s.waText}>Chat on WhatsApp</Text>
-    </Link>
-  );
-}
-
 function Header({ data, logo, t }: { data: PropertyPdfData; logo: Buffer | null; t: Theme }) {
   const { s } = t;
   if (data.copy === "agent") {
@@ -443,39 +413,14 @@ function Header({ data, logo, t }: { data: PropertyPdfData; logo: Buffer | null;
 }
 
 function PriceCard({ data, t }: { data: PropertyPdfData; t: Theme }) {
-  const { s, C } = t;
-  const branded = data.copy === "client";
-  if (!data.price && !branded) return null;
+  const { s } = t;
+  if (!data.price) return null;
   return (
     <View style={s.priceCard}>
-      {data.price ? (
-        <>
-          <Text style={s.priceLabel}>{data.priceLabel}</Text>
-          <Text style={s.price}>{data.price}</Text>
-          {data.priceSuffix ? <Text style={s.priceNote}>per month</Text> : null}
-          {data.priceNote ? <Text style={s.priceNote}>{data.priceNote}</Text> : null}
-          {branded ? <View style={s.priceDivider} /> : null}
-        </>
-      ) : null}
-      {branded ? (
-        <>
-          <View style={s.contactRow}>
-            <Svg width={11} height={11} viewBox="0 0 24 24">
-              <Path
-                d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"
-                stroke={C.white}
-                strokeWidth={2.2}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-            <Text style={[s.priceLabel, { marginLeft: 5 }]}>Contact {data.contact.name}</Text>
-          </View>
-          <Text style={s.pricePhone}>{data.contact.phone}</Text>
-          <WhatsAppPdfLink phone={data.contact.phone} t={t} />
-        </>
-      ) : null}
+      <Text style={s.priceLabel}>{data.priceLabel}</Text>
+      <Text style={s.price}>{data.price}</Text>
+      {data.priceSuffix ? <Text style={s.priceNote}>per month</Text> : null}
+      {data.priceNote ? <Text style={s.priceNote}>{data.priceNote}</Text> : null}
     </View>
   );
 }

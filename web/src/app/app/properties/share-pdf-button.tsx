@@ -5,11 +5,17 @@ import { useEffect, useRef, useState } from "react";
 type Copy = "client" | "agent";
 
 const OPTIONS: { copy: Copy; label: string; hint: string }[] = [
-  { copy: "client", label: "Client copy", hint: "Central7 branded, with your contact details" },
+  { copy: "client", label: "Client copy", hint: "Central7 branded, with company contact details" },
   { copy: "agent", label: "Agent copy", hint: "No Central7 name, logo or contacts" },
 ];
 
 function filenameFrom(header: string | null, fallback: string) {
+  const encoded = header?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {}
+  }
   return header?.match(/filename="([^"]+)"/)?.[1] ?? fallback;
 }
 

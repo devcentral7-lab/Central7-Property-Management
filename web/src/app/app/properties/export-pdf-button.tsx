@@ -6,7 +6,7 @@ const OPTIONS = [
   {
     copy: "client",
     label: "Client copy",
-    hint: "Central7 branded, with your contact details",
+    hint: "Central7 branded, with company contact details",
   },
   {
     copy: "agent",

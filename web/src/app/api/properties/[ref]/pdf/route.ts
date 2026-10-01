@@ -2,7 +2,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse, type NextRequest } from "next/server";
 import { getOptionalProfile } from "@/lib/auth";
-import { loadPropertyPdfData, type PdfCopy } from "@/lib/pdf/property-pdf-data";
+import {
+  loadPropertyPdfData,
+  type PdfCopy,
+  type PropertyPdfData,
+} from "@/lib/pdf/property-pdf-data";
 import { renderPropertyPdf } from "@/lib/pdf/property-pdf-document";
 
 export const runtime = "nodejs";
@@ -25,6 +29,24 @@ async function loadLogo(origin: string): Promise<Buffer | null> {
   return logoCache;
 }
 
+function pdfFilename(data: PropertyPdfData): string {
+  const title = /\sin$/.test(data.eyebrow)
+    ? `${data.eyebrow.toUpperCase()} ${data.heading}`
+    : data.eyebrow.toUpperCase();
+  const name = `${data.refNo}- ${title}`
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[. ]+$/, "");
+  return `${name}.pdf`;
+}
+
+function contentDisposition(filename: string): string {
+  const ascii = filename.replace(/[’‘]/g, "'").replace(/[^\x20-\x7e]/g, "_");
+  const encoded = encodeURIComponent(filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ ref: string }> },
@@ -38,7 +60,7 @@ export async function GET(
   const copy: PdfCopy = req.nextUrl.searchParams.get("copy") === "agent" ? "agent" : "client";
 
   try {
-    const data = await loadPropertyPdfData(ref, copy, profile);
+    const data = await loadPropertyPdfData(ref, copy);
     if (!data) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
@@ -46,11 +68,10 @@ export async function GET(
       data,
       copy === "client" ? await loadLogo(req.nextUrl.origin) : null,
     );
-    const filename = copy === "agent" ? `${data.refNo}-property-details.pdf` : `${data.refNo}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": contentDisposition(pdfFilename(data)),
         "Cache-Control": "private, no-store",
       },
     });
