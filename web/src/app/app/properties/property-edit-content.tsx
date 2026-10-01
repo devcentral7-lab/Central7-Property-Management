@@ -22,13 +22,7 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
 
   if (error || !property) notFound();
 
-  const isOwner =
-    property.created_by === profile.id ||
-    (!property.created_by &&
-      property.created_by_name === profile.display_name);
-  if (profile.role !== "Admin" && !isOwner) {
-    notFound();
-  }
+  if (profile.role !== "Admin") notFound();
 
   const [{ data: complexes }, options] = await Promise.all([
     supabase.from("apartment_complexes").select("id, name").order("name"),

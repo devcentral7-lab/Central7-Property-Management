@@ -39,15 +39,11 @@ export const SOCIAL_MEDIA_PLATFORMS = [
   "Instagram",
 ] as const;
 export const STATUS_CHANGE_OPTIONS = [
-  "Publish",
   "Republish",
   "Drop",
   "Lost",
-  "Hold",
-  "New Ad Published",
   "Closed",
   "Data Change",
-  "Obsolete",
 ] as const;
 export const AMENITIES_LIST = [
   "Swimming Pool",

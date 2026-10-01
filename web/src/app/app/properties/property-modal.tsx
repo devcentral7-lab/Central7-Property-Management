@@ -161,7 +161,7 @@ function ViewBody({
       }
     >
       <NotesCards comments={data.comments} internalComments={data.internalComments} />
-      <PropertyPhotosPanel refNo={data.refNo} canEdit={data.canEdit} />
+      <PropertyPhotosPanel refNo={data.refNo} canEdit={data.canManagePhotos} />
     </PropertyDetailsView>
   );
 }

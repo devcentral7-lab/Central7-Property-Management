@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { BRAND, seriesColor, statusColor } from "@/app/app/dashboard/palette";
+import { RefSearch } from "@/app/app/dashboard/ref-search";
 import { Icon, StatCard, type IconName } from "@/app/app/user-management/ui";
 import { StatusBadge } from "@/components/status-badge";
 import type { CountRow, UserDashboardData } from "@/lib/user-dashboard";
@@ -172,6 +173,8 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
           </Link>
         </div>
       </header>
+
+      <RefSearch />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Link href="/app/my-properties" className="rounded-2xl transition hover:brightness-110">

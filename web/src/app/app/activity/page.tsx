@@ -67,13 +67,13 @@ function EventRow({
 
 const CATEGORIES = [
   { id: "all", label: "All" },
+  { id: "social", label: "Social media approvals" },
   { id: "auth", label: "Logins" },
   { id: "property", label: "Properties" },
   { id: "staff", label: "Staff" },
   { id: "partner", label: "Partners" },
   { id: "settings", label: "Settings" },
   { id: "workflow", label: "Workflow" },
-  { id: "social", label: "Social approvals" },
 ] as const;
 
 function formatDetails(details: unknown): string[] {

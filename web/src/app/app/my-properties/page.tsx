@@ -26,7 +26,9 @@ export default async function MyPropertiesPage({
         <div>
           <h1 className="font-display text-2xl font-semibold sm:text-3xl">My properties</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            Listings you’ve added. Click a row to view, edit or update its status.
+            {isAdmin
+              ? "Listings you’ve added. Click a row to view, edit or update its status."
+              : "Listings you’ve added. Click a row to view it, update its status or request a change."}
           </p>
         </div>
         <Link

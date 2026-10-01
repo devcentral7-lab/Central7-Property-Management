@@ -30,8 +30,9 @@ export async function loadPropertyDetail(refNoRaw: string) {
     property.created_by === profile.id ||
     (!property.created_by &&
       property.created_by_name === profile.display_name);
-  const canEdit = profile.role === "Admin" || isOwner;
-  const canDelete = profile.role === "Admin";
+  const isAdmin = profile.role === "Admin";
+  const canEdit = isAdmin;
+  const canDelete = isAdmin;
 
   const [{ data: events }, { data: complex }, options] =
     await Promise.all([
@@ -65,7 +66,7 @@ export async function loadPropertyDetail(refNoRaw: string) {
     options,
     canEdit,
     canDelete,
-    canChangeStatus: canEdit,
+    canChangeStatus: isAdmin || isOwner,
   };
 }
 

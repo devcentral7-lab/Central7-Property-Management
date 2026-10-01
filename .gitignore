@@ -19,6 +19,11 @@ Thumbs.db
 *.pem
 .vercel
 
+# Google service-account keys
+central7-property-management-*.json
+*service-account*.json
+*-sa-key*.json
+
 # Supabase CLI local state (linked project, CLI cache, temp scripts)
 supabase/.temp/
 supabase/.branches/

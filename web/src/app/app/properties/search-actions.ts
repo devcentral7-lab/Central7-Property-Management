@@ -23,6 +23,39 @@ export type ParagraphSearchResult =
     }
   | { ok: false; error: string };
 
+export type RefMatch = {
+  ref_no: string;
+  property_type: string | null;
+  opportunity_type: string | null;
+  city: string | null;
+  status: string | null;
+};
+
+export async function searchRefNumbers(term: string): Promise<RefMatch[]> {
+  await requireProfile();
+  const q = term.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  if (!q) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .select("ref_no, property_type, opportunity_type, city, status")
+    .ilike("ref_no", `%${q}%`)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw new Error(error.message);
+
+  const rank = (ref: string) => {
+    const r = ref.toUpperCase();
+    if (r === q || r.replace(/^C7-?/, "") === q) return 0;
+    if (r.startsWith(q) || r.replace(/^C7-?/, "").startsWith(q)) return 1;
+    return 2;
+  };
+  return ((data ?? []) as RefMatch[])
+    .sort((a, b) => rank(a.ref_no) - rank(b.ref_no))
+    .slice(0, 8);
+}
+
 const SELECT_COLS =
   "id, ref_no, created_at, created_by_name, opportunity_type, property_type, property_subtype, city, address, status, currency, price_total, budget, land_size_perch, floor_area_sqft, bedrooms, bathrooms, number_of_floors, parking_spaces, age_years, purpose, type_attributes, view, furnished, contact_type, contact_name, amenities, comments";
 

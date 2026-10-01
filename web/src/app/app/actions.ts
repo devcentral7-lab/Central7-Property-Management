@@ -295,23 +295,19 @@ export async function createProperty(formData: FormData) {
 
 export async function updateProperty(formData: FormData) {
   const profile = await requireProfile();
+  if (profile.role !== "Admin") {
+    throw new Error("Only Admins can edit listings. Use Update status → Data Change to request a change.");
+  }
   const supabase = await createClient();
   const refNo = str(formData.get("ref_no")).toUpperCase();
   if (!refNo) throw new Error("Missing ref");
 
   const { data: existing, error: findErr } = await supabase
     .from("properties")
-    .select("id, ref_no, created_by, created_by_name")
+    .select("id, ref_no")
     .eq("ref_no", refNo)
     .single();
   if (findErr || !existing) throw findErr ?? new Error("Property not found");
-
-  const isOwner =
-    existing.created_by === profile.id ||
-    (!existing.created_by && existing.created_by_name === profile.display_name);
-  if (profile.role !== "Admin" && !isOwner) {
-    throw new Error("Only owner or Admin can edit this listing");
-  }
 
   const { row } = await buildPropertyPayload(formData);
   const { error } = await supabase
@@ -352,6 +348,9 @@ export async function updatePropertyStatus(formData: FormData) {
 
   if (!options.statusChangeOptions.includes(action)) {
     throw new Error("Invalid status action");
+  }
+  if (action === "Data Change" && !comment) {
+    throw new Error("Describe what needs to change.");
   }
 
   const { data: property, error } = await supabase
