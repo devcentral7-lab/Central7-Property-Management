@@ -61,7 +61,13 @@ export function LiveFilterForm({ children, className = "", action }: Props) {
     if (!form) return;
     const params = new URLSearchParams();
     for (const [key, value] of new FormData(form)) {
-      if (typeof value === "string" && value.trim()) params.append(key, value.trim());
+      if (typeof value === "string" && value.trim()) {
+        const input = form.elements.namedItem(key);
+        const raw = input instanceof HTMLInputElement && input.dataset.moneyInput
+          ? value.replace(/,/g, "")
+          : value;
+        params.append(key, raw.trim());
+      }
     }
     const qs = params.toString();
     const path = action ?? pathname;
@@ -74,7 +80,7 @@ export function LiveFilterForm({ children, className = "", action }: Props) {
 
   function onChange(target: EventTarget) {
     const el = target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-    if (el.tagName === "SELECT" || IMMEDIATE_INPUT_TYPES.has(el.type)) {
+    if (el.tagName === "SELECT" || (IMMEDIATE_INPUT_TYPES.has(el.type) && !(el instanceof HTMLInputElement && el.dataset.rangeFilter))) {
       apply();
       return;
     }

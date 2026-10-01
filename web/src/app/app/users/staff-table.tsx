@@ -107,7 +107,7 @@ export function StaffTable({ rows, currentAdminId }: Props) {
 
   function onReset(u: StaffListItem) {
     setConfirmReq({
-      title: "Reset password?",
+      title: "Reset Password?",
       body: `${u.display_name} will need the new 10-digit temporary password to sign in. It is shown only once.`,
       confirmLabel: "Reset password",
       onConfirm: () =>
@@ -118,7 +118,7 @@ export function StaffTable({ rows, currentAdminId }: Props) {
             return;
           }
           setCreds({
-            title: "Password reset",
+            title: "Password Reset",
             subtitle: u.display_name,
             details: [["Email", res.email]],
             email: res.email,
@@ -201,7 +201,7 @@ export function StaffTable({ rows, currentAdminId }: Props) {
       <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
         <div className="flex flex-col gap-3 border-b border-[var(--line)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
-            <h2 className="font-display text-lg font-semibold">Staff directory</h2>
+            <h2 className="font-display text-lg font-semibold">Staff Directory</h2>
             <p className="text-xs text-[var(--muted)]">
               Everyone who can sign in to Central7 Pulse as staff.
             </p>

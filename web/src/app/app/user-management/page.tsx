@@ -63,7 +63,7 @@ export default async function UserManagementPage({
   const stats: { label: string; value: number; hint?: string; icon: IconName; accent?: boolean }[] =
     tab === "users"
       ? [
-          { label: "Total staff", value: staffRows.length, icon: "users", accent: true },
+          { label: "Total Staff", value: staffRows.length, icon: "users", accent: true },
           {
             label: "Admins",
             value: staffRows.filter((u) => u.role === "Admin").length,
@@ -84,20 +84,20 @@ export default async function UserManagementPage({
           },
         ]
       : [
-          { label: "Total partners", value: partnerRows.length, icon: "building", accent: true },
+          { label: "Total Partners", value: partnerRows.length, icon: "building", accent: true },
           {
             label: "Approved",
             value: partnerRows.filter((p) => p.status === "Approved").length,
             icon: "check",
           },
           {
-            label: "Pending approval",
+            label: "Pending Approval",
             value: partnerRows.filter((p) => p.status === "Pending").length,
             hint: "Awaiting review",
             icon: "clock",
           },
           {
-            label: "With login",
+            label: "With Login",
             value: partnerRows.filter((p) => p.auth_user_id).length,
             hint: "Portal access",
             icon: "key",
@@ -110,7 +110,7 @@ export default async function UserManagementPage({
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold sm:text-3xl">User management</h1>
+          <h1 className="font-display text-2xl font-semibold sm:text-3xl">User Management</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             Manage staff accounts and partner agencies, their roles and sign-in access.
           </p>

@@ -93,7 +93,7 @@ export default async function SocialQueuePage({
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Social media queue</h1>
+      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Social Media Queue</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
         Items appear here after approval on the Activity log. Tick each platform
         as you post it — Done unlocks once every platform is ticked.

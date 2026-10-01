@@ -43,38 +43,42 @@ export const FORM_LIST_META: {
   field: keyof FormOptions;
 }[] = [
   { key: "amenities_list", title: "Amenities", field: "amenities" },
-  { key: "contact_types", title: "Contact types", field: "contactTypes" },
+  { key: "contact_types", title: "Contact Types", field: "contactTypes" },
   {
     key: "opportunity_types",
-    title: "Opportunity types",
+    title: "Opportunity Types",
     field: "opportunityTypes",
   },
-  { key: "property_types", title: "Property types", field: "propertyTypes" },
-  { key: "furnished_list", title: "Furnished options", field: "furnished" },
+  { key: "property_types", title: "Property Types", field: "propertyTypes" },
+  { key: "furnished_list", title: "Furnished Options", field: "furnished" },
   { key: "currencies", title: "Currencies", field: "currencies" },
-  { key: "status_list", title: "Listing statuses", field: "statuses" },
+  { key: "status_list", title: "Listing Statuses", field: "statuses" },
   {
     key: "social_media_platforms",
-    title: "Publish platforms",
+    title: "Publish Platforms",
     field: "platforms",
   },
   {
     key: "status_change_options",
-    title: "Status change actions",
+    title: "Status Change Actions",
     field: "statusChangeOptions",
   },
 ];
 
+function sortAlpha(arr: readonly string[] | string[]): string[] {
+  return [...arr].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 const FALLBACK: FormOptions = {
-  amenities: [...AMENITIES_LIST],
-  contactTypes: [...CONTACT_TYPES],
-  opportunityTypes: [...OPPORTUNITY_TYPES],
-  propertyTypes: [...PROPERTY_TYPES],
-  furnished: [...FURNISHED_LIST],
-  currencies: ["LKR", "USD"],
-  statuses: [...STATUS_LIST],
-  platforms: [...SOCIAL_MEDIA_PLATFORMS],
-  statusChangeOptions: [...STATUS_CHANGE_OPTIONS],
+  amenities: sortAlpha(AMENITIES_LIST),
+  contactTypes: sortAlpha(CONTACT_TYPES),
+  opportunityTypes: sortAlpha(OPPORTUNITY_TYPES),
+  propertyTypes: sortAlpha(PROPERTY_TYPES),
+  furnished: sortAlpha(FURNISHED_LIST),
+  currencies: sortAlpha(["LKR", "USD"]),
+  statuses: sortAlpha(STATUS_LIST),
+  platforms: sortAlpha(SOCIAL_MEDIA_PLATFORMS),
+  statusChangeOptions: sortAlpha(STATUS_CHANGE_OPTIONS),
 };
 
 function asStringArray(value: unknown): string[] | null {
@@ -89,8 +93,10 @@ function fromRows(
   rows: { key: string; value: unknown }[] | null,
 ): FormOptions {
   const map = new Map((rows ?? []).map((r) => [r.key, r.value]));
-  const pick = (key: FormListKey, fallback: string[]) =>
-    asStringArray(map.get(key)) ?? fallback;
+  const pick = (key: FormListKey, fallback: string[]) => {
+    const list = asStringArray(map.get(key));
+    return sortAlpha(list ?? fallback);
+  };
 
   return {
     amenities: pick("amenities_list", FALLBACK.amenities),

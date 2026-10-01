@@ -75,7 +75,7 @@ export default async function PropertiesPage({
     if (outerTab === "mine") redirect(page > 1 ? `/app/my-properties?page=${page}` : "/app/my-properties");
     return (
       <div>
-        <h1 className="font-display text-2xl font-semibold sm:text-3xl">Search properties</h1>
+        <h1 className="font-display text-2xl font-semibold sm:text-3xl">Search Properties</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           Find any listing by keyword, location, type, price or features.
         </p>

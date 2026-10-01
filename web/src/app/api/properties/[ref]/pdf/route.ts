@@ -17,10 +17,10 @@ let logoCache: Buffer | null | undefined;
 async function loadLogo(origin: string): Promise<Buffer | null> {
   if (logoCache !== undefined) return logoCache;
   try {
-    logoCache = await readFile(path.join(process.cwd(), "public", "logo.jpg"));
+    logoCache = await readFile(path.join(process.cwd(), "public", "logo-light.png"));
   } catch {
     try {
-      const res = await fetch(new URL("/logo.jpg", origin));
+      const res = await fetch(new URL("/logo-light.png", origin));
       logoCache = res.ok ? Buffer.from(await res.arrayBuffer()) : null;
     } catch {
       logoCache = null;

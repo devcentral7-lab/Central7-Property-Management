@@ -28,12 +28,12 @@ export async function PropertyAddPanel({ isAdmin, section }: Props) {
       ?.ref_no ?? null;
 
   const subTabs = [
-    { id: "add" as const, label: "Add listing", href: "/app/properties?tab=add" },
+    { id: "add" as const, label: "Add Listing", href: "/app/properties?tab=add" },
     ...(isAdmin
       ? [
           {
             id: "options" as const,
-            label: "Listing form options",
+            label: "Listing Form Options",
             href: "/app/properties?tab=options",
           },
         ]

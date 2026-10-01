@@ -258,7 +258,7 @@ export default async function ActivityPage({
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Activity log</h1>
+      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Activity Log</h1>
 
       <LiveFilterForm
         action="/app/activity"

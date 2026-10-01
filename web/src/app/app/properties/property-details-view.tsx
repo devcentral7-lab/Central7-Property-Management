@@ -255,7 +255,7 @@ export function NotesCards({
       {internalComments ? (
         <section className="rounded-xl border border-dashed border-[var(--muted)]/40 bg-[var(--bg)]/60 p-4">
           <h2 className="flex items-center gap-2 font-display text-sm font-semibold">
-            Internal comments
+            Internal Comments
             <span className="rounded bg-[var(--sidebar)] px-1.5 py-0.5 font-sans text-[10px] font-semibold uppercase tracking-wide text-white">
               Staff only
             </span>

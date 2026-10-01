@@ -24,7 +24,7 @@ export default async function MyPropertiesPage({
     <div>
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold sm:text-3xl">My properties</h1>
+          <h1 className="font-display text-2xl font-semibold sm:text-3xl">My Properties</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {isAdmin
               ? "Listings you’ve added. Click a row to view, edit or update its status."

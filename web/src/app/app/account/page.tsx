@@ -134,7 +134,7 @@ export default async function AccountPage() {
               <Icon name="key" />
             </span>
             <div>
-              <h2 className="font-display text-lg font-semibold">Change password</h2>
+              <h2 className="font-display text-lg font-semibold">Change Password</h2>
               <p className="text-sm text-[var(--muted)]">
                 Confirm your current password, then choose a new one.
               </p>

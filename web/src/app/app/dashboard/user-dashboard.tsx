@@ -152,7 +152,7 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
         <div>
           <p className="text-sm font-medium text-[var(--muted)]">My dashboard</p>
           <h1 className="font-display text-2xl font-semibold text-[var(--brand-deep)] sm:text-3xl">
-            Welcome back, {name}
+            Welcome Back, {name}
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">Here’s how your listings are doing.</p>
         </div>
@@ -186,10 +186,10 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Listings by status" subtitle={`${data.total.toLocaleString()} listings`} icon="check">
+        <Panel title="Listings By Status" subtitle={`${data.total.toLocaleString()} listings`} icon="check">
           <StatusBreakdown rows={data.byStatus} total={data.total} />
         </Panel>
-        <Panel title="Portfolio mix" subtitle="Property types and deal type" icon="building">
+        <Panel title="Portfolio Mix" subtitle="Property types and deal type" icon="building">
           <div className="space-y-5">
             <OpportunitySplit rows={data.byOpportunity} total={data.total} />
             <BarList rows={data.byType} total={data.total} />
@@ -199,7 +199,7 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Panel
-          title="Recently added"
+          title="Recently Added"
           subtitle="Your latest listings"
           icon="plus"
           action={
@@ -238,7 +238,7 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
           )}
         </Panel>
 
-        <Panel title="My recent activity" subtitle="Status updates you made" icon="clock">
+        <Panel title="My Recent Activity" subtitle="Status updates you made" icon="clock">
           {data.activity.length ? (
             <ol className="relative space-y-4 border-l border-[var(--line)] pl-5">
               {data.activity.map((e, i) => (

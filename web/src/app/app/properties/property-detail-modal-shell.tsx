@@ -78,7 +78,7 @@ export function PropertyDetailModalShell({
   title?: string;
 }) {
   return (
-    <PropertyModalShell title={title || "Property details"}>
+    <PropertyModalShell title={title || "Property Details"}>
       {children}
     </PropertyModalShell>
   );

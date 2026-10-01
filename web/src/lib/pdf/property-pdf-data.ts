@@ -30,6 +30,7 @@ export type PropertyPdfData = {
   details: PdfField[];
   amenities: PdfAmenity[];
   description: string | null;
+  contact: { name: string; phone: string } | null;
   company: typeof COMPANY;
   photos: PdfPhoto[];
   generatedAt: string;
@@ -109,7 +110,7 @@ export async function loadPropertyPdfData(
   if (error) throw new Error(error.message);
   if (!p) return null;
 
-  const [{ data: complex }, photos] = await Promise.all([
+  const [{ data: complex }, photos, { data: staffContact }] = await Promise.all([
     p.apartment_complex_id
       ? supabase
           .from("apartment_complexes")
@@ -118,6 +119,13 @@ export async function loadPropertyPdfData(
           .maybeSingle()
       : Promise.resolve({ data: null as { name: string; amenities: string[] | null } | null }),
     loadPhotos(supabase, p.id, p.ref_no),
+    copy === "client" && (p.created_by || p.created_by_name)
+      ? supabase
+          .from("profiles")
+          .select("display_name, mobile_number")
+          .eq(p.created_by ? "id" : "display_name", p.created_by || p.created_by_name)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   const propertyType = String(p.property_type || "Property");
@@ -159,16 +167,6 @@ export async function loadPropertyPdfData(
   add("Floors", p.number_of_floors, pick("number_of_floors", p.number_of_floors));
   add("Parking", p.parking_spaces, pick("parking_spaces", p.parking_spaces));
   add("View", p.view, pick("view", p.view));
-  add(
-    "Floor area",
-    has(p.floor_area_sqft) ? `${num(p.floor_area_sqft)} sq.ft` : null,
-    pick("floor_area_sqft", p.floor_area_sqft),
-  );
-  add(
-    "Land size",
-    has(p.land_size_perch) ? `${num(p.land_size_perch)} perches` : null,
-    pick("land_size_perch", p.land_size_perch),
-  );
   add("Built-up area", attrs.built_up_area, pick("built_up_area", attrs.built_up_area));
   add("Suitable for", attrs.suitable_for, pick("suitable_for", attrs.suitable_for));
   add("Purpose", p.purpose, allowed.has("purpose") && has(p.purpose));
@@ -210,6 +208,12 @@ export async function loadPropertyPdfData(
     details,
     amenities,
     description: has(p.comments) ? String(p.comments).trim() : null,
+    contact: copy === "client"
+      ? {
+          name: staffContact?.mobile_number ? staffContact.display_name : COMPANY.name,
+          phone: staffContact?.mobile_number || COMPANY.phone,
+        }
+      : null,
     company: COMPANY,
     photos,
     generatedAt: new Date().toLocaleDateString("en-GB", {
