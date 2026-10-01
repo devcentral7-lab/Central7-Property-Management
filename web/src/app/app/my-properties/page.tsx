@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireProfile } from "@/lib/auth";
+import { mineFiltersFromParams } from "@/lib/my-properties-filters";
 import { PropertyMinePanel } from "@/app/app/properties/property-mine";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -36,7 +37,13 @@ export default async function MyPropertiesPage({
         </Link>
       </header>
       <div className="mt-5 sm:mt-6">
-        <PropertyMinePanel target={target} page={page} isAdmin={isAdmin} standalone />
+        <PropertyMinePanel
+          target={target}
+          page={page}
+          isAdmin={isAdmin}
+          filters={mineFiltersFromParams(sp)}
+          standalone
+        />
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import {
 } from "@/app/app/social-queue/queue-actions";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { LinkRow } from "@/components/clickable-row";
+import { LiveFilterForm } from "@/components/live-filter-form";
 import { requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
@@ -259,7 +260,10 @@ export default async function ActivityPage({
     <div>
       <h1 className="font-display text-2xl font-semibold sm:text-3xl">Activity log</h1>
 
-      <form className="mt-5 flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-end">
+      <LiveFilterForm
+        action="/app/activity"
+        className="mt-5 flex flex-col gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-end"
+      >
         <label className="text-sm font-medium">
           Category
           <select
@@ -283,13 +287,7 @@ export default async function ActivityPage({
             className="mt-1 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
           />
         </label>
-        <button
-          type="submit"
-          className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white"
-        >
-          Filter
-        </button>
-      </form>
+      </LiveFilterForm>
 
       <div className="tab-scroll -mx-4 mt-4 px-4 sm:mx-0 sm:px-0">
         {CATEGORIES.map((c) => {

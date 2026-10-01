@@ -89,16 +89,16 @@ export default function LoginPage() {
   return (
     <main className="login-page relative flex min-h-screen items-center justify-center overflow-hidden bg-[var(--sidebar)] px-4 py-10">
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden bg-white">
-        <Image
-          src="/login-background.png"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="login-photo object-contain object-bottom"
-        />
-        <div className="absolute inset-0 bg-[var(--brand)] mix-blend-multiply" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/10 to-black/25" />
+        <div className="absolute inset-x-0 bottom-0 h-full portrait:h-[45%]">
+          <Image
+            src="/login-background.png"
+            alt=""
+            fill
+            priority
+            sizes="(orientation: portrait) 125vh, (max-aspect-ratio: 2089/753) 278vh, 100vw"
+            className="login-photo object-cover object-bottom"
+          />
+        </div>
       </div>
 
       <div className="login-panel relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-white/20 bg-[var(--card)] shadow-[0_32px_80px_rgba(0,0,0,0.45)]">

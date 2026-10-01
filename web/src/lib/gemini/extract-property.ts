@@ -1,10 +1,12 @@
 import type { FormOptions } from "@/lib/form-options";
 import {
+  COMMERCIAL_SUBTYPES,
   CONTACT_TYPES,
   FURNISHED_LIST,
   OPPORTUNITY_TYPES,
   PROPERTY_TYPES,
 } from "@/lib/constants";
+import { parseMapsLink } from "@/lib/maps-link";
 
 /** Partial listing fields Gemini may return. Null/omitted = leave blank. */
 export type ExtractedPropertyFields = {
@@ -28,8 +30,6 @@ export type ExtractedPropertyFields = {
   age_years?: number | string | null;
   apartment_floor?: string | null;
   view?: string | null;
-  latitude?: number | string | null;
-  longitude?: number | string | null;
   suitable_for?: string | null;
   built_up_area?: number | string | null;
   currency?: string | null;
@@ -98,7 +98,6 @@ export function normalizeExtractedFields(
   set("city", strVal(raw.city));
   set("address", strVal(raw.address));
   set("purpose", strVal(raw.purpose));
-  set("property_subtype", strVal(raw.property_subtype));
   set("apartment_floor", strVal(raw.apartment_floor));
   set("view", strVal(raw.view));
   set("suitable_for", strVal(raw.suitable_for));
@@ -117,6 +116,12 @@ export function normalizeExtractedFields(
   const ptype = strVal(raw.property_type);
   if (lists.propertyTypes.includes(ptype)) {
     out.property_type = ptype;
+  }
+
+  const subtype = strVal(raw.property_subtype).toLowerCase();
+  const subtypeMatch = COMMERCIAL_SUBTYPES.find((s) => s.toLowerCase() === subtype);
+  if (subtypeMatch && (!out.property_type || out.property_type === "Commercial Property")) {
+    out.property_subtype = subtypeMatch;
   }
 
   const furnished = strVal(raw.furnished);
@@ -143,8 +148,6 @@ export function normalizeExtractedFields(
     "price_per_sqft",
     "price_total",
     "budget",
-    "latitude",
-    "longitude",
   ] as const) {
     const n = strVal(raw[key]).replace(/,/g, "");
     if (n && Number.isFinite(Number(n))) out[key] = n;
@@ -175,8 +178,8 @@ function buildPrompt(paragraph: string, lists: EnumLists): string {
     "",
     "Numeric fields: land_size_perch, floor_area_sqft, bedrooms, bathrooms,",
     "number_of_floors, parking_spaces, age_years, built_up_area,",
-    "price_per_perch, price_per_sqft, price_total, budget, latitude, longitude — numbers only.",
-    "property_subtype: free text when a more specific type is stated (villa, annex, shop…).",
+    "price_per_perch, price_per_sqft, price_total, budget — numbers only.",
+    `property_subtype: only for Commercial Property, one of ${COMMERCIAL_SUBTYPES.join(" | ")}; otherwise null.`,
     "amenities: array of short strings when mentioned.",
     "comments: leftover useful notes not mapped to other fields (optional).",
     "Map rent/lease → opportunity_type Rent Out; sale/selling → Sell.",
@@ -187,7 +190,7 @@ function buildPrompt(paragraph: string, lists: EnumLists): string {
     "contact_type, contact_name, contact_phone_1, contact_phone_2, contact_email,",
     "opportunity_type, property_type, property_subtype, city, address, purpose,",
     "land_size_perch, floor_area_sqft, bedrooms, bathrooms, number_of_floors,",
-    "parking_spaces, age_years, apartment_floor, view, latitude, longitude,",
+    "parking_spaces, age_years, apartment_floor, view,",
     "suitable_for, built_up_area, currency, furnished,",
     "price_per_perch, price_per_sqft, price_total, budget, amenities, comments",
     "",
@@ -272,6 +275,9 @@ export async function extractPropertyFieldsWithGemini(
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned an empty response.");
 
-  const parsed = parseJsonObject(text);
-  return normalizeExtractedFields(parsed, lists);
+  const fields = normalizeExtractedFields(parseJsonObject(text), lists);
+  // Read straight from the notes — the model can mangle long share URLs.
+  const mapsLink = parseMapsLink(input);
+  if (mapsLink.ok && mapsLink.url) fields.location_url = mapsLink.url;
+  return fields;
 }

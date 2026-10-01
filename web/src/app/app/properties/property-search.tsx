@@ -14,6 +14,13 @@ function formatMoney(n: number | null, currency: string) {
   return `${currency} ${Number(n).toLocaleString()}`;
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function complexName(v: unknown): string | null {
+  const c = (Array.isArray(v) ? v[0] : v) as { name?: string | null } | null;
+  return c?.name ?? null;
+}
+
 function numOrNull(v: string): number | null {
   if (!v.trim()) return null;
   const n = Number(v);
@@ -30,12 +37,16 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
-  const options = await loadFormOptions();
+  const [options, { data: complexData }] = await Promise.all([
+    loadFormOptions(),
+    supabase.from("apartment_complexes").select("id, name").order("name"),
+  ]);
+  const complexes = (complexData ?? []) as { id: string; name: string }[];
 
   let query = supabase
     .from("properties")
     .select(
-      "id, ref_no, created_at, created_by_name, opportunity_type, property_type, city, address, status, currency, price_total, bedrooms, bathrooms, land_size_perch, floor_area_sqft",
+      "id, ref_no, created_at, created_by_name, opportunity_type, property_type, city, address, status, currency, price_total, bedrooms, bathrooms, land_size_perch, floor_area_sqft, apartment_complexes(name)",
       { count: "exact" },
     )
     .order("created_at", { ascending: false })
@@ -44,6 +55,11 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (filters.status) query = query.eq("status", filters.status);
   if (filters.property_type) {
     query = query.eq("property_type", filters.property_type);
+  }
+  if (filters.complex) {
+    query = UUID_RE.test(filters.complex)
+      ? query.eq("apartment_complex_id", filters.complex)
+      : query.is("id", null);
   }
   if (filters.opportunity_type) {
     query = query.eq("opportunity_type", filters.opportunity_type);
@@ -54,19 +70,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (filters.furnished) query = query.eq("furnished", filters.furnished);
   if (filters.currency) query = query.eq("currency", filters.currency);
   if (filters.city) query = query.ilike("city", `%${filters.city}%`);
-  if (filters.property_subtype) {
-    query = query.ilike("property_subtype", `%${filters.property_subtype}%`);
-  }
-  if (filters.purpose) {
-    const p = filters.purpose.replace(/[%_,()]/g, " ");
-    query = query.or(
-      `purpose.ilike.%${p}%,type_attributes->>suitable_for.ilike.%${p}%`,
-    );
-  }
   if (filters.view) query = query.ilike("view", `%${filters.view}%`);
-  if (filters.agent) {
-    query = query.ilike("created_by_name", `%${filters.agent}%`);
-  }
   if (filters.do_not_publish === "true") {
     query = query.eq("do_not_publish", true);
   } else if (filters.do_not_publish === "false") {
@@ -86,9 +90,6 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   const budgetMin = numOrNull(filters.budget_min);
   const budgetMax = numOrNull(filters.budget_max);
   const parkingMin = numOrNull(filters.parking_min);
-  const floorsMin = numOrNull(filters.floors_min);
-  const floorsMax = numOrNull(filters.floors_max);
-  const ageMax = numOrNull(filters.age_max);
 
   if (bedroomsMin != null) query = query.gte("bedrooms", bedroomsMin);
   if (bedroomsMax != null) query = query.lte("bedrooms", bedroomsMax);
@@ -103,19 +104,6 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (budgetMin != null) query = query.gte("budget", budgetMin);
   if (budgetMax != null) query = query.lte("budget", budgetMax);
   if (parkingMin != null) query = query.gte("parking_spaces", parkingMin);
-  if (floorsMin != null) query = query.gte("number_of_floors", floorsMin);
-  if (floorsMax != null) query = query.lte("number_of_floors", floorsMax);
-  if (ageMax != null) query = query.lte("age_years", ageMax);
-
-  if (filters.amenities.trim()) {
-    const parts = filters.amenities
-      .split(",")
-      .map((a) => a.trim())
-      .filter(Boolean);
-    if (parts.length) {
-      query = query.overlaps("amenities", parts);
-    }
-  }
 
   if (filters.q) {
     const q = filters.q.replace(/[%_,]/g, " ");
@@ -149,7 +137,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
 
   return (
     <div className="space-y-4">
-      <PropertySearchForm options={options} filters={filters} />
+      <PropertySearchForm options={options} filters={filters} complexes={complexes} />
 
       <p className="text-sm text-[var(--muted)]">
         {total.toLocaleString()} filtered matches · page {page} of {totalPages}{" "}
@@ -166,6 +154,11 @@ export async function PropertySearchPanel({ filters, page }: Props) {
             <p className="mt-1 text-sm">
               {r.property_type} · {r.opportunity_type} · {r.city || "—"}
             </p>
+            {complexName(r.apartment_complexes) ? (
+              <p className="text-xs text-[var(--muted)]">
+                {complexName(r.apartment_complexes)}
+              </p>
+            ) : null}
             <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
               <span className="font-semibold">
                 {formatMoney(r.price_total, r.currency)}
@@ -213,7 +206,14 @@ export async function PropertySearchPanel({ filters, page }: Props) {
                     {r.opportunity_type}
                   </span>
                 </td>
-                <td className="px-4 py-3">{r.city || "—"}</td>
+                <td className="px-4 py-3">
+                  {r.city || "—"}
+                  {complexName(r.apartment_complexes) ? (
+                    <span className="block text-xs text-[var(--muted)]">
+                      {complexName(r.apartment_complexes)}
+                    </span>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={r.status} />
                 </td>

@@ -1,6 +1,13 @@
 import { typeSpecificKeys } from "@/lib/property-fields";
 
-export type DetailField = { label: string; value: string; href?: string; phone?: boolean };
+export type DetailField = {
+  label: string;
+  value: string;
+  href?: string;
+  phone?: boolean;
+  /** `value` is a map URL, shown as Open / Copy buttons. */
+  mapLink?: boolean;
+};
 
 export type DetailSectionId = "property" | "location" | "pricing" | "contact" | "record";
 
@@ -53,7 +60,7 @@ function telHref(phone: string) {
 
 export function buildPropertyDetails(
   p: Row,
-  extras: { complexName?: string | null; lat?: number | null; lng?: number | null },
+  extras: { complexName?: string | null },
 ): PropertyDetailsModel {
   const propertyType = str(p.property_type);
   const opportunity = str(p.opportunity_type);
@@ -96,17 +103,16 @@ export function buildPropertyDetails(
     ["Age", has(p.age_years) ? `${num(p.age_years)} years` : null, pick("age_years", p.age_years)],
   ]);
 
-  const hasCoords = extras.lat != null && extras.lng != null;
-  const location = collect([
-    ["City", p.city],
-    ["Address", p.address],
-    [
-      "Coordinates",
-      hasCoords ? `${extras.lat}, ${extras.lng}` : null,
-      hasCoords,
-      hasCoords ? `https://www.google.com/maps?q=${extras.lat},${extras.lng}` : undefined,
-    ],
-  ]);
+  const mapUrl = str(p.location_url);
+  const location: DetailField[] = [
+    ...collect([
+      ["City", p.city],
+      ["Address", p.address],
+    ]),
+    ...(mapUrl && /^https?:\/\//i.test(mapUrl)
+      ? [{ label: "Map", value: mapUrl, mapLink: true }]
+      : []),
+  ];
 
   const pricing = collect([
     [rent ? "Monthly rent" : "Total price", money(p.price_total, currency)],

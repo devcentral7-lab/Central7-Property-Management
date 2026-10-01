@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveFilterForm } from "@/components/live-filter-form";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
@@ -138,8 +139,7 @@ export default async function AgentSearchPage({
       </p>
 
       <div className="mt-5 space-y-4 sm:mt-6">
-        <form
-          method="get"
+        <LiveFilterForm
           action="/agent"
           className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4"
         >
@@ -273,20 +273,14 @@ export default async function AgentSearchPage({
           </details>
 
           <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
-            <Link
-              href="/agent"
+            <button
+              type="reset"
               className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
             >
               Clear
-            </Link>
-            <button
-              type="submit"
-              className="rounded-full bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
-            >
-              Apply filters
             </button>
           </div>
-        </form>
+        </LiveFilterForm>
 
         {error ? (
           <p className="rounded-xl bg-red-50 p-4 text-[var(--danger)]">{error.message}</p>

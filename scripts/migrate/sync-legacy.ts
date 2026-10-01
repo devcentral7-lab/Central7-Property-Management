@@ -19,6 +19,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import fs from 'node:fs';
 import { cleanProperties, loadOriginalTimestamps } from './clean.js';
+import { cleanLegacyComplex, complexNameResolver } from './complexes.js';
 import { SOCIAL_MEDIA_PLATFORMS } from './constants.js';
 import { loadEnvFile } from './load-env.js';
 import { coerceTimestamp, dataPath, readJsonFile, s, writeJsonFile } from './utils.js';
@@ -132,7 +133,7 @@ async function main(): Promise<void> {
 
   const [dbProps, dbComplexes, dbProfiles, dbUsers] = await Promise.all([
     fetchAll(sb, 'properties', 'id, ref_no, ref_seq, created_at, created_by, created_by_name, type_attributes, do_not_publish, internal_comments'),
-    fetchAll(sb, 'apartment_complexes', 'id, name, location, amenities, added_by, created_at'),
+    fetchAll(sb, 'apartment_complexes', 'id, name, location, amenities, added_by, address, built_year, created_at'),
     fetchAll(sb, 'profiles', 'id, display_name, active'),
     fetchAll(sb, 'users', 'id, username, auth_user_id'),
   ]);
@@ -140,32 +141,31 @@ async function main(): Promise<void> {
   const profileId = new Map(dbProfiles.map((p) => [String(p.display_name), String(p.id)]));
 
   // ---------------------------------------------------------------- complexes
-  const legacyComplexes = rawFile(null, 'Apartment_Complexes.json');
+  const legacyComplexes = rawFile(null, 'Apartment_Complexes.json').map(cleanLegacyComplex);
+  const resolveComplex = complexNameResolver(legacyComplexes.map((c) => c.name));
   const cxByName = new Map(dbComplexes.map((c) => [String(c.name), c]));
   const cxInserts: Row[] = [];
   const cxPatches: { id: string; patch: Row }[] = [];
   const legacyCxNames = new Set<string>();
   for (const c of legacyComplexes) {
-    const name = s(c['Name']);
+    const name = resolveComplex(c.name);
     if (!name || legacyCxNames.has(name)) continue;
     legacyCxNames.add(name);
-    const location = s(c['Location']) || null;
-    const amenities = s(c['Default Amenities']).split(',').map((a) => a.trim()).filter(Boolean);
-    const addedBy = s(c['Added By']) || null;
     const existing = cxByName.get(name);
     if (!existing) {
-      const createdAt = coerceTimestamp(c['Created At']);
-      cxInserts.push({ name, location, amenities, added_by: addedBy, ...(createdAt ? { created_at: createdAt } : {}) });
+      const { created_at, ...fields } = c;
+      cxInserts.push({ ...fields, name, ...(created_at ? { created_at } : {}) });
       continue;
     }
     const patch: Row = {};
-    if (!existing.location && location) patch.location = location;
-    if (!(existing.amenities as string[] | null)?.length && amenities.length) patch.amenities = amenities;
-    if (!existing.added_by && addedBy) patch.added_by = addedBy;
+    for (const col of ['location', 'added_by', 'address', 'built_year'] as const) {
+      if ((existing[col] === null || existing[col] === undefined) && c[col] !== null) patch[col] = c[col];
+    }
+    if (!(existing.amenities as string[] | null)?.length && c.amenities.length) patch.amenities = c.amenities;
     if (Object.keys(patch).length) cxPatches.push({ id: String(existing.id), patch });
   }
   for (const r of nextRows) {
-    const name = s((r.type_attributes as Row)?.apartment_complex_name);
+    const name = resolveComplex((r.type_attributes as Row)?.apartment_complex_name);
     if (name && !cxByName.has(name) && !legacyCxNames.has(name)) {
       legacyCxNames.add(name);
       cxInserts.push({ name });
@@ -430,7 +430,7 @@ async function main(): Promise<void> {
   const cx = await fetchAll(sb, 'apartment_complexes', 'id, name');
   const cxId = new Map(cx.map((c) => [String(c.name), String(c.id)]));
   const complexIdFor = (attrs: unknown) => {
-    const name = s((attrs as Row | undefined)?.apartment_complex_name);
+    const name = resolveComplex((attrs as Row | undefined)?.apartment_complex_name);
     return name ? cxId.get(name) ?? null : null;
   };
 

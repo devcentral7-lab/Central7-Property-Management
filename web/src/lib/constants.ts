@@ -8,6 +8,16 @@ export const PROPERTY_TYPES = [
   "Commercial Property",
   "Estate",
 ] as const;
+export const COMMERCIAL_SUBTYPES = [
+  "Estate",
+  "Warehouse",
+  "Office Space",
+  "Factory",
+  "Commercial Building",
+  "Apartment Complex",
+  "Hotel",
+  "Restaurant or Cafe",
+] as const;
 export const STATUS_LIST = [
   "Active",
   "Hold",

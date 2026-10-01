@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
+import { mineFiltersFromParams } from "@/lib/my-properties-filters";
 import { PropertyAddPanel } from "@/app/app/properties/property-add";
 import { PropertyMinePanel } from "@/app/app/properties/property-mine";
 import { PropertySearchPanel } from "@/app/app/properties/property-search";
@@ -22,13 +23,11 @@ function filtersFromParams(
     status: sp.status === undefined ? "Active" : one(sp.status),
     opportunity_type: one(sp.opportunity_type),
     property_type: one(sp.property_type),
-    property_subtype: one(sp.property_subtype).trim(),
+    complex: one(sp.complex).trim(),
     contact_type: one(sp.contact_type),
     city: one(sp.city).trim(),
     furnished: one(sp.furnished),
     currency: one(sp.currency),
-    agent: one(sp.agent).trim(),
-    purpose: one(sp.purpose).trim(),
     view: one(sp.view).trim(),
     bedrooms_min: one(sp.bedrooms_min).trim(),
     bedrooms_max: one(sp.bedrooms_max).trim(),
@@ -43,11 +42,7 @@ function filtersFromParams(
     budget_min: one(sp.budget_min).trim(),
     budget_max: one(sp.budget_max).trim(),
     parking_min: one(sp.parking_min).trim(),
-    floors_min: one(sp.floors_min).trim(),
-    floors_max: one(sp.floors_max).trim(),
-    age_max: one(sp.age_max).trim(),
     do_not_publish: one(sp.do_not_publish),
-    amenities: one(sp.amenities).trim(),
     advanced: one(sp.advanced),
   };
 }
@@ -146,6 +141,7 @@ export default async function PropertiesPage({
             target={target}
             page={page}
             isAdmin={isAdmin}
+            filters={mineFiltersFromParams(sp)}
           />
         ) : null}
       </div>

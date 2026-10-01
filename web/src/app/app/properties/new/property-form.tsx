@@ -11,8 +11,9 @@ import {
   ConfirmDialog,
   type ConfirmRequest,
 } from "@/app/app/user-management/dialogs";
+import { COMMERCIAL_SUBTYPES } from "@/lib/constants";
 import type { FormOptions } from "@/lib/form-options";
-import { LocationPickerField } from "./location-picker";
+import { parseMapsLink } from "@/lib/maps-link";
 
 export type ComplexOption = { id: string; name: string };
 
@@ -40,8 +41,7 @@ const EMPTY: PropertyFormValues = {
   apartment_complex_id: "",
   apartment_floor: "",
   view: "",
-  latitude: "",
-  longitude: "",
+  location_url: "",
   suitable_for: "",
   built_up_area: "",
   currency: "LKR",
@@ -354,13 +354,28 @@ function PropertyFormInner({
                 ))}
               </select>
             </Field>
-            <Field label="Property sub-type">
-              <input
-                {...bind("property_subtype")}
-                className={inputBase}
-                placeholder="e.g. Villa, Annex, Shop"
-              />
-            </Field>
+            {isCommercial ? (
+              <Field label="Property sub-type">
+                <select {...bind("property_subtype")} className={inputBase}>
+                  <option value="">Select sub-type</option>
+                  {values.property_subtype &&
+                  !(COMMERCIAL_SUBTYPES as readonly string[]).includes(
+                    values.property_subtype,
+                  ) ? (
+                    <option value={values.property_subtype}>
+                      {values.property_subtype}
+                    </option>
+                  ) : null}
+                  {COMMERCIAL_SUBTYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <input type="hidden" name="property_subtype" value="" />
+            )}
             <Field label="Status">
               <select {...bind("status")} className={inputBase}>
                 {options.statuses.map((t) => (
@@ -384,11 +399,7 @@ function PropertyFormInner({
 
           <SubHeading>Location</SubHeading>
           <div className={grid3}>
-            <Field
-              label="City"
-              required
-              hint="Filled automatically when you pin the map."
-            >
+            <Field label="City" required>
               <input required {...bind("city")} className={inputBase} />
             </Field>
             <Field label="Address">
@@ -398,18 +409,10 @@ function PropertyFormInner({
                 placeholder="Street, area"
               />
             </Field>
-            <LocationPickerField
+            <LocationLinkField
               className="sm:col-span-2 lg:col-span-1"
-              latitude={values.latitude}
-              longitude={values.longitude}
-              onChange={(lat, lng, city) =>
-                setValues((prev) => ({
-                  ...prev,
-                  latitude: lat,
-                  longitude: lng,
-                  ...(city ? { city } : {}),
-                }))
-              }
+              value={values.location_url}
+              onChange={(v) => setField("location_url", v)}
             />
           </div>
         </FormSection>
@@ -851,7 +854,7 @@ function PropertyFormInner({
               onClick={() =>
                 setConfirm({
                   title: "Reset the form?",
-                  body: "This clears every field and tick box, including the AI notes and map pin. You can't undo this.",
+                  body: "This clears every field and tick box, including the AI notes. You can't undo this.",
                   confirmLabel: "Reset form",
                   danger: true,
                   onConfirm: onReset,
@@ -959,6 +962,48 @@ function Field({
       <FieldLabel required={required}>{label}</FieldLabel>
       <span className="mt-1.5 block">{children}</span>
       {hint ? <FieldHint>{hint}</FieldHint> : null}
+    </label>
+  );
+}
+
+function LocationLinkField({
+  value,
+  onChange,
+  className = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  const parsed = parseMapsLink(value);
+  const error = parsed.ok ? null : parsed.error;
+
+  return (
+    <label className={`block min-w-0 ${className}`}>
+      <FieldLabel>Location</FieldLabel>
+      <span className="mt-1.5 block">
+        <input
+          name="location_url"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          spellCheck={false}
+          value={value}
+          placeholder="Paste Google Maps link"
+          aria-invalid={Boolean(error)}
+          ref={(el) => el?.setCustomValidity(error ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => {
+            if (parsed.ok && parsed.url && parsed.url !== value) onChange(parsed.url);
+          }}
+          className={`${inputBase} ${error ? "border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[var(--danger)]/15" : ""}`}
+        />
+      </span>
+      {error ? (
+        <span className="mt-1.5 block text-xs text-[var(--danger)]">{error}</span>
+      ) : (
+        <FieldHint>In Google Maps, tap Share → Copy link, then paste it here.</FieldHint>
+      )}
     </label>
   );
 }

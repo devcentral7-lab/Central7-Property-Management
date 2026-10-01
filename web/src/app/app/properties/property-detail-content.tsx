@@ -33,7 +33,7 @@ export async function loadPropertyDetail(refNoRaw: string) {
   const canEdit = profile.role === "Admin" || isOwner;
   const canDelete = profile.role === "Admin";
 
-  const [{ data: events }, { data: coords }, { data: complex }, options] =
+  const [{ data: events }, { data: complex }, options] =
     await Promise.all([
       supabase
         .from("property_status_events")
@@ -44,7 +44,6 @@ export async function loadPropertyDetail(refNoRaw: string) {
         .is("archived_at", null)
         .order("occurred_at", { ascending: false })
         .limit(20),
-      supabase.rpc("get_property_location", { p_property_id: property.id }),
       property.apartment_complex_id
         ? supabase
             .from("apartment_complexes")
@@ -55,11 +54,8 @@ export async function loadPropertyDetail(refNoRaw: string) {
       loadFormOptions(),
     ]);
 
-  const coord = Array.isArray(coords) ? coords[0] : coords;
   const details = buildPropertyDetails(property, {
     complexName: complex?.name ?? null,
-    lat: coord?.lat ?? null,
-    lng: coord?.lng ?? null,
   });
 
   return {
