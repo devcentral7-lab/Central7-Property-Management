@@ -3,7 +3,6 @@ import { COMPANY } from "@/lib/company";
 import { downloadPhoto, isDriveConfigured, listPropertyPhotos } from "@/lib/drive/photos";
 import { resizeToJpeg } from "@/lib/drive/resize";
 import { withSavedOrder } from "@/lib/drive/saved-order";
-import type { Profile } from "@/lib/types";
 import { typeSpecificKeys } from "@/lib/property-fields";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,7 +30,6 @@ export type PropertyPdfData = {
   details: PdfField[];
   amenities: PdfAmenity[];
   description: string | null;
-  contact: { name: string; phone: string };
   company: typeof COMPANY;
   photos: PdfPhoto[];
   generatedAt: string;
@@ -99,7 +97,6 @@ async function loadPhotos(
 export async function loadPropertyPdfData(
   refNoRaw: string,
   copy: PdfCopy,
-  profile: Profile,
 ): Promise<PropertyPdfData | null> {
   const refNo = decodeURIComponent(refNoRaw).toUpperCase();
   const supabase = await createClient();
@@ -213,10 +210,6 @@ export async function loadPropertyPdfData(
     details,
     amenities,
     description: has(p.comments) ? String(p.comments).trim() : null,
-    contact: {
-      name: profile.display_name,
-      phone: has(profile.mobile_number) ? String(profile.mobile_number) : COMPANY.phone,
-    },
     company: COMPANY,
     photos,
     generatedAt: new Date().toLocaleDateString("en-GB", {
