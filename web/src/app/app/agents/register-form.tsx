@@ -84,7 +84,7 @@ export function RegisterPartnerForm() {
       }
       setOpen(false);
       setCreds({
-        title: "Partner registered",
+        title: "Partner Registered",
         subtitle: result.tempPassword ? "Share these sign-in details with the partner." : undefined,
         details: [
           ["Username", result.username],
@@ -114,7 +114,7 @@ export function RegisterPartnerForm() {
       <PopupDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Register partner"
+        title="Register Partner"
         subtitle="Partner agencies sign in with the Agent role."
         busy={pending}
         size="lg"

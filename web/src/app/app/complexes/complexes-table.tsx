@@ -132,7 +132,7 @@ export function AddComplexButton({ locations }: { locations: string[] }) {
         <Icon name="plus" className="h-4 w-4" />
         Add complex
       </button>
-      <PopupDialog open={open} onClose={() => setOpen(false)} title="Add apartment complex" busy={pending} size="lg">
+      <PopupDialog open={open} onClose={() => setOpen(false)} title="Add Apartment Complex" busy={pending} size="lg">
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
           <ComplexFields locations={locations} />
           {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p> : null}
@@ -258,7 +258,7 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
       <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
         <div className="flex flex-col gap-3 border-b border-[var(--line)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
-            <h2 className="font-display text-lg font-semibold">Complex directory</h2>
+            <h2 className="font-display text-lg font-semibold">Complex Directory</h2>
             <p className="text-xs text-[var(--muted)]">Buildings staff can pick when adding an apartment listing.</p>
           </div>
           <SearchBox value={query} onChange={setQuery} placeholder="Search name, location or address" />

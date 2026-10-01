@@ -113,7 +113,7 @@ export default function LoginPage() {
         </div>
         <div className="px-7 py-7 sm:px-8 sm:py-8">
           <h1 className="font-display text-3xl font-semibold text-[var(--ink)]">
-            Sign in
+            Sign In
           </h1>
           <p className="mt-2 text-sm text-[var(--muted)]">
             Use your Central 7 staff email and password.

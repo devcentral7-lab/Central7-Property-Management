@@ -9,6 +9,7 @@ import {
 } from "@/lib/my-properties-filters";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyCard } from "@/lib/types";
+import { RangeFilter } from "@/components/range-filter";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { StatusBadge } from "@/components/status-badge";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
@@ -200,6 +201,21 @@ export async function PropertyMinePanel({
             />
           </label>
           <label className="text-sm font-medium">
+            Currency
+            <select
+              name="currency"
+              defaultValue={filters.currency}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">All currencies</option>
+              {options.currencies.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-medium">
             Beds min
             <input
               name="bedrooms_min"
@@ -208,25 +224,20 @@ export async function PropertyMinePanel({
               className={`${inputClass} mt-1`}
             />
           </label>
-          <label className="text-sm font-medium">
-            Price min
-            <input
-              name="price_min"
-              defaultValue={filters.price_min}
-              inputMode="decimal"
-              className={`${inputClass} mt-1`}
+          <div className="col-span-2 grid grid-cols-2 xl:col-span-4">
+            <RangeFilter
+              label="Price"
+              minName="price_min"
+              maxName="price_max"
+              defaultMin={filters.price_min}
+              defaultMax={filters.price_max}
+              ceiling={filters.currency === "USD" ? 1000000 : 100000000}
+              step={1000}
+              money
+              inputClassName={inputClass}
             />
-          </label>
-          <label className="text-sm font-medium">
-            Price max
-            <input
-              name="price_max"
-              defaultValue={filters.price_max}
-              inputMode="decimal"
-              className={`${inputClass} mt-1`}
-            />
-          </label>
-          <div className="flex items-end justify-end">
+          </div>
+          <div className="col-span-2 flex items-end justify-end xl:col-span-4">
             <button
               type="reset"
               className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"

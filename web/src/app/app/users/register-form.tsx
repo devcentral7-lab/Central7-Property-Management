@@ -33,7 +33,7 @@ export function RegisterStaffForm() {
       }
       setOpen(false);
       setCreds({
-        title: "Account created",
+        title: "Account Created",
         subtitle: "Share these sign-in details with the new user.",
         details: [
           ["Name", result.display_name],
@@ -64,7 +64,7 @@ export function RegisterStaffForm() {
       <PopupDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Register staff user"
+        title="Register Staff User"
         subtitle="A 10-digit temporary password is generated automatically."
         busy={pending}
         size="lg"

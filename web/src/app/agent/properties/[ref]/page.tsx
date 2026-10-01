@@ -60,7 +60,7 @@ export default async function AgentPropertyPage({
       <div className="mt-5 grid gap-4 sm:mt-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:p-6">
-            <h2 className="font-display text-base font-semibold">Property details</h2>
+            <h2 className="font-display text-base font-semibold">Property Details</h2>
             <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Fact label="Type" value={data.property_type} />
               <Fact label="Opportunity" value={data.opportunity_type} />

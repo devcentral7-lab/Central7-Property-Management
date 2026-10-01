@@ -246,7 +246,7 @@ export function PropertyModalProvider({ children }: { children: ReactNode }) {
   const dialog =
     state.open && mounted ? (
       <ModalShell
-        title={state.mode === "edit" ? "Edit listing" : "Property details"}
+        title={state.mode === "edit" ? "Edit Listing" : "Property Details"}
         wide={state.mode === "edit"}
         onClose={close}
       >

@@ -31,7 +31,7 @@ export default async function AppHomePage({
     return (
       <div>
         <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
-          Operations overview
+          Operations Overview
         </h1>
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
           {result.error}
@@ -52,7 +52,7 @@ export default async function AppHomePage({
     return (
       <div>
         <h1 className="font-display text-3xl font-semibold text-[var(--brand-deep)]">
-          Welcome back, {profile.display_name}
+          Welcome Back, {profile.display_name}
         </h1>
         <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">
           {result.error}

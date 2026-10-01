@@ -43,7 +43,7 @@ export default async function ComplexesPage() {
     <div className="space-y-6">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold sm:text-3xl">Apartment complexes</h1>
+          <h1 className="font-display text-2xl font-semibold sm:text-3xl">Apartment Complexes</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             View, add, edit and remove the apartment buildings used on listings.
           </p>

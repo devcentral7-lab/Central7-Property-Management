@@ -12,6 +12,8 @@ import {
   type ConfirmRequest,
 } from "@/app/app/user-management/dialogs";
 import { COMMERCIAL_SUBTYPES } from "@/lib/constants";
+import { MoneyInput } from "@/components/money-input";
+import { CitySelect } from "@/components/city-select";
 import type { FormOptions } from "@/lib/form-options";
 import { parseMapsLink } from "@/lib/maps-link";
 
@@ -25,8 +27,8 @@ const EMPTY: PropertyFormValues = {
   contact_phone_1: "",
   contact_phone_2: "",
   contact_email: "",
-  opportunity_type: "Sell",
-  property_type: "House",
+  opportunity_type: "",
+  property_type: "",
   property_subtype: "",
   city: "",
   address: "",
@@ -104,8 +106,6 @@ function PropertyFormInner({
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [values, setValues] = useState<PropertyFormValues>(() => ({
     ...EMPTY,
-    opportunity_type: options.opportunityTypes[0] || "Sell",
-    property_type: options.propertyTypes[0] || "House",
     currency: options.currencies[0] || "LKR",
     status: options.statuses.includes("Active")
       ? "Active"
@@ -259,7 +259,7 @@ function PropertyFormInner({
             </span>
             <div className="min-w-0">
               <h2 className="font-display text-base font-semibold leading-tight">
-                Quick fill with AI
+                Quick Fill With AI
               </h2>
               <p className="mt-0.5 text-xs text-[var(--muted)] sm:text-sm">
                 Paste listing notes and we&apos;ll fill in the fields below.
@@ -305,11 +305,14 @@ function PropertyFormInner({
         {mode === "edit" && refNo ? (
           <input type="hidden" name="ref_no" value={refNo} />
         ) : null}
+        {mode === "create" ? (
+          <input type="hidden" name="status" value="Active" />
+        ) : null}
 
         <FormSection
           step={1}
           title="Property"
-          description="What's being listed, its status and where it is."
+          description="What's being listed and where it is."
         >
           <div className={grid3}>
             <div className="min-w-0">
@@ -332,6 +335,7 @@ function PropertyFormInner({
             </div>
             <Field label="Opportunity" required>
               <select required {...bind("opportunity_type")} className={inputBase}>
+                <option value="">Select opportunity</option>
                 {options.opportunityTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -339,7 +343,7 @@ function PropertyFormInner({
                 ))}
               </select>
             </Field>
-            <Field label="Property type" required>
+            <Field label="Property Type" required>
               <select
                 name="property_type"
                 required
@@ -347,6 +351,7 @@ function PropertyFormInner({
                 onChange={(e) => onPropertyTypeChange(e.target.value)}
                 className={inputBase}
               >
+                <option value="">Select type</option>
                 {options.propertyTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -355,7 +360,7 @@ function PropertyFormInner({
               </select>
             </Field>
             {isCommercial ? (
-              <Field label="Property sub-type">
+              <Field label="Property Sub-type">
                 <select {...bind("property_subtype")} className={inputBase}>
                   <option value="">Select sub-type</option>
                   {values.property_subtype &&
@@ -376,18 +381,9 @@ function PropertyFormInner({
             ) : (
               <input type="hidden" name="property_subtype" value="" />
             )}
-            <Field label="Status">
-              <select {...bind("status")} className={inputBase}>
-                {options.statuses.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Furnished">
               <select {...bind("furnished")} className={inputBase}>
-                <option value="">Not specified</option>
+                <option value="">Select furnished status</option>
                 {options.furnished.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -395,13 +391,26 @@ function PropertyFormInner({
                 ))}
               </select>
             </Field>
+            {mode === "edit" ? (
+              <Field label="Status">
+                <select {...bind("status")} className={inputBase}>
+                  {options.statuses.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
           </div>
 
           <SubHeading>Location</SubHeading>
           <div className={grid3}>
-            <Field label="City" required>
-              <input required {...bind("city")} className={inputBase} />
-            </Field>
+            <CitySelect
+              value={values.city ?? ""}
+              onChange={(city) => setField("city", city)}
+              className={inputBase}
+            />
             <Field label="Address">
               <input
                 {...bind("address")}
@@ -423,8 +432,8 @@ function PropertyFormInner({
           description="Owner or agent to reach about this listing."
         >
           <div className={grid3}>
-            <Field label="Contact type">
-              <select {...bind("contact_type")} className={inputBase}>
+            <Field label="Contact Type" required>
+              <select required {...bind("contact_type")} className={inputBase}>
                 <option value="">Select type</option>
                 {options.contactTypes.map((t) => (
                   <option key={t} value={t}>
@@ -433,7 +442,7 @@ function PropertyFormInner({
                 ))}
               </select>
             </Field>
-            <Field label="Name of contact" required>
+            <Field label="Name of Contact" required>
               <input
                 required
                 {...bind("contact_name")}
@@ -476,7 +485,7 @@ function PropertyFormInner({
 
         <FormSection
           step={3}
-          title={`${typeLabel} details`}
+          title={`${typeLabel} Details`}
           description="Fields change with the property type you picked."
         >
           {!hasTypeDetails ? (
@@ -488,7 +497,7 @@ function PropertyFormInner({
           {isHouseLike ? (
             <div className={grid4}>
               <input type="hidden" name="purpose" value={values.purpose} />
-              <Field label="Land size">
+              <Field label="Land Size">
                 <Affix suffix="perch">
                   <input
                     {...bind("land_size_perch")}
@@ -497,7 +506,7 @@ function PropertyFormInner({
                   />
                 </Affix>
               </Field>
-              <Field label="Floor area">
+              <Field label="Floor Area">
                 <Affix suffix="sqft">
                   <input
                     {...bind("floor_area_sqft")}
@@ -512,13 +521,13 @@ function PropertyFormInner({
               <Field label="Bathrooms">
                 <input {...bind("bathrooms")} className={inputBase} />
               </Field>
-              <Field label="Number of floors">
+              <Field label="Number of Floors">
                 <input {...bind("number_of_floors")} className={inputBase} />
               </Field>
-              <Field label="Parking spaces">
+              <Field label="Parking Spaces">
                 <input {...bind("parking_spaces")} className={inputBase} />
               </Field>
-              <Field label="Age of the house">
+              <Field label="Age of the House">
                 <Affix suffix="years">
                   <input
                     {...bind("age_years")}
@@ -532,7 +541,7 @@ function PropertyFormInner({
 
           {isLand ? (
             <div className={grid4}>
-              <Field label="Land size">
+              <Field label="Land Size">
                 <Affix suffix="perch">
                   <input
                     {...bind("land_size_perch")}
@@ -553,7 +562,7 @@ function PropertyFormInner({
 
           {isApartment ? (
             <div className={grid4}>
-              <Field label="Apartment complex" className="sm:col-span-2">
+              <Field label="Apartment Complex" className="sm:col-span-2">
                 <select {...bind("apartment_complex_id")} className={inputBase}>
                   <option value="">Select complex</option>
                   {complexes.map((c) => (
@@ -566,7 +575,7 @@ function PropertyFormInner({
               <Field label="Floor">
                 <input {...bind("apartment_floor")} className={inputBase} />
               </Field>
-              <Field label="Floor area">
+              <Field label="Floor Area">
                 <Affix suffix="sqft">
                   <input
                     {...bind("floor_area_sqft")}
@@ -575,13 +584,13 @@ function PropertyFormInner({
                   />
                 </Affix>
               </Field>
-              <Field label="Number of rooms">
+              <Field label="Number of Rooms">
                 <input {...bind("bedrooms")} className={inputBase} />
               </Field>
-              <Field label="Number of bathrooms">
+              <Field label="Number of Bathrooms">
                 <input {...bind("bathrooms")} className={inputBase} />
               </Field>
-              <Field label="Dedicated parking slots">
+              <Field label="Dedicated Parking Slots">
                 <input {...bind("parking_spaces")} className={inputBase} />
               </Field>
               <Field label="View">
@@ -603,7 +612,7 @@ function PropertyFormInner({
                   placeholder="e.g. Office, Retail, Warehouse"
                 />
               </Field>
-              <Field label="Size of land">
+              <Field label="Size of Land">
                 <Affix suffix="perch">
                   <input
                     {...bind("land_size_perch")}
@@ -612,7 +621,7 @@ function PropertyFormInner({
                   />
                 </Affix>
               </Field>
-              <Field label="Built-up area">
+              <Field label="Built-up Area">
                 <input {...bind("built_up_area")} className={inputBase} />
               </Field>
             </div>
@@ -674,24 +683,23 @@ function PropertyFormInner({
             </Field>
             {(
               [
-                ["Price total", "price_total"],
-                ["Price per perch", "price_per_perch"],
+                ["Price Total", "price_total"],
+                ["Price per Perch", "price_per_perch"],
                 ...(isLand
                   ? []
                   : ([
-                      ["Price per sqft", "price_per_sqft"],
+                      ["Price per Sqft", "price_per_sqft"],
                       ["Budget", "budget"],
                     ] as const)),
               ] as const
             ).map(([label, name]) => (
               <Field key={name} label={label}>
-                <Affix suffix={currency}>
-                  <input
-                    {...bind(name)}
-                    className={`${inputBase} pr-14 tabular-nums`}
-                    inputMode="decimal"
-                  />
-                </Affix>
+                <CurrencyInput
+                  name={name}
+                  value={values[name] ?? ""}
+                  currency={currency}
+                  onChange={(v) => setField(name, v)}
+                />
               </Field>
             ))}
           </div>
@@ -743,7 +751,7 @@ function PropertyFormInner({
             </div>
             <div className="mt-5">
               <Field
-                label="Other amenities"
+                label="Other Amenities"
                 hint="Separate extras with commas."
               >
                 <input
@@ -758,7 +766,7 @@ function PropertyFormInner({
 
           <FormSection
             step={isLand ? 5 : 6}
-            title={mode === "create" ? "Notes & publishing" : "Notes & visibility"}
+            title={mode === "create" ? "Notes & Publishing" : "Notes & Visibility"}
             description={
               mode === "create"
                 ? "Anything else to know, and where to post it."
@@ -767,7 +775,7 @@ function PropertyFormInner({
           >
             <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
               <Field
-                label="Comments / other information"
+                label="Comments / Other Information"
                 hint="Can appear on the public listing."
               >
                 <textarea
@@ -778,7 +786,7 @@ function PropertyFormInner({
                 />
               </Field>
               <Field
-                label="Internal comments"
+                label="Internal Comments"
                 hint="Staff only. Never shown publicly or posted."
               >
                 <textarea
@@ -853,7 +861,7 @@ function PropertyFormInner({
             <ResetButton
               onClick={() =>
                 setConfirm({
-                  title: "Reset the form?",
+                  title: "Reset The Form?",
                   body: "This clears every field and tick box, including the AI notes. You can't undo this.",
                   confirmLabel: "Reset form",
                   danger: true,
@@ -1003,6 +1011,32 @@ function LocationLinkField({
         <span className="mt-1.5 block text-xs text-[var(--danger)]">{error}</span>
       ) : null}
     </label>
+  );
+}
+
+function CurrencyInput({
+  name,
+  value,
+  currency,
+  onChange,
+}: {
+  name: string;
+  value: string;
+  currency: string;
+  onChange: (raw: string) => void;
+}) {
+  return (
+    <span className="relative block">
+      <MoneyInput
+        name={name}
+        value={value}
+        className={`${inputBase} pr-14 tabular-nums`}
+        onValueChange={onChange}
+      />
+      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-[var(--muted)]">
+        {currency}
+      </span>
+    </span>
   );
 }
 

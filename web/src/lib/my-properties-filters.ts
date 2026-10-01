@@ -5,6 +5,7 @@ export type MinePropertyFilters = {
   status: string;
   opportunity_type: string;
   property_type: string;
+  currency: string;
   city: string;
   bedrooms_min: string;
   price_min: string;
@@ -18,6 +19,7 @@ export const MINE_FILTER_KEYS = [
   "status",
   "opportunity_type",
   "property_type",
+  "currency",
   "city",
   "bedrooms_min",
   "price_min",
@@ -71,6 +73,7 @@ const FILTER_LABELS: Record<keyof MinePropertyFilters, string> = {
   status: "Status",
   opportunity_type: "Opportunity",
   property_type: "Type",
+  currency: "Currency",
   city: "City",
   bedrooms_min: "Beds min",
   price_min: "Price min",
@@ -101,6 +104,7 @@ export function applyMineFilters<Q extends Filterable<Q>>(query: Q, f: MinePrope
   if (f.status) q = q.eq("status", f.status);
   if (f.opportunity_type) q = q.eq("opportunity_type", f.opportunity_type);
   if (f.property_type) q = q.eq("property_type", f.property_type);
+  if (f.currency) q = q.eq("currency", f.currency);
   if (f.city) q = q.ilike("city", `%${f.city}%`);
 
   const bedroomsMin = numOrNull(f.bedrooms_min);

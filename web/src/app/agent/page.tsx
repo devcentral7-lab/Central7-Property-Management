@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RangeFilter } from "@/components/range-filter";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
@@ -133,7 +134,7 @@ export default async function AgentSearchPage({
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Search properties</h1>
+      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Search Properties</h1>
       <p className="mt-1 text-sm text-[var(--muted)]">
         Browse every active Central 7 listing by keyword, location, type or price.
       </p>
@@ -199,76 +200,65 @@ export default async function AgentSearchPage({
               <span className="group-open:hidden">Show advanced filters</span>
               <span className="hidden group-open:inline">Hide advanced filters</span>
             </summary>
-            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 xl:grid-cols-4">
-              <label className="text-sm font-medium">
-                Currency
-                <select
-                  name="currency"
-                  defaultValue={filters.currency}
-                  className={`${inputClass} mt-1`}
-                >
-                  <option value="">All</option>
-                  {options.currencies.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                Beds min
-                <input
-                  name="bedrooms_min"
-                  defaultValue={filters.bedrooms_min}
-                  inputMode="numeric"
-                  className={`${inputClass} mt-1`}
+            <div className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
+              <div className="grid grid-cols-2 items-start gap-3 xl:grid-cols-3">
+                <label className="text-sm font-medium">
+                  Currency
+                  <select
+                    name="currency"
+                    defaultValue={filters.currency}
+                    className={`${inputClass} mt-1`}
+                  >
+                    <option value="">All</option>
+                    {options.currencies.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Beds min
+                  <input
+                    name="bedrooms_min"
+                    defaultValue={filters.bedrooms_min}
+                    inputMode="numeric"
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Baths min
+                  <input
+                    name="bathrooms_min"
+                    defaultValue={filters.bathrooms_min}
+                    inputMode="numeric"
+                    className={`${inputClass} mt-1`}
+                  />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4">
+                <RangeFilter
+                  label="Price"
+                  minName="price_min"
+                  maxName="price_max"
+                  defaultMin={filters.price_min}
+                  defaultMax={filters.price_max}
+                  ceiling={filters.currency === "USD" ? 1000000 : 100000000}
+                  step={1000}
+                  money
+                  inputClassName={inputClass}
                 />
-              </label>
-              <label className="text-sm font-medium">
-                Baths min
-                <input
-                  name="bathrooms_min"
-                  defaultValue={filters.bathrooms_min}
-                  inputMode="numeric"
-                  className={`${inputClass} mt-1`}
+                <RangeFilter
+                  label="Land (Perches)"
+                  minName="land_min"
+                  maxName="land_max"
+                  defaultMin={filters.land_min}
+                  defaultMax={filters.land_max}
+                  ceiling={1000}
+                  step={0.5}
+                  inputClassName={inputClass}
                 />
-              </label>
-              <label className="text-sm font-medium">
-                Price min
-                <input
-                  name="price_min"
-                  defaultValue={filters.price_min}
-                  inputMode="decimal"
-                  className={`${inputClass} mt-1`}
-                />
-              </label>
-              <label className="text-sm font-medium">
-                Price max
-                <input
-                  name="price_max"
-                  defaultValue={filters.price_max}
-                  inputMode="decimal"
-                  className={`${inputClass} mt-1`}
-                />
-              </label>
-              <label className="text-sm font-medium">
-                Land min (perch)
-                <input
-                  name="land_min"
-                  defaultValue={filters.land_min}
-                  inputMode="decimal"
-                  className={`${inputClass} mt-1`}
-                />
-              </label>
-              <label className="text-sm font-medium">
-                Land max (perch)
-                <input
-                  name="land_max"
-                  defaultValue={filters.land_max}
-                  inputMode="decimal"
-                  className={`${inputClass} mt-1`}
-                />
-              </label>
+              </div>
             </div>
           </details>
 

@@ -1,5 +1,6 @@
 import {
   Document,
+  Font,
   Image,
   Link,
   Page,
@@ -22,6 +23,7 @@ import type {
 
 type Palette = {
   accent: string;
+  priceAccent: string;
   accentPale: string;
   charcoal: string;
   ink: string;
@@ -32,19 +34,21 @@ type Palette = {
 };
 
 const BRANDED: Palette = {
-  accent: "#c8102e",
-  accentPale: "#fbe9ec",
-  charcoal: "#1f1f1f",
-  ink: "#1c1917",
-  muted: "#78716c",
-  line: "#ebe7e2",
-  bg: "#f7f5f2",
+  accent: "#ef2016",
+  priceAccent: "#bb120b",
+  accentPale: "#fdebe8",
+  charcoal: "#172230",
+  ink: "#2e2e2e",
+  muted: "#70798a",
+  line: "#dedbd4",
+  bg: "#f7f3eb",
   white: "#ffffff",
 };
 
 const PAD_X = 36;
 const PAD_TOP = 28;
 const FOOTER_H = 50;
+Font.registerHyphenationCallback((word) => [word]);
 
 function makeStyles(C: Palette) {
   return StyleSheet.create({
@@ -112,7 +116,7 @@ function makeStyles(C: Palette) {
       paddingVertical: 12,
       paddingHorizontal: 16,
       borderRadius: 10,
-      backgroundColor: C.accent,
+      backgroundColor: C.priceAccent,
       alignItems: "center",
     },
     priceLabel: { fontSize: 7.5, color: "#ffffffcc", letterSpacing: 1.4, textTransform: "uppercase" },
@@ -152,7 +156,7 @@ function makeStyles(C: Palette) {
       justifyContent: "center",
       marginRight: 9,
     },
-    glanceValue: { fontFamily: "Helvetica-Bold", fontSize: 14, color: C.charcoal, lineHeight: 1.1 },
+    glanceValue: { fontFamily: "Helvetica-Bold", fontSize: 14, color: C.accent, lineHeight: 1.1 },
     glanceLabel: { fontSize: 6.5, color: C.muted, marginTop: 2, letterSpacing: 0.8, textTransform: "uppercase" },
 
     card: {
@@ -373,7 +377,7 @@ function Header({ data, logo, t }: { data: PropertyPdfData; logo: Buffer | null;
   if (data.copy === "agent") {
     return (
       <>
-        <View style={s.header}>
+        <View style={s.header} fixed>
           <View>
             <Text style={s.brandName}>PROPERTY DETAILS</Text>
             <Text style={s.brandSub}>{data.eyebrow.replace(/\s+in$/, "").toUpperCase()}</Text>
@@ -383,18 +387,18 @@ function Header({ data, logo, t }: { data: PropertyPdfData; logo: Buffer | null;
             <Text style={s.headDate}>{data.generatedAt}</Text>
           </View>
         </View>
-        <View style={s.accentBar} />
+        <View style={s.accentBar} fixed />
       </>
     );
   }
   return (
     <>
-      <View style={s.header}>
+      <View style={s.header} fixed>
         <View style={s.brand}>
           {logo ? (
             <View style={s.logoTile}>
               {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
-              <Image style={s.logo} src={{ data: logo, format: "jpg" }} />
+              <Image style={s.logo} src={{ data: logo, format: "png" }} />
             </View>
           ) : null}
           <View>
@@ -407,7 +411,7 @@ function Header({ data, logo, t }: { data: PropertyPdfData; logo: Buffer | null;
           <Text style={s.headDate}>{data.generatedAt}</Text>
         </View>
       </View>
-      <View style={s.accentBar} />
+      <View style={s.accentBar} fixed />
     </>
   );
 }
@@ -499,41 +503,66 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
         ) : null}
 
         {data.description ? (
-          <Section title={branded ? "Other information" : "About this property"} t={t} keep>
+          <Section title={branded ? "Other information" : "About this property"} t={t}>
             <View style={s.card}>
               <Text style={s.paragraph}>{data.description}</Text>
             </View>
           </Section>
         ) : null}
 
-        <Footer data={data} t={t} />
-      </Page>
-
-      {data.photos.length ? (
-        <Page size="A4" style={s.page}>
-          <Header data={data} logo={logo} t={t} />
-          <View style={[s.galleryHead, { marginTop: 18 }]}>
-            <View style={[s.sectionHead, { marginBottom: 0 }]}>
-              <View style={s.sectionBar} />
-              <Text style={s.sectionTitle}>Photo gallery</Text>
+        {branded && data.contact ? (
+          <View style={[s.card, { marginTop: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]} wrap={false}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={s.label}>Contact {data.contact.name}</Text>
+              <Link
+                src={whatsappHref(data.contact.phone) || `tel:${data.contact.phone.replace(/\s/g, "")}`}
+                style={[s.value, { fontSize: 12, marginTop: 5, textDecoration: "none" }]}
+              >
+                {data.contact.phone}
+              </Link>
             </View>
-            <Text style={s.galleryRef}>
-              {data.eyebrow} {data.heading}
-            </Text>
+            {data.price ? (
+              <View style={{ alignItems: "flex-end", maxWidth: "55%" }}>
+                <Text style={s.label}>{data.priceSuffix ? "Rent" : "Price"}</Text>
+                <Text style={[s.value, { color: t.C.accent, fontSize: 12, marginTop: 5 }]}>
+                  {data.price}{data.priceSuffix ? ` ${data.priceSuffix}` : ""}
+                </Text>
+              </View>
+            ) : null}
           </View>
-          <View style={s.photoGrid}>
-            {data.photos.map((p, i) => (
-              <View key={i} style={s.photoWrap} wrap={false}>
-                <View style={s.photoFrame}>
-                  {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
-                  <Image style={s.photo} src={{ data: p.data, format: p.format }} />
+        ) : null}
+
+        {data.photos.length ? (
+          <View style={{ marginTop: 18 }}>
+            {Array.from({ length: Math.ceil(data.photos.length / 2) }, (_, row) => (
+              <View key={row} wrap={false}>
+                {row === 0 ? (
+                  <View style={s.galleryHead}>
+                    <View style={[s.sectionHead, { marginBottom: 0 }]}>
+                      <View style={s.sectionBar} />
+                      <Text style={s.sectionTitle}>Photo gallery</Text>
+                    </View>
+                    <Text style={s.galleryRef}>
+                      {data.eyebrow} {data.heading}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={s.photoGrid}>
+                  {data.photos.slice(row * 2, row * 2 + 2).map((p, i) => (
+                    <View key={i} style={s.photoWrap}>
+                      <View style={s.photoFrame}>
+                        {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+                        <Image style={s.photo} src={{ data: p.data, format: p.format }} />
+                      </View>
+                    </View>
+                  ))}
                 </View>
               </View>
             ))}
           </View>
-          <Footer data={data} t={t} />
-        </Page>
-      ) : null}
+        ) : null}
+        <Footer data={data} t={t} />
+      </Page>
     </Document>
   );
 }

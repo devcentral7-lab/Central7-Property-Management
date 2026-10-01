@@ -128,7 +128,7 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
 
   function onReset(u: PartnerListItem) {
     setConfirmReq({
-      title: "Reset password?",
+      title: "Reset Password?",
       body: `${partnerName(u)} will need the new 10-digit temporary password to sign in. It is shown only once.`,
       confirmLabel: "Reset password",
       onConfirm: () =>
@@ -237,7 +237,7 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
       <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
         <div className="flex flex-col gap-3 border-b border-[var(--line)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
-            <h2 className="font-display text-lg font-semibold">Partner directory</h2>
+            <h2 className="font-display text-lg font-semibold">Partner Directory</h2>
             <p className="text-xs text-[var(--muted)]">Agencies and brokers who list through Central7.</p>
           </div>
           <SearchBox value={query} onChange={setQuery} placeholder="Search company, contact or username" />

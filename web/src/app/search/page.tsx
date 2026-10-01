@@ -60,7 +60,7 @@ export default async function PublicSearchPage({
           Staff login
         </Link>
       </div>
-      <h1 className="mt-6 font-display text-3xl font-semibold sm:mt-8 sm:text-4xl">Search listings</h1>
+      <h1 className="mt-6 font-display text-3xl font-semibold sm:mt-8 sm:text-4xl">Search Listings</h1>
 
       <LiveFilterForm action="/search" className="mt-5 grid grid-cols-2 gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 md:grid-cols-3">
         <input name="q" defaultValue={q} placeholder="Ref or keyword" className="col-span-2 min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm md:col-span-1" />

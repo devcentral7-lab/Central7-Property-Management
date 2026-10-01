@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { RangeFilter } from "@/components/range-filter";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import { StatusBadge } from "@/components/status-badge";
@@ -105,7 +106,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="font-display text-base font-semibold">
-            Paragraph search
+            Paragraph Search
           </h2>
           <button
             type="button"
@@ -133,116 +134,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               .map(([k, v]) => `${k}=${v}`)
               .join(" · ")}
           </p>
-        ) : null}
-
-        {paraResults ? (
-          <div className="mt-4 overflow-hidden rounded-xl border border-[var(--line)]">
-            <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-accent)]/50 px-4 py-2">
-              <p className="text-sm font-medium">
-                {paraResults.length} ranked match
-                {paraResults.length === 1 ? "" : "es"}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setParaResults(null);
-                  setUsedCriteria(null);
-                }}
-                className="text-xs font-semibold text-[var(--muted)] hover:underline"
-              >
-                Clear matches
-              </button>
-            </div>
-            <ul className="divide-y divide-[var(--line)] md:hidden">
-              {paraResults.map((r) => (
-                <PropertyRow key={r.id} refNo={r.ref_no} as="li" className="px-4 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
-                    <span className="shrink-0 font-semibold tabular-nums text-[var(--brand-deep)]">
-                      {r.match_percent}%
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm">
-                    {r.property_type} · {r.opportunity_type} · {r.city || "—"}
-                  </p>
-                  <p className="mt-1 text-sm">
-                    <span className="font-semibold">
-                      {formatMoney(r.price_total, r.currency || "LKR")}
-                    </span>
-                    <span className="text-[var(--muted)]"> · </span>
-                    <StatusBadge status={r.status} className="text-xs" />
-                  </p>
-                  {r.match_hits.length ? (
-                    <p className="mt-1 text-xs text-[var(--muted)]">
-                      {r.match_hits.slice(0, 4).join(", ")}
-                    </p>
-                  ) : null}
-                </PropertyRow>
-              ))}
-              {!paraResults.length ? (
-                <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-                  No matching properties found.
-                </li>
-              ) : null}
-            </ul>
-            <div className="hidden overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-[var(--line)] text-[var(--muted)]">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Match</th>
-                  <th className="px-4 py-2 font-medium">Ref</th>
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 font-medium">City</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Price</th>
-                  <th className="px-4 py-2 font-medium">Hits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paraResults.map((r) => (
-                  <PropertyRow
-                    key={r.id}
-                    refNo={r.ref_no}
-                    className="border-b border-[var(--line)] last:border-0"
-                  >
-                    <td className="px-4 py-2 font-semibold tabular-nums text-[var(--brand-deep)]">
-                      {r.match_percent}%
-                    </td>
-                    <td className="px-4 py-2">
-                      <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
-                    </td>
-                    <td className="px-4 py-2">
-                      {r.property_type}
-                      <span className="block text-xs text-[var(--muted)]">
-                        {r.opportunity_type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2">{r.city || "—"}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                    <td className="px-4 py-2">
-                      {formatMoney(r.price_total, r.currency || "LKR")}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-[var(--muted)]">
-                      {r.match_hits.slice(0, 4).join(", ") || "—"}
-                    </td>
-                  </PropertyRow>
-                ))}
-                {!paraResults.length ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-8 text-center text-[var(--muted)]"
-                    >
-                      No matching properties found.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-            </div>
-          </div>
         ) : null}
       </section>
 
@@ -350,192 +241,260 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
         </div>
 
         {showAdvanced ? (
-          <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 xl:grid-cols-4">
-            <label className="text-sm font-medium">
-              Contact type
-              <select
-                name="contact_type"
-                defaultValue={filters.contact_type}
-                className={`${inputClass} mt-1`}
-              >
-                <option value="">All</option>
-                {options.contactTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              Furnished
-              <select
-                name="furnished"
-                defaultValue={filters.furnished}
-                className={`${inputClass} mt-1`}
-              >
-                <option value="">All</option>
-                {options.furnished.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              Currency
-              <select
-                name="currency"
-                defaultValue={filters.currency}
-                className={`${inputClass} mt-1`}
-              >
-                <option value="">All</option>
-                {options.currencies.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              View
-              <input
-                name="view"
-                defaultValue={filters.view}
-                className={`${inputClass} mt-1`}
+          <div className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
+            <div className="grid grid-cols-2 items-start gap-3 xl:grid-cols-3">
+              <label className="text-sm font-medium">
+                Contact Type
+                <select
+                  name="contact_type"
+                  defaultValue={filters.contact_type}
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">All</option>
+                  {options.contactTypes.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium">
+                Furnished
+                <select
+                  name="furnished"
+                  defaultValue={filters.furnished}
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">All</option>
+                  {options.furnished.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium">
+                Currency
+                <select
+                  name="currency"
+                  defaultValue={filters.currency}
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">All</option>
+                  {options.currencies.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium">
+                View
+                <input
+                  name="view"
+                  defaultValue={filters.view}
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+              <label className="text-sm font-medium">
+                Do Not Publish
+                <select
+                  name="do_not_publish"
+                  defaultValue={filters.do_not_publish}
+                  className={`${inputClass} mt-1`}
+                >
+                  <option value="">Any</option>
+                  <option value="false">Publishable only</option>
+                  <option value="true">Do not publish only</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium">
+                Parking Min
+                <input
+                  name="parking_min"
+                  defaultValue={filters.parking_min}
+                  inputMode="decimal"
+                  className={`${inputClass} mt-1`}
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4 xl:grid-cols-6">
+              <RangeFilter
+                label="Beds"
+                minName="bedrooms_min"
+                maxName="bedrooms_max"
+                defaultMin={filters.bedrooms_min}
+                defaultMax={filters.bedrooms_max}
+                ceiling={20}
+                step={1}
+                inputClassName={inputClass}
               />
-            </label>
-            <label className="text-sm font-medium">
-              Do not publish
-              <select
-                name="do_not_publish"
-                defaultValue={filters.do_not_publish}
-                className={`${inputClass} mt-1`}
-              >
-                <option value="">Any</option>
-                <option value="false">Publishable only</option>
-                <option value="true">Do not publish only</option>
-              </select>
-            </label>
-            <label className="text-sm font-medium">
-              Beds min
-              <input
-                name="bedrooms_min"
-                defaultValue={filters.bedrooms_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
+              <RangeFilter
+                label="Baths"
+                minName="bathrooms_min"
+                maxName="bathrooms_max"
+                defaultMin={filters.bathrooms_min}
+                defaultMax={filters.bathrooms_max}
+                ceiling={20}
+                step={1}
+                inputClassName={inputClass}
               />
-            </label>
-            <label className="text-sm font-medium">
-              Beds max
-              <input
-                name="bedrooms_max"
-                defaultValue={filters.bedrooms_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
+              <RangeFilter
+                label="Land (Perches)"
+                minName="land_min"
+                maxName="land_max"
+                defaultMin={filters.land_min}
+                defaultMax={filters.land_max}
+                ceiling={1000}
+                step={0.5}
+                inputClassName={inputClass}
               />
-            </label>
-            <label className="text-sm font-medium">
-              Baths min
-              <input
-                name="bathrooms_min"
-                defaultValue={filters.bathrooms_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
+              <RangeFilter
+                label="Floor Area (Sqft)"
+                minName="floor_min"
+                maxName="floor_max"
+                defaultMin={filters.floor_min}
+                defaultMax={filters.floor_max}
+                ceiling={50000}
+                step={100}
+                inputClassName={inputClass}
               />
-            </label>
-            <label className="text-sm font-medium">
-              Baths max
-              <input
-                name="bathrooms_max"
-                defaultValue={filters.bathrooms_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
+              <RangeFilter
+                label="Price"
+                minName="price_min"
+                maxName="price_max"
+                defaultMin={filters.price_min}
+                defaultMax={filters.price_max}
+                ceiling={filters.currency === "USD" ? 1000000 : 100000000}
+                step={1000}
+                money
+                inputClassName={inputClass}
               />
-            </label>
-            <label className="text-sm font-medium">
-              Land min (perch)
-              <input
-                name="land_min"
-                defaultValue={filters.land_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
+              <RangeFilter
+                label="Budget"
+                minName="budget_min"
+                maxName="budget_max"
+                defaultMin={filters.budget_min}
+                defaultMax={filters.budget_max}
+                ceiling={filters.currency === "USD" ? 1000000 : 100000000}
+                step={1000}
+                money
+                inputClassName={inputClass}
               />
-            </label>
-            <label className="text-sm font-medium">
-              Land max (perch)
-              <input
-                name="land_max"
-                defaultValue={filters.land_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Floor area min
-              <input
-                name="floor_min"
-                defaultValue={filters.floor_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Floor area max
-              <input
-                name="floor_max"
-                defaultValue={filters.floor_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Price min
-              <input
-                name="price_min"
-                defaultValue={filters.price_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Price max
-              <input
-                name="price_max"
-                defaultValue={filters.price_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Budget min
-              <input
-                name="budget_min"
-                defaultValue={filters.budget_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Budget max
-              <input
-                name="budget_max"
-                defaultValue={filters.budget_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Parking min
-              <input
-                name="parking_min"
-                defaultValue={filters.parking_min}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
+            </div>
           </div>
         ) : null}
       </LiveFilterForm>
+
+      {paraResults ? (
+        <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)]">
+          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-accent)]/50 px-4 py-3">
+            <p className="font-display text-base font-semibold">
+              {paraResults.length} ranked match
+              {paraResults.length === 1 ? "" : "es"}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setParaResults(null);
+                setUsedCriteria(null);
+              }}
+              className="rounded-full border border-[var(--line)] px-4 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--bg-accent)] transition"
+            >
+              Clear matches
+            </button>
+          </div>
+          <ul className="divide-y divide-[var(--line)] md:hidden">
+            {paraResults.map((r) => (
+              <PropertyRow key={r.id} refNo={r.ref_no} as="li" className="px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
+                  <span className="shrink-0 font-semibold tabular-nums text-[var(--brand-deep)]">
+                    {r.match_percent}%
+                  </span>
+                </div>
+                <p className="mt-1 text-sm">
+                  {r.property_type} · {r.opportunity_type} · {r.city || "—"}
+                </p>
+                <p className="mt-1 text-sm">
+                  <span className="font-semibold">
+                    {formatMoney(r.price_total, r.currency || "LKR")}
+                  </span>
+                  <span className="text-[var(--muted)]"> · </span>
+                  <StatusBadge status={r.status} className="text-xs" />
+                </p>
+                {r.match_hits.length ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {r.match_hits.slice(0, 4).join(", ")}
+                  </p>
+                ) : null}
+              </PropertyRow>
+            ))}
+            {!paraResults.length ? (
+              <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
+                No matching properties found.
+              </li>
+            ) : null}
+          </ul>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-[var(--line)] text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Match</th>
+                  <th className="px-4 py-2 font-medium">Ref</th>
+                  <th className="px-4 py-2 font-medium">Type</th>
+                  <th className="px-4 py-2 font-medium">City</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Price</th>
+                  <th className="px-4 py-2 font-medium">Hits</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paraResults.map((r) => (
+                  <PropertyRow
+                    key={r.id}
+                    refNo={r.ref_no}
+                    className="border-b border-[var(--line)] last:border-0"
+                  >
+                    <td className="px-4 py-2 font-semibold tabular-nums text-[var(--brand-deep)]">
+                      {r.match_percent}%
+                    </td>
+                    <td className="px-4 py-2">
+                      <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
+                    </td>
+                    <td className="px-4 py-2">
+                      {r.property_type}
+                      <span className="block text-xs text-[var(--muted)]">
+                        {r.opportunity_type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">{r.city || "—"}</td>
+                    <td className="px-4 py-2">
+                      <StatusBadge status={r.status} />
+                    </td>
+                    <td className="px-4 py-2">
+                      {formatMoney(r.price_total, r.currency || "LKR")}
+                    </td>
+                    <td className="px-4 py-2 text-xs text-[var(--muted)]">
+                      {r.match_hits.slice(0, 4).join(", ") || "—"}
+                    </td>
+                  </PropertyRow>
+                ))}
+                {!paraResults.length ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-4 py-8 text-center text-[var(--muted)]"
+                    >
+                      No matching properties found.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

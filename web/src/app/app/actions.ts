@@ -78,12 +78,16 @@ async function buildPropertyPayload(formData: FormData) {
   const options = await loadFormOptions();
   const propertyType = str(formData.get("property_type"));
   const opportunityType = str(formData.get("opportunity_type"));
+  const contactType = str(formData.get("contact_type"));
   const contactName = str(formData.get("contact_name"));
   const contact1 = str(formData.get("contact_phone_1"));
   const city = str(formData.get("city"));
 
-  if (!contactName || !contact1 || !opportunityType || !propertyType || !city) {
-    throw new Error("Contact name, phone, opportunity, type, and city are required.");
+  if (!contactName || !contact1 || !opportunityType || !propertyType || !city || !contactType) {
+    throw new Error("Contact type, contact name, phone, opportunity, type, and city are required.");
+  }
+  if (!options.contactTypes.includes(contactType)) {
+    throw new Error("Invalid contact type");
   }
   if (!options.opportunityTypes.includes(opportunityType)) {
     throw new Error("Invalid opportunity type");

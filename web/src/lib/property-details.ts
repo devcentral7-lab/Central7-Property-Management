@@ -163,8 +163,8 @@ export function buildPropertyDetails(
       { id: "property", title: "Property", fields: property },
       { id: "location", title: "Location", fields: location },
       { id: "pricing", title: "Pricing", fields: pricing },
-      { id: "contact", title: "Owner contact", fields: contact },
-      { id: "record", title: "Listing record", fields: record },
+      { id: "contact", title: "Owner Contact", fields: contact },
+      { id: "record", title: "Listing Record", fields: record },
     ] as DetailSection[]
   ).filter((s) => s.fields.length);
 

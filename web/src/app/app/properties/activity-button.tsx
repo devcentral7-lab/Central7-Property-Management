@@ -49,7 +49,7 @@ export function ActivityButton({ refNo, events }: { refNo: string; events: Activ
         ) : null}
       </button>
 
-      <PopupDialog open={open} onClose={() => setOpen(false)} title="Recent activity" subtitle={refNo}>
+      <PopupDialog open={open} onClose={() => setOpen(false)} title="Recent Activity" subtitle={refNo}>
         {events.length ? (
           <ol className="relative space-y-4 border-l border-[var(--line)] pl-5">
             {events.map((e, i) => {

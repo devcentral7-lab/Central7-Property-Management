@@ -621,7 +621,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
   return (
     <>
       <Section
-        title="By agent — monthly trend"
+        title="By Agent — Monthly Trend"
         subtitle={`${d.yearLabel} · listings added per month`}
         icon="trend"
       >
@@ -639,7 +639,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
       </Section>
 
       <Section
-        title="By agent — daily"
+        title="By Agent — Daily"
         subtitle={`${d.monthLabel} · days with new listings`}
         icon="calendar"
       >
@@ -658,7 +658,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
       </Section>
 
       <Section
-        title="Status by property type"
+        title="Status By Property Type"
         subtitle={`${period} · listings added, by current status`}
         icon="tag"
       >
@@ -671,7 +671,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
       </Section>
 
       <Section
-        title="Do not publish properties"
+        title="Do Not Publish Properties"
         subtitle={`${period} · saved and searchable, but never sent for advertising`}
         icon="eyeOff"
         aside={
@@ -718,7 +718,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
       </Section>
 
       <NumberTable
-        title="City breakdown"
+        title="City Breakdown"
         subtitle={`${period} · listings added`}
         icon="pin"
         nameHeader="City"
@@ -729,7 +729,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
       />
 
       <Section
-        title="Social media daily activity"
+        title="Social Media Daily Activity"
         subtitle={`${period} · items marked done on the social media queue, and what was still waiting at the end of each day`}
         icon="share"
       >
@@ -852,7 +852,7 @@ export function AdminDashboard({
       />
 
       <Section
-        title="Company overview"
+        title="Company Overview"
         subtitle={`${period} activity and what's waiting now`}
         icon="grid"
         aside={
@@ -865,7 +865,7 @@ export function AdminDashboard({
       >
         <div className="space-y-5">
           <TileGroup
-            title="Listing activity"
+            title="Listing Activity"
             hint={period}
             icon="chart"
             cols="sm:grid-cols-3 xl:grid-cols-6"
@@ -879,7 +879,7 @@ export function AdminDashboard({
             ]}
           />
           <TileGroup
-            title="Social media queue"
+            title="Social Media Queue"
             hint="approved, waiting to be posted"
             icon="share"
             cols="lg:grid-cols-4"
@@ -891,7 +891,7 @@ export function AdminDashboard({
             ]}
           />
           <TileGroup
-            title="Awaiting approval"
+            title="Awaiting Approval"
             hint="on the Activity log"
             icon="clock"
             cols="lg:grid-cols-4"
@@ -904,7 +904,7 @@ export function AdminDashboard({
       </Section>
 
       <Section
-        title="Properties added by agent"
+        title="Properties Added By Agent"
         subtitle={`${period} · Direct vs Partner contacts`}
         icon="user"
       >
@@ -921,14 +921,14 @@ export function AdminDashboard({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <NumberTable
-          title="Listings by status"
+          title="Listings By Status"
           subtitle="Current inventory"
           rows={data.byStatus}
           colorFor={statusColor}
           hrefFor={(s) => `/app/properties?status=${encodeURIComponent(s)}`}
         />
         <NumberTable
-          title="Listings by type"
+          title="Listings By Type"
           subtitle="Current inventory"
           rows={data.byType}
           colorFor={(_, i) => (i === 0 ? BRAND.red : i === 1 ? BRAND.charcoal : BRAND.stone)}
@@ -979,10 +979,10 @@ export function AdminDashboard({
   const visuals = (
     <div className="space-y-4 sm:space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartPanel title="Status mix" subtitle="Current inventory · hover a slice or row">
+        <ChartPanel title="Status Mix" subtitle="Current inventory · hover a slice or row">
           <DonutChart data={data.byStatus} colors={statusColors} />
         </ChartPanel>
-        <ChartPanel title="Sell vs rent" subtitle="Current inventory by opportunity">
+        <ChartPanel title="Sell Vs Rent" subtitle="Current inventory by opportunity">
           <DonutChart
             data={data.byOpportunity}
             colors={data.byOpportunity.map((_, i) => seriesColor(i))}
@@ -990,21 +990,21 @@ export function AdminDashboard({
         </ChartPanel>
       </div>
 
-      <ChartPanel title="Listings added" subtitle={`${period} · per day, dashed line = daily average`}>
+      <ChartPanel title="Listings Added" subtitle={`${period} · per day, dashed line = daily average`}>
         <TrendChart data={data.byDay} />
       </ChartPanel>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartPanel title="Property types" subtitle="Current inventory">
+        <ChartPanel title="Property Types" subtitle="Current inventory">
           <HBarChart data={data.byType} colors={rankColors(data.byType.length)} />
         </ChartPanel>
-        <ChartPanel title="Status by property type" subtitle="Current inventory · hover a segment">
+        <ChartPanel title="Status By Property Type" subtitle="Current inventory · hover a segment">
           <StackedBarChart rows={statusByTypeRows} keys={statusNames} colors={statusColors} />
         </ChartPanel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartPanel title="Top creators" subtitle={`${period} · listings added`}>
+        <ChartPanel title="Top Creators" subtitle={`${period} · listings added`}>
           <HBarChart
             data={data.byCreator}
             colors={rankColors(data.byCreator.length)}
@@ -1012,7 +1012,7 @@ export function AdminDashboard({
             emptyLabel="No listings added in this period"
           />
         </ChartPanel>
-        <ChartPanel title="Direct vs partner by agent" subtitle={`${period} · listings added`}>
+        <ChartPanel title="Direct Vs Partner By Agent" subtitle={`${period} · listings added`}>
           <StackedBarChart
             rows={agentSplitRows}
             keys={["Direct", "Partner"]}
@@ -1022,13 +1022,13 @@ export function AdminDashboard({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <ChartPanel title="Listing outcomes" subtitle={`${period} · status changes`}>
+        <ChartPanel title="Listing Outcomes" subtitle={`${period} · status changes`}>
           <ColumnChart
             data={outcomes}
             colors={[BRAND.red, BRAND.charcoal, BRAND.redDark, BRAND.stone, BRAND.stoneLight]}
           />
         </ChartPanel>
-        <ChartPanel title="Social media pipeline" subtitle="Where queue items are right now">
+        <ChartPanel title="Social Media Pipeline" subtitle="Where queue items are right now">
           <HBarChart
             data={pipeline}
             colors={[BRAND.stoneLight, BRAND.redSoft, BRAND.red]}
@@ -1039,7 +1039,7 @@ export function AdminDashboard({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartPanel
-          title="Top cities"
+          title="Top Cities"
           subtitle={`Active listings${data.activeCitiesOther ? ` · ${data.activeCitiesOther.toLocaleString()} more tagged "Other"` : ""}`}
         >
           <HBarChart
@@ -1049,7 +1049,7 @@ export function AdminDashboard({
             emptyLabel="No active listings"
           />
         </ChartPanel>
-        <ChartPanel title="Busiest weekdays" subtitle={`${period} · listings added`}>
+        <ChartPanel title="Busiest Weekdays" subtitle={`${period} · listings added`}>
           <ColumnChart
             data={weekdayTotals}
             colors={weekdayTotals.map((w) =>
@@ -1069,7 +1069,7 @@ export function AdminDashboard({
             Admin dashboard
           </p>
           <h1 className="mt-1 font-display text-3xl font-semibold text-[var(--ink)] sm:text-4xl">
-            Operations overview
+            Operations Overview
           </h1>
         </div>
         <Suspense fallback={null}>

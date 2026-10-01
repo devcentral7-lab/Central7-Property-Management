@@ -62,7 +62,7 @@ export function UpdateStatusButton({
       <PopupDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Update status"
+        title="Update Status"
         subtitle={refNo}
         busy={pending}
       >
