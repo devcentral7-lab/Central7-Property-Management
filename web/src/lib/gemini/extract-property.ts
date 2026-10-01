@@ -7,6 +7,7 @@ import {
   PROPERTY_TYPES,
 } from "@/lib/constants";
 import { parseMapsLink } from "@/lib/maps-link";
+import { SEARCH_RANGE_KEYS } from "@/lib/paragraph-search-filters";
 
 /** Partial listing fields Gemini may return. Null/omitted = leave blank. */
 export type ExtractedPropertyFields = {
@@ -40,7 +41,7 @@ export type ExtractedPropertyFields = {
   budget?: number | string | null;
   amenities?: string[] | string | null;
   comments?: string | null;
-};
+} & Partial<Record<(typeof SEARCH_RANGE_KEYS)[number], number | string | null>> & { status?: string | null };
 
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
 
@@ -163,7 +164,7 @@ export function normalizeExtractedFields(
   return out;
 }
 
-function buildPrompt(paragraph: string, lists: EnumLists): string {
+function buildPrompt(paragraph: string, lists: EnumLists, search = false, statuses: string[] = []): string {
   return [
     "You extract structured real-estate listing fields from informal Sri Lankan property notes.",
     "Return ONLY a JSON object. Use null for any field not clearly stated — do not invent values.",
@@ -194,6 +195,17 @@ function buildPrompt(paragraph: string, lists: EnumLists): string {
     "suitable_for, built_up_area, currency, furnished,",
     "price_per_perch, price_per_sqft, price_total, budget, amenities, comments",
     "",
+    ...(search ? [
+      "This is a property search request, not a listing to create. Also extract these search filter keys:",
+      SEARCH_RANGE_KEYS.join(", "),
+      `status: ${statuses.join(" | ")}; only set a status if explicitly requested.`,
+      "Use numeric bounds for ranges, minimums, maximums, at least, up to, under, and over.",
+      "For an exact quantity, set both its min and max. Do not invent tolerances or bounds.",
+      "Price/rent budgets and 'under' amounts set price_max; minimum prices set price_min.",
+      "For 3+ bedrooms set bedrooms_min=3 and leave bedrooms_max null.",
+      "land_min/land_max are perches; floor_min/floor_max are square feet. Convert lakhs/millions to full amounts.",
+      "Only use budget_min/budget_max when explicitly searching the property's budget field.",
+    ] : []),
     "Notes:",
     paragraph,
   ].join("\n");
@@ -214,6 +226,7 @@ function parseJsonObject(text: string): ExtractedPropertyFields {
 export async function extractPropertyFieldsWithGemini(
   paragraph: string,
   formOptions?: FormOptions,
+  search = false,
 ): Promise<Record<string, string>> {
   const key = getGeminiApiKey();
   if (!key) {
@@ -248,7 +261,7 @@ export async function extractPropertyFieldsWithGemini(
       "x-goog-api-key": key,
     },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: buildPrompt(input, lists) }] }],
+      contents: [{ parts: [{ text: buildPrompt(input, lists, search, formOptions?.statuses) }] }],
       generationConfig: {
         temperature: 0.1,
         maxOutputTokens: 2048,
@@ -275,7 +288,16 @@ export async function extractPropertyFieldsWithGemini(
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("Gemini returned an empty response.");
 
-  const fields = normalizeExtractedFields(parseJsonObject(text), lists);
+  const raw = parseJsonObject(text);
+  const fields = normalizeExtractedFields(raw, lists);
+  if (search) {
+    for (const key of SEARCH_RANGE_KEYS) {
+      const value = strVal(raw[key]).replace(/,/g, "");
+      if (value && Number.isFinite(Number(value)) && Number(value) >= 0) fields[key] = value;
+    }
+    const status = strVal(raw.status);
+    if (formOptions?.statuses.includes(status)) fields.status = status;
+  }
   // Read straight from the notes — the model can mangle long share URLs.
   const mapsLink = parseMapsLink(input);
   if (mapsLink.ok && mapsLink.url) fields.location_url = mapsLink.url;

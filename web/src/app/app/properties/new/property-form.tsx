@@ -2,8 +2,10 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import {
   createProperty,
+  createPropertyForImageUpload,
   extractPropertyFromParagraph,
   updateProperty,
 } from "@/app/app/actions";
@@ -16,6 +18,8 @@ import { MoneyInput } from "@/components/money-input";
 import { CitySelect } from "@/components/city-select";
 import type { FormOptions } from "@/lib/form-options";
 import { parseMapsLink } from "@/lib/maps-link";
+import { PropertyImageAttachments } from "@/components/property-image-attachments";
+import { uploadPropertyPhotosAction } from "@/app/app/properties/photo-actions";
 
 export type ComplexOption = { id: string; name: string };
 
@@ -63,6 +67,7 @@ type Props = {
   refNo?: string;
   /** Create mode: preview of the ref the system will assign on save. */
   nextRef?: string | null;
+  driveConfigured?: boolean;
   initialValues?: Partial<PropertyFormValues>;
   initialAmenities?: string[];
   initialPlatforms?: string[];
@@ -95,6 +100,7 @@ function PropertyFormInner({
   mode = "create",
   refNo,
   nextRef,
+  driveConfigured = false,
   initialValues,
   initialAmenities = [],
   initialPlatforms = [],
@@ -103,6 +109,14 @@ function PropertyFormInner({
   options,
   onReset,
 }: Props & { onReset?: () => void }) {
+  const router = useRouter();
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [preparingImages, setPreparingImages] = useState(false);
+  const [savingImages, setSavingImages] = useState(false);
+  const [savedRef, setSavedRef] = useState<string | null>(null);
+  const savedProperty = useRef<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [imageProgress, setImageProgress] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [values, setValues] = useState<PropertyFormValues>(() => ({
     ...EMPTY,
@@ -233,7 +247,44 @@ function PropertyFormInner({
     });
   }
 
-  const formAction = mode === "edit" ? updateProperty : createProperty;
+  async function formAction(formData: FormData) {
+    if (mode === "edit") return updateProperty(formData);
+    if (!imageFiles.length && !savedProperty.current) return createProperty(formData);
+    setSaveError(null);
+    setSavingImages(true);
+    try {
+      if (!savedProperty.current) {
+        const property = await createPropertyForImageUpload(formData);
+        savedProperty.current = property.ref_no;
+        setSavedRef(property.ref_no);
+      }
+      const finalRef = savedProperty.current;
+      for (let index = 0; index < imageFiles.length; index++) {
+        setImageProgress(`Uploading image ${index + 1} of ${imageFiles.length}…`);
+        const uploadData = new FormData();
+        uploadData.append("files", imageFiles[index]);
+        try {
+          const result = await uploadPropertyPhotosAction(finalRef, uploadData);
+          if (!result.ok) throw new Error(result.error);
+        } catch (error) {
+          // Keep only unfinished uploads; the saved property is reused on retry.
+          setImageFiles(imageFiles.slice(index));
+          throw error;
+        }
+      }
+      setImageFiles([]);
+      router.push(`/app/properties/${finalRef}`);
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload failed. Please try again.";
+      setSaveError(savedProperty.current
+        ? `Property ${savedProperty.current} is saved. Some images could not upload: ${message} Retry to upload the remaining images.`
+        : message);
+    } finally {
+      setSavingImages(false);
+      setImageProgress(null);
+    }
+  }
   const currency = values.currency || "LKR";
   const hasTypeDetails = isHouseLike || isLand || isApartment || isCommercial;
 
@@ -251,7 +302,7 @@ function PropertyFormInner({
 
   return (
     <div className="w-full space-y-5 sm:space-y-6">
-      {mode === "create" ? (
+      {mode === "create" && !savedRef && !savingImages ? (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:p-6">
           <div className="flex items-start gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--brand)]/10 text-[var(--brand)]">
@@ -302,6 +353,7 @@ function PropertyFormInner({
       ) : null}
 
       <form action={formAction} className="space-y-5 sm:space-y-6">
+        <fieldset disabled={Boolean(savedRef) || savingImages} className="min-w-0 space-y-5 sm:space-y-6">
         {mode === "edit" && refNo ? (
           <input type="hidden" name="ref_no" value={refNo} />
         ) : null}
@@ -323,7 +375,7 @@ function PropertyFormInner({
                 title="Assigned automatically by the system"
               >
                 <span className="font-semibold tabular-nums text-[var(--ink)]">
-                  {mode === "edit" ? refNo || "—" : nextRef || "Auto-assigned"}
+                  {mode === "edit" ? refNo || "—" : savedRef || nextRef || "Auto-assigned"}
                 </span>
                 <LockIcon />
               </div>
@@ -722,10 +774,14 @@ function PropertyFormInner({
           </>
         ) : null}
 
+        </fieldset>
         <div
-          className={`grid items-start gap-5 sm:gap-6 ${isLand ? "" : "xl:grid-cols-2"}`}
+          className={`grid items-stretch gap-5 sm:gap-6 ${isLand && mode === "edit" ? "" : "xl:grid-cols-2"} ${mode === "create" && !isLand ? "xl:grid-rows-[min-content_1fr]" : ""}`}
         >
+          {!isLand || mode === "create" ? (
+          <div className={`flex min-w-0 flex-col gap-5 sm:gap-6 ${mode === "create" && !isLand ? "xl:contents" : ""}`}>
           {!isLand ? (
+          <fieldset disabled={Boolean(savedRef) || savingImages} className="min-w-0 xl:col-start-1 xl:row-start-1">
           <FormSection
             step={5}
             title="Amenities"
@@ -762,10 +818,19 @@ function PropertyFormInner({
               </Field>
             </div>
           </FormSection>
+          </fieldset>
           ) : null}
-
+          {mode === "create" ? (
+            <PropertyImageAttachments files={imageFiles} configured={driveConfigured} disabled={savingImages}
+              className={`flex-1 ${!isLand ? "xl:col-start-1 xl:row-start-2" : ""}`} onChange={setImageFiles} onPreparing={setPreparingImages} />
+          ) : null}
+          </div>
+          ) : null}
+          <fieldset disabled={Boolean(savedRef) || savingImages}
+            className={`flex min-w-0 flex-col ${mode === "create" && !isLand ? "xl:col-start-2 xl:row-start-1 xl:row-span-2" : ""}`}>
           <FormSection
             step={isLand ? 5 : 6}
+            className="flex-1"
             title={mode === "create" ? "Notes & Publishing" : "Notes & Visibility"}
             description={
               mode === "create"
@@ -773,14 +838,14 @@ function PropertyFormInner({
                 : "Anything else to know, and whether it's public."
             }
           >
-            <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
+            <div className="grid gap-5">
               <Field
                 label="Comments / Other Information"
                 hint="Can appear on the public listing."
               >
                 <textarea
                   {...bind("comments")}
-                  rows={4}
+                  rows={8}
                   className={`${inputBase} resize-y`}
                   placeholder="Access, viewing times, special terms…"
                 />
@@ -791,7 +856,7 @@ function PropertyFormInner({
               >
                 <textarea
                   {...bind("internal_comments")}
-                  rows={4}
+                  rows={2}
                   className={`${inputBase} resize-y`}
                   placeholder="Owner notes, negotiation, follow-ups…"
                 />
@@ -854,10 +919,15 @@ function PropertyFormInner({
               </div>
             ) : null}
           </FormSection>
+          </fieldset>
         </div>
-
+        {imageProgress ? <p role="status" className="text-sm font-medium text-[var(--brand)]">{imageProgress}</p> : null}
+        {saveError ? <p role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-[var(--danger)]">{saveError}</p> : null}
+        {savedRef && !savingImages ? (
+          <a href={`/app/properties/${savedRef}`} className="inline-block text-sm font-semibold text-[var(--brand)] hover:underline">Open Saved Property {savedRef}</a>
+        ) : null}
         <div className="sticky bottom-3 z-10 flex gap-3">
-          {onReset ? (
+          {onReset && !savedRef ? (
             <ResetButton
               onClick={() =>
                 setConfirm({
@@ -870,7 +940,7 @@ function PropertyFormInner({
               }
             />
           ) : null}
-          <SubmitButton label={mode === "edit" ? "Save changes" : "Save listing"} />
+          <SubmitButton disabled={preparingImages || savingImages} label={savedRef ? "Retry Image Upload" : mode === "edit" ? "Save changes" : "Save listing"} />
         </div>
       </form>
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
@@ -888,14 +958,16 @@ function FormSection({
   title,
   description,
   children,
+  className = "",
 }: {
   step: number;
   title: string;
   description?: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)]">
+    <section className={`min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)] ${className}`}>
       <header className="flex items-start gap-3 border-b border-[var(--line)] px-4 py-4 sm:px-6">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand)]/10 text-xs font-bold text-[var(--brand)]">
           {step}
@@ -1075,12 +1147,12 @@ function CheckChip({
   );
 }
 
-function SubmitButton({ label }: { label: string }) {
+function SubmitButton({ label, disabled = false }: { label: string; disabled?: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       className="flex w-full items-center justify-center rounded-xl bg-[var(--brand)] px-6 py-3.5 text-base font-semibold text-white shadow-lg transition hover:bg-[var(--brand-deep)] disabled:cursor-wait disabled:opacity-70"
     >
       {pending ? "Saving…" : label}

@@ -36,8 +36,13 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
     const sync = () => queueMicrotask(() => {
       setBounds([amount(minimum.current?.value ?? ""), amount(maximum.current?.value ?? "")]);
     });
+    const clear = () => setBounds([null, null]);
     form.addEventListener("reset", sync);
-    return () => form.removeEventListener("reset", sync);
+    form.addEventListener("filters-cleared", clear);
+    return () => {
+      form.removeEventListener("reset", sync);
+      form.removeEventListener("filters-cleared", clear);
+    };
   }, []);
 
   function slide(index: number, value: number) {
@@ -61,20 +66,21 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
   }
 
   return (
-    <fieldset className="col-span-2 min-w-0 rounded-xl border border-[var(--line)] bg-[var(--card)] p-3">
-      <legend className="px-1 text-sm font-semibold">{label} Range</legend>
+    <fieldset className="flex min-w-0 flex-col rounded-xl border border-[var(--line)] bg-[var(--card)] p-4">
+      <legend className="sr-only">{label} Range</legend>
+      <p aria-hidden="true" className="mb-3 text-sm font-semibold leading-5">{label} Range</p>
       <div className="grid grid-cols-2 gap-3">
         {([0, 1] as const).map((index) => {
           const props = {
             ref: index === 0 ? minimum : maximum,
             name: index === 0 ? minName : maxName,
             defaultValue: index === 0 ? defaultMin : defaultMax,
-            className: `${inputClassName} mt-1`,
+            className: `${inputClassName} mt-1 h-10`,
             placeholder: index === 0 ? "No minimum" : "No maximum",
           };
           const update = (raw: string) => typeBound(index, raw);
           return (
-            <label key={index} className="text-sm font-medium">
+            <label key={index} className="min-w-0 text-xs font-medium leading-5 text-[var(--muted)]">
               {index === 0 ? "Min" : "Max"}
               {money ? <MoneyInput {...props} onValueChange={update} /> : (
                 <input {...props} type="number" min="0" step="any" onChange={(event) => update(event.currentTarget.value)} />
@@ -83,7 +89,7 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
           );
         })}
       </div>
-      <div className="relative mx-2 mt-3 h-8">
+      <div className="relative mx-2 mt-4 h-8">
         <div className="absolute inset-x-0 top-3 h-1.5 rounded-full bg-stone-200" />
         <div className="absolute top-3 h-1.5 rounded-full bg-[var(--brand)]" style={{ left: `${low / limit * 100}%`, right: `${100 - high / limit * 100}%` }} />
         {([0, 1] as const).map((index) => (

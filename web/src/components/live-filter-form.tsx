@@ -11,15 +11,17 @@ type Props = {
   className?: string;
   /** Path to filter; defaults to the current page. */
   action?: string;
+  /** Clear state outside the form, such as a paragraph search prompt. */
+  onClear?: () => void;
 };
 
 /**
  * GET filter form that applies as the user types or picks. Changing a filter drops
- * `page`. A `<button type="reset">` clears every visible field (selects go to
- * their first option). Fields use `defaultValue`; when the URL changes from outside
+ * `page`. A `<button type="reset">` clears every visible field (selects use
+ * `data-default-value` or their first option). Fields use `defaultValue`; when the URL changes from outside
  * the form (tabs, sidebar, back button) they re-sync to the server-rendered values.
  */
-export function LiveFilterForm({ children, className = "", action }: Props) {
+export function LiveFilterForm({ children, className = "", action, onClear }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -50,7 +52,7 @@ export function LiveFilterForm({ children, className = "", action }: Props) {
     for (const el of Array.from(form.elements)) {
       if (!(el instanceof HTMLSelectElement) || !el.name) continue;
       const value = searchParams.get(el.name);
-      el.value = value ?? "";
+      el.value = value ?? el.dataset.defaultValue ?? "";
       if (el.selectedIndex < 0) el.selectedIndex = 0;
     }
   }, [searchParams]);
@@ -61,8 +63,8 @@ export function LiveFilterForm({ children, className = "", action }: Props) {
     if (!form) return;
     const params = new URLSearchParams();
     for (const [key, value] of new FormData(form)) {
-      if (typeof value === "string" && value.trim()) {
-        const input = form.elements.namedItem(key);
+      const input = form.elements.namedItem(key);
+      if (typeof value === "string" && (value.trim() || (input instanceof HTMLSelectElement && input.dataset.defaultValue !== undefined))) {
         const raw = input instanceof HTMLInputElement && input.dataset.moneyInput
           ? value.replace(/,/g, "")
           : value;
@@ -93,14 +95,19 @@ export function LiveFilterForm({ children, className = "", action }: Props) {
     if (!form) return;
     for (const el of Array.from(form.elements)) {
       if (el instanceof HTMLSelectElement) {
-        el.selectedIndex = 0;
+        if (el.dataset.defaultValue !== undefined) el.value = el.dataset.defaultValue;
+        else el.selectedIndex = 0;
       } else if (el instanceof HTMLTextAreaElement) {
         el.value = "";
       } else if (el instanceof HTMLInputElement && el.type !== "hidden") {
+        // Range handles are controlled by RangeFilter and reset with its bounds.
+        if (el.dataset.rangeFilter) continue;
         if (el.type === "checkbox" || el.type === "radio") el.checked = false;
         else el.value = "";
       }
     }
+    form.dispatchEvent(new Event("filters-cleared"));
+    onClear?.();
     apply();
   }
 

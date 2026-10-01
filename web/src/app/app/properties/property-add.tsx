@@ -4,6 +4,7 @@ import { PropertyForm } from "@/app/app/properties/new/property-form";
 import { FormListEditor } from "@/app/app/form-options/form-list-editor";
 import { FORM_LIST_META, loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
+import { isDriveConfigured } from "@/lib/drive/photos";
 
 type Props = {
   isAdmin: boolean;
@@ -68,6 +69,7 @@ export async function PropertyAddPanel({ isAdmin, section }: Props) {
           complexes={complexes ?? []}
           options={options}
           nextRef={nextRef}
+          driveConfigured={isDriveConfigured()}
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">

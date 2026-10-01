@@ -133,7 +133,7 @@ export async function PropertyMinePanel({
           </label>
           <label className="text-sm font-medium">
             Status
-            <select name="status" defaultValue={filters.status} className={`${inputClass} mt-1`}>
+            <select name="status" defaultValue={filters.status} data-default-value="Active" className={`${inputClass} mt-1`}>
               <option value="">All statuses</option>
               {options.statuses.map((s) => (
                 <option key={s} value={s}>
@@ -224,7 +224,7 @@ export async function PropertyMinePanel({
               className={`${inputClass} mt-1`}
             />
           </label>
-          <div className="col-span-2 grid grid-cols-2 xl:col-span-4">
+          <div className="col-span-2 grid grid-cols-1 xl:col-span-4">
             <RangeFilter
               label="Price"
               minName="price_min"
@@ -240,7 +240,7 @@ export async function PropertyMinePanel({
           <div className="col-span-2 flex items-end justify-end xl:col-span-4">
             <button
               type="reset"
-              className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
+              className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
             >
               Clear filters
             </button>
