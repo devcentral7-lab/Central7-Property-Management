@@ -163,7 +163,9 @@ export async function uploadPropertyPhotos(
       fields: "id, name, mimeType",
       supportsAllDrives: true,
     });
-    if (!created.data.id) continue;
+    if (!created.data.id) {
+      throw new DrivePhotosError(`Upload did not return a file ID: ${file.name}`);
+    }
     uploaded.push({
       id: created.data.id,
       name: created.data.name || file.name,

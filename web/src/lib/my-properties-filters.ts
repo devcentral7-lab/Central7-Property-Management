@@ -53,7 +53,7 @@ function dayStartIso(day: string, addDays = 0): string | null {
 
 export function mineFiltersFromParams(sp: Params): MinePropertyFilters {
   return Object.fromEntries(
-    MINE_FILTER_KEYS.map((k) => [k, one(sp[k])]),
+    MINE_FILTER_KEYS.map((k) => [k, k === "status" && sp[k] === undefined ? "Active" : one(sp[k])]),
   ) as MinePropertyFilters;
 }
 
@@ -61,10 +61,10 @@ export function hasMineFilters(f: MinePropertyFilters): boolean {
   return MINE_FILTER_KEYS.some((k) => Boolean(f[k]));
 }
 
-/** Sets every non-empty filter on `params`. */
+/** Sets non-empty filters and preserves an explicit "All statuses" selection. */
 export function appendMineFilters(params: URLSearchParams, f: MinePropertyFilters) {
   for (const k of MINE_FILTER_KEYS) {
-    if (f[k]) params.set(k, f[k]);
+    if (f[k] || k === "status") params.set(k, f[k]);
   }
 }
 

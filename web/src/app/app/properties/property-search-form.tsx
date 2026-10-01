@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { RangeFilter } from "@/components/range-filter";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
-import { StatusBadge } from "@/components/status-badge";
-import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import type { FormOptions } from "@/lib/form-options";
-import type { ScoredProperty } from "@/lib/property-match";
 
 const inputClass =
   "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm";
@@ -40,11 +38,6 @@ export type SearchFilterValues = {
   advanced: string;
 };
 
-function formatMoney(n: number | null, currency: string) {
-  if (n === null || n === undefined) return "—";
-  return `${currency} ${Number(n).toLocaleString()}`;
-}
-
 type Props = {
   options: FormOptions;
   filters: SearchFilterValues;
@@ -52,6 +45,7 @@ type Props = {
 };
 
 export function PropertySearchForm({ options, filters, complexes }: Props) {
+  const router = useRouter();
   const hasAdvanced = useMemo(() => {
     const keys: (keyof SearchFilterValues)[] = [
       "opportunity_type",
@@ -77,27 +71,44 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
     return keys.some((k) => Boolean(filters[k])) || filters.advanced === "1";
   }, [filters]);
 
-  const [showAdvanced, setShowAdvanced] = useState(hasAdvanced);
+  const [advancedOverride, setShowAdvanced] = useState<boolean | null>(null);
+  const showAdvanced = advancedOverride ?? hasAdvanced;
   const [paragraph, setParagraph] = useState("");
   const [pending, startTransition] = useTransition();
   const [paraError, setParaError] = useState<string | null>(null);
-  const [paraResults, setParaResults] = useState<ScoredProperty[] | null>(null);
-  const [usedCriteria, setUsedCriteria] = useState<Record<string, string> | null>(
-    null,
-  );
+  const [filtersFilled, setFiltersFilled] = useState(false);
+  const searchRequest = useRef(0);
+
+  function clearSearch() {
+    searchRequest.current += 1;
+    setParagraph("");
+    setParaError(null);
+    setFiltersFilled(false);
+  }
 
   function runParagraphSearch() {
+    const request = ++searchRequest.current;
     setParaError(null);
+    setFiltersFilled(false);
     startTransition(async () => {
-      const result = await searchPropertiesByParagraph(paragraph);
-      if (!result.ok) {
-        setParaResults(null);
-        setUsedCriteria(null);
-        setParaError(result.error);
-        return;
+      try {
+        const result = await searchPropertiesByParagraph(paragraph);
+        if (request !== searchRequest.current) return;
+        if (!result.ok) {
+          setParaError(result.error);
+          return;
+        }
+        const params = new URLSearchParams({ status: result.filters.status ?? "Active", advanced: "1" });
+        for (const [key, value] of Object.entries(result.filters)) {
+          if (value) params.set(key, value);
+        }
+        setShowAdvanced(true);
+        router.replace(`/app/properties?${params}`, { scroll: false });
+        setFiltersFilled(true);
+      } catch {
+        if (request !== searchRequest.current) return;
+        setParaError("Could not fill the filters. Please try again.");
       }
-      setUsedCriteria(result.criteria);
-      setParaResults(result.results);
     });
   }
 
@@ -106,7 +117,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="font-display text-base font-semibold">
-            Paragraph Search
+            Quick search
           </h2>
           <button
             type="button"
@@ -114,38 +125,37 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
             disabled={pending || !paragraph.trim()}
             className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
           >
-            {pending ? "Matching…" : "Find matches"}
+            {pending ? "Searching…" : "Search properties"}
           </button>
         </div>
         <textarea
           value={paragraph}
           onChange={(e) => setParagraph(e.target.value)}
           rows={3}
-          placeholder="Paste a property description — results are ranked by match %"
+          placeholder="Describe what you need, e.g. a 3-bedroom apartment in Colombo 02 for rent under USD 2,500."
+          disabled={pending}
           className={`${inputClass} mt-2`}
         />
         {paraError ? (
           <p className="mt-2 text-sm text-[var(--danger)]">{paraError}</p>
         ) : null}
-        {usedCriteria ? (
+        {filtersFilled ? (
           <p className="mt-2 text-xs text-[var(--muted)]">
-            Matched on:{" "}
-            {Object.entries(usedCriteria)
-              .map(([k, v]) => `${k}=${v}`)
-              .join(" · ")}
+            Filters filled from your description. Refine them below to update the results.
           </p>
         ) : null}
       </section>
 
       <LiveFilterForm
         action="/app/properties"
+        onClear={clearSearch}
         className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4"
       >
         {showAdvanced ? <input type="hidden" name="advanced" value="1" /> : null}
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <label className="col-span-2 text-sm font-medium">
-            Quick search
+            Keyword search
             <input
               name="q"
               defaultValue={filters.q}
@@ -158,6 +168,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
             <select
               name="status"
               defaultValue={filters.status}
+              data-default-value="Active"
               className={`${inputClass} mt-1`}
             >
               <option value="">All statuses</option>
@@ -227,14 +238,14 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
+            onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-sm font-semibold text-[var(--brand-deep)] hover:underline"
           >
             {showAdvanced ? "Hide advanced filters" : "Show advanced filters"}
           </button>
           <button
             type="reset"
-            className="ml-auto rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
+            className="ml-auto rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
           >
             Clear
           </button>
@@ -242,7 +253,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
 
         {showAdvanced ? (
           <div className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
-            <div className="grid grid-cols-2 items-start gap-3 xl:grid-cols-3">
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <label className="text-sm font-medium">
                 Contact Type
                 <select
@@ -318,7 +329,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 />
               </label>
             </div>
-            <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4 xl:grid-cols-6">
+            <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
               <RangeFilter
                 label="Beds"
                 minName="bedrooms_min"
@@ -385,116 +396,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
           </div>
         ) : null}
       </LiveFilterForm>
-
-      {paraResults ? (
-        <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)]">
-          <div className="flex items-center justify-between border-b border-[var(--line)] bg-[var(--bg-accent)]/50 px-4 py-3">
-            <p className="font-display text-base font-semibold">
-              {paraResults.length} ranked match
-              {paraResults.length === 1 ? "" : "es"}
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setParaResults(null);
-                setUsedCriteria(null);
-              }}
-              className="rounded-full border border-[var(--line)] px-4 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--bg-accent)] transition"
-            >
-              Clear matches
-            </button>
-          </div>
-          <ul className="divide-y divide-[var(--line)] md:hidden">
-            {paraResults.map((r) => (
-              <PropertyRow key={r.id} refNo={r.ref_no} as="li" className="px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
-                  <span className="shrink-0 font-semibold tabular-nums text-[var(--brand-deep)]">
-                    {r.match_percent}%
-                  </span>
-                </div>
-                <p className="mt-1 text-sm">
-                  {r.property_type} · {r.opportunity_type} · {r.city || "—"}
-                </p>
-                <p className="mt-1 text-sm">
-                  <span className="font-semibold">
-                    {formatMoney(r.price_total, r.currency || "LKR")}
-                  </span>
-                  <span className="text-[var(--muted)]"> · </span>
-                  <StatusBadge status={r.status} className="text-xs" />
-                </p>
-                {r.match_hits.length ? (
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {r.match_hits.slice(0, 4).join(", ")}
-                  </p>
-                ) : null}
-              </PropertyRow>
-            ))}
-            {!paraResults.length ? (
-              <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-                No matching properties found.
-              </li>
-            ) : null}
-          </ul>
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-[var(--line)] text-[var(--muted)]">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Match</th>
-                  <th className="px-4 py-2 font-medium">Ref</th>
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 font-medium">City</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Price</th>
-                  <th className="px-4 py-2 font-medium">Hits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paraResults.map((r) => (
-                  <PropertyRow
-                    key={r.id}
-                    refNo={r.ref_no}
-                    className="border-b border-[var(--line)] last:border-0"
-                  >
-                    <td className="px-4 py-2 font-semibold tabular-nums text-[var(--brand-deep)]">
-                      {r.match_percent}%
-                    </td>
-                    <td className="px-4 py-2">
-                      <PropertyLink refNo={r.ref_no}>{r.ref_no}</PropertyLink>
-                    </td>
-                    <td className="px-4 py-2">
-                      {r.property_type}
-                      <span className="block text-xs text-[var(--muted)]">
-                        {r.opportunity_type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2">{r.city || "—"}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge status={r.status} />
-                    </td>
-                    <td className="px-4 py-2">
-                      {formatMoney(r.price_total, r.currency || "LKR")}
-                    </td>
-                    <td className="px-4 py-2 text-xs text-[var(--muted)]">
-                      {r.match_hits.slice(0, 4).join(", ") || "—"}
-                    </td>
-                  </PropertyRow>
-                ))}
-                {!paraResults.length ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-8 text-center text-[var(--muted)]"
-                    >
-                      No matching properties found.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

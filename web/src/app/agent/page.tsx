@@ -201,7 +201,7 @@ export default async function AgentSearchPage({
               <span className="hidden group-open:inline">Hide advanced filters</span>
             </summary>
             <div className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
-              <div className="grid grid-cols-2 items-start gap-3 xl:grid-cols-3">
+              <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <label className="text-sm font-medium">
                   Currency
                   <select
@@ -236,7 +236,7 @@ export default async function AgentSearchPage({
                   />
                 </label>
               </div>
-              <div className="grid grid-cols-2 items-stretch gap-4 lg:grid-cols-4">
+              <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 md:grid-cols-2">
                 <RangeFilter
                   label="Price"
                   minName="price_min"

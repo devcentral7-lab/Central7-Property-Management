@@ -7,6 +7,7 @@ import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { loadFormOptions } from "@/lib/form-options";
 import { parseMapsLink } from "@/lib/maps-link";
+import { isDriveConfigured } from "@/lib/drive/photos";
 import {
   extractPropertyFieldsWithGemini,
   isGeminiConfigured,
@@ -194,6 +195,19 @@ async function buildPropertyPayload(formData: FormData) {
 }
 
 export async function createProperty(formData: FormData) {
+  await saveProperty(formData);
+  redirect("/app/my-properties");
+}
+
+export async function createPropertyForImageUpload(formData: FormData) {
+  await requireProfile();
+  if (!isDriveConfigured()) {
+    throw new Error("Image uploads are not configured. Please contact an administrator.");
+  }
+  return saveProperty(formData);
+}
+
+async function saveProperty(formData: FormData) {
   const profile = await requireProfile();
   const supabase = await createClient();
   const { row, platforms } = await buildPropertyPayload(formData);
@@ -294,7 +308,7 @@ export async function createProperty(formData: FormData) {
   revalidatePath("/app");
   revalidatePath("/app/activity");
   revalidatePath("/app/social-queue");
-  redirect("/app/my-properties");
+  return property;
 }
 
 export async function updateProperty(formData: FormData) {
