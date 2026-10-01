@@ -18,7 +18,9 @@ export function UpdateStatusButton({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [action, setAction] = useState("Data Change");
   const selectRef = useRef<HTMLSelectElement>(null);
+  const commentRequired = action === "Data Change";
 
   useEffect(() => {
     if (open) selectRef.current?.focus();
@@ -46,6 +48,7 @@ export function UpdateStatusButton({
         type="button"
         onClick={() => {
           setError(null);
+          setAction("Data Change");
           setOpen(true);
         }}
         className="inline-flex items-center gap-1.5 rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
@@ -71,7 +74,8 @@ export function UpdateStatusButton({
               ref={selectRef}
               name="action"
               required
-              defaultValue="Data Change"
+              value={action}
+              onChange={(e) => setAction(e.target.value)}
               className="mt-1 w-full rounded-xl border border-[var(--line)] bg-[var(--card)] px-3 py-2.5 text-sm"
             >
               {options.map((o) => (
@@ -82,11 +86,23 @@ export function UpdateStatusButton({
             </select>
           </label>
           <label className="mt-3 block text-sm font-medium">
-            Comment <span className="font-normal text-[var(--muted)]">(optional)</span>
+            Comment{" "}
+            {commentRequired ? (
+              <span className="text-[var(--brand)]" aria-hidden>
+                *
+              </span>
+            ) : (
+              <span className="font-normal text-[var(--muted)]">(optional)</span>
+            )}
             <textarea
               name="comment"
               rows={3}
-              placeholder="What changed and why?"
+              required={commentRequired}
+              placeholder={
+                commentRequired
+                  ? "What needs to change? e.g. Price reduced to LKR 42M"
+                  : "What changed and why?"
+              }
               className="mt-1 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
             />
           </label>

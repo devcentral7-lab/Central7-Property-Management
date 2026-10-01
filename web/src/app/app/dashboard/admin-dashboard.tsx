@@ -9,6 +9,7 @@ import type {
 } from "@/lib/analytics";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { PeriodSelect } from "@/app/app/dashboard/period-select";
+import { RefSearch } from "@/app/app/dashboard/ref-search";
 import {
   ColumnChart,
   DonutChart,
@@ -1075,6 +1076,8 @@ export function AdminDashboard({
           <PeriodSelect period={data.period} />
         </Suspense>
       </div>
+
+      <RefSearch />
 
       <DashboardTabs initialView={view} stats={stats} visuals={visuals} />
     </div>

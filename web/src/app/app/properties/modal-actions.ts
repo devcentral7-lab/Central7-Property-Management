@@ -30,6 +30,7 @@ export type PropertyModalData = {
   canEdit: boolean;
   canDelete: boolean;
   canChangeStatus: boolean;
+  canManagePhotos: boolean;
   statusChangeOptions: string[];
   complexes: ComplexOption[];
   options: FormOptions;
@@ -63,8 +64,9 @@ export async function getPropertyModalData(
       property.created_by === profile.id ||
       (!property.created_by &&
         property.created_by_name === profile.display_name);
-    const canEdit = profile.role === "Admin" || isOwner;
-    const canDelete = profile.role === "Admin";
+    const isAdmin = profile.role === "Admin";
+    const canEdit = isAdmin;
+    const canDelete = isAdmin;
 
     const [{ data: events }, { data: complex }, options] =
       await Promise.all([
@@ -120,7 +122,8 @@ export async function getPropertyModalData(
         })),
         canEdit,
         canDelete,
-        canChangeStatus: canEdit,
+        canChangeStatus: isAdmin || isOwner,
+        canManagePhotos: isAdmin || isOwner,
         statusChangeOptions: options.statusChangeOptions,
         complexes: (complexes ?? []) as ComplexOption[],
         options,

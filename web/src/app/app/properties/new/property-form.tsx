@@ -1001,9 +1001,7 @@ function LocationLinkField({
       </span>
       {error ? (
         <span className="mt-1.5 block text-xs text-[var(--danger)]">{error}</span>
-      ) : (
-        <FieldHint>In Google Maps, tap Share → Copy link, then paste it here.</FieldHint>
-      )}
+      ) : null}
     </label>
   );
 }
