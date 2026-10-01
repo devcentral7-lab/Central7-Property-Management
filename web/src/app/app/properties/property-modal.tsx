@@ -13,6 +13,7 @@ import { ClickableRow } from "@/components/clickable-row";
 import { DeletePropertyButton } from "@/app/app/properties/[ref]/delete-property-button";
 import { ActivityButton } from "@/app/app/properties/activity-button";
 import { ExportPdfButton } from "@/app/app/properties/export-pdf-button";
+import { SharePdfButton } from "@/app/app/properties/share-pdf-button";
 import { UpdateStatusButton } from "@/app/app/properties/update-status-button";
 import {
   NotesCards,
@@ -110,6 +111,18 @@ function ModalShell({
   );
 }
 
+/** e.g. "C7-10683 · House for sale in Kandy · LKR 45,000,000" */
+function shareText(data: PropertyModalData) {
+  const d = data.details;
+  const rent = /rent|lease/i.test(d.opportunity || "");
+  const what = [d.propertyType, d.opportunity ? (rent ? "for rent" : "for sale") : null]
+    .filter(Boolean)
+    .join(" ");
+  return [data.refNo, [what, d.city ? `in ${d.city}` : null].filter(Boolean).join(" "), d.price]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function ViewBody({
   data,
   onEdit,
@@ -133,6 +146,7 @@ function ViewBody({
           ) : null}
           <ActivityButton refNo={data.refNo} events={data.events} />
           <ExportPdfButton refNo={data.refNo} />
+          <SharePdfButton refNo={data.refNo} text={shareText(data)} />
           {data.canEdit ? (
             <button
               type="button"

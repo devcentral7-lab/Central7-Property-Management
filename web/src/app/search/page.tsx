@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand-logo";
+import { LiveFilterForm } from "@/components/live-filter-form";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
@@ -38,6 +39,16 @@ export default async function PublicSearchPage({
 
   const { data, count, error } = await query;
 
+  function pageHref(p: number) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (propertyType) params.set("property_type", propertyType);
+    if (city) params.set("city", city);
+    if (p > 1) params.set("page", String(p));
+    const s = params.toString();
+    return s ? `/search?${s}` : "/search";
+  }
+
   return (
     <main className="mx-auto min-h-screen max-w-6xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-8">
       <div className="flex items-center justify-between gap-3">
@@ -51,7 +62,7 @@ export default async function PublicSearchPage({
       </div>
       <h1 className="mt-6 font-display text-3xl font-semibold sm:mt-8 sm:text-4xl">Search listings</h1>
 
-      <form className="mt-5 grid grid-cols-2 gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 md:grid-cols-4">
+      <LiveFilterForm action="/search" className="mt-5 grid grid-cols-2 gap-3 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 sm:mt-6 md:grid-cols-3">
         <input name="q" defaultValue={q} placeholder="Ref or keyword" className="col-span-2 min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm md:col-span-1" />
         <select name="property_type" defaultValue={propertyType} className="min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm">
           <option value="">All types</option>
@@ -60,8 +71,7 @@ export default async function PublicSearchPage({
           ))}
         </select>
         <input name="city" defaultValue={city} placeholder="City" className="min-w-0 rounded-xl border border-[var(--line)] px-3 py-2 text-sm" />
-        <button className="col-span-2 rounded-xl bg-[var(--brand)] px-4 py-2.5 text-sm font-semibold text-white md:col-span-1">Search</button>
-      </form>
+      </LiveFilterForm>
 
       {error ? (
         <p className="mt-6 text-[var(--danger)]">{error.message}</p>
@@ -90,10 +100,10 @@ export default async function PublicSearchPage({
       </div>
 
       <div className="mt-6 flex justify-between text-sm">
-        <Link href={page > 1 ? `/search?page=${page - 1}` : "#"} className={`-ml-2 rounded-lg px-2 py-2 ${page <= 1 ? "opacity-40" : ""}`}>
+        <Link href={page > 1 ? pageHref(page - 1) : "#"} className={`-ml-2 rounded-lg px-2 py-2 ${page <= 1 ? "opacity-40" : ""}`}>
           ← Previous
         </Link>
-        <Link href={`/search?page=${page + 1}`} className="-mr-2 rounded-lg px-2 py-2">
+        <Link href={pageHref(page + 1)} className="-mr-2 rounded-lg px-2 py-2">
           Next →
         </Link>
       </div>

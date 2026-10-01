@@ -30,13 +30,11 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
     notFound();
   }
 
-  const [{ data: complexes }, { data: coords }, options] = await Promise.all([
+  const [{ data: complexes }, options] = await Promise.all([
     supabase.from("apartment_complexes").select("id, name").order("name"),
-    supabase.rpc("get_property_location", { p_property_id: property.id }),
     loadFormOptions(),
   ]);
 
-  const coord = Array.isArray(coords) ? coords[0] : coords;
   const attrs = (property.type_attributes || {}) as Record<string, unknown>;
   const amenities = (property.amenities || []) as string[];
   const known = new Set(options.amenities);
@@ -82,8 +80,7 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
             apartment_complex_id: s(property.apartment_complex_id),
             apartment_floor: s(property.apartment_floor),
             view: s(property.view),
-            latitude: coord?.lat != null ? String(coord.lat) : "",
-            longitude: coord?.lng != null ? String(coord.lng) : "",
+            location_url: s(property.location_url),
             suitable_for: s(attrs.suitable_for),
             built_up_area: s(attrs.built_up_area),
             currency: s(property.currency) || options.currencies[0] || "LKR",

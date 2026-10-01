@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MapLinkButtons } from "@/components/map-link-buttons";
 import { StatusBadge } from "@/components/status-badge";
 import { WhatsAppLink } from "@/components/whatsapp-link";
 import type {
@@ -86,7 +87,9 @@ function FieldRows({ section }: { section: DetailSection }) {
           <dd
             className={`min-w-0 break-words text-sm font-medium ${f.phone ? "flex items-center gap-1" : ""}`}
           >
-            {f.href ? (
+            {f.mapLink ? (
+              <MapLinkButtons url={f.value} />
+            ) : f.href ? (
               <a
                 href={f.href}
                 target={f.href.startsWith("http") ? "_blank" : undefined}

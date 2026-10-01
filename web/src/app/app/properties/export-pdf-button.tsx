@@ -6,12 +6,12 @@ const OPTIONS = [
   {
     copy: "client",
     label: "Client copy",
-    hint: "Hides owner contacts, address and internal notes",
+    hint: "Central7 branded, with your contact details",
   },
   {
-    copy: "full",
-    label: "Staff copy",
-    hint: "Everything, marked internal",
+    copy: "agent",
+    label: "Agent copy",
+    hint: "Property details and ref no. only, no Central7 name, logo or contacts",
   },
 ] as const;
 

@@ -45,6 +45,7 @@ export default async function AppLayout({
             icon: "users",
             match: "exact",
           },
+          { href: "/app/complexes", label: "Apartment Complexes", icon: "building" },
           { href: "/app/activity", label: "Activity Log", icon: "activity" },
         ] as SidebarNavItem[])
       : []),

@@ -35,15 +35,18 @@ export async function GET(
   }
 
   const { ref } = await params;
-  const copy: PdfCopy = req.nextUrl.searchParams.get("copy") === "full" ? "full" : "client";
+  const copy: PdfCopy = req.nextUrl.searchParams.get("copy") === "agent" ? "agent" : "client";
 
   try {
     const data = await loadPropertyPdfData(ref, copy, profile);
     if (!data) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
-    const pdf = await renderPropertyPdf(data, await loadLogo(req.nextUrl.origin));
-    const filename = `${data.refNo}${copy === "full" ? "-internal" : ""}.pdf`;
+    const pdf = await renderPropertyPdf(
+      data,
+      copy === "client" ? await loadLogo(req.nextUrl.origin) : null,
+    );
+    const filename = copy === "agent" ? `${data.refNo}-property-details.pdf` : `${data.refNo}.pdf`;
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",

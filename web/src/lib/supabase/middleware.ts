@@ -29,6 +29,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Server actions must get an action response, not a redirect to an HTML page
+  // (the client throws "An unexpected response was received from the server").
+  // Each action enforces its own auth, e.g. signOut, requireProfile().
+  const isServerAction =
+    request.method === "POST" && request.headers.has("next-action");
+  if (isServerAction) return supabaseResponse;
+
   const path = request.nextUrl.pathname;
   const isLogin = path === "/login" || path.startsWith("/login/");
   const isAuthContinue = path.startsWith("/auth/");

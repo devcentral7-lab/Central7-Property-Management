@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { loadFormOptions } from "@/lib/form-options";
+import { parseMapsLink } from "@/lib/maps-link";
 import {
   extractPropertyFieldsWithGemini,
   isGeminiConfigured,
@@ -142,8 +143,8 @@ async function buildPropertyPayload(formData: FormData) {
   }
 
   const complexId = str(formData.get("apartment_complex_id"));
-  const lat = num(formData.get("latitude"));
-  const lng = num(formData.get("longitude"));
+  const mapsLink = parseMapsLink(str(formData.get("location_url")));
+  if (!mapsLink.ok) throw new Error(mapsLink.error);
 
   return {
     row: {
@@ -158,6 +159,7 @@ async function buildPropertyPayload(formData: FormData) {
       property_subtype: str(formData.get("property_subtype")) || null,
       address: str(formData.get("address")) || null,
       city,
+      location_url: mapsLink.url,
       land_size_perch: num(formData.get("land_size_perch")),
       floor_area_sqft,
       bedrooms: num(formData.get("bedrooms")),
@@ -181,43 +183,16 @@ async function buildPropertyPayload(formData: FormData) {
       internal_comments: str(formData.get("internal_comments")) || null,
       type_attributes,
     },
-    lat,
-    lng,
     platforms: options.platforms.filter(
       (p) => formData.get(`platform_${p}`) === "on",
     ),
   };
 }
 
-async function applyLocation(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  propertyId: string,
-  lat: number | null,
-  lng: number | null,
-) {
-  if (lat == null && lng == null) {
-    await supabase.rpc("set_property_location", {
-      p_property_id: propertyId,
-      p_lat: null,
-      p_lng: null,
-    });
-    return;
-  }
-  if (lat == null || lng == null) {
-    throw new Error("Provide both latitude and longitude, or leave both blank.");
-  }
-  const { error } = await supabase.rpc("set_property_location", {
-    p_property_id: propertyId,
-    p_lat: lat,
-    p_lng: lng,
-  });
-  if (error) throw error;
-}
-
 export async function createProperty(formData: FormData) {
   const profile = await requireProfile();
   const supabase = await createClient();
-  const { row, lat, lng, platforms } = await buildPropertyPayload(formData);
+  const { row, platforms } = await buildPropertyPayload(formData);
 
   if (!row.do_not_publish && platforms.length === 0) {
     throw new Error("Select at least one platform, or mark Do Not Publish.");
@@ -251,8 +226,6 @@ export async function createProperty(formData: FormData) {
   if (!property) {
     throw new Error("Could not assign a reference number. Please try again.");
   }
-
-  await applyLocation(supabase, property.id, lat, lng);
 
   if (!row.do_not_publish) {
     const { data: settings } = await supabase
@@ -340,14 +313,12 @@ export async function updateProperty(formData: FormData) {
     throw new Error("Only owner or Admin can edit this listing");
   }
 
-  const { row, lat, lng } = await buildPropertyPayload(formData);
+  const { row } = await buildPropertyPayload(formData);
   const { error } = await supabase
     .from("properties")
     .update(row)
     .eq("id", existing.id);
   if (error) throw error;
-
-  await applyLocation(supabase, existing.id, lat, lng);
 
   await logAudit({
     category: "property",

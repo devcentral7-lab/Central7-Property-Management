@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { LiveFilterForm } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import { StatusBadge } from "@/components/status-badge";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
@@ -16,13 +16,11 @@ export type SearchFilterValues = {
   status: string;
   opportunity_type: string;
   property_type: string;
-  property_subtype: string;
+  complex: string;
   contact_type: string;
   city: string;
   furnished: string;
   currency: string;
-  agent: string;
-  purpose: string;
   view: string;
   bedrooms_min: string;
   bedrooms_max: string;
@@ -37,11 +35,7 @@ export type SearchFilterValues = {
   budget_min: string;
   budget_max: string;
   parking_min: string;
-  floors_min: string;
-  floors_max: string;
-  age_max: string;
   do_not_publish: string;
-  amenities: string;
   advanced: string;
 };
 
@@ -53,18 +47,16 @@ function formatMoney(n: number | null, currency: string) {
 type Props = {
   options: FormOptions;
   filters: SearchFilterValues;
+  complexes: { id: string; name: string }[];
 };
 
-export function PropertySearchForm({ options, filters }: Props) {
+export function PropertySearchForm({ options, filters, complexes }: Props) {
   const hasAdvanced = useMemo(() => {
     const keys: (keyof SearchFilterValues)[] = [
       "opportunity_type",
-      "property_subtype",
       "contact_type",
       "furnished",
       "currency",
-      "agent",
-      "purpose",
       "view",
       "bedrooms_min",
       "bedrooms_max",
@@ -79,11 +71,7 @@ export function PropertySearchForm({ options, filters }: Props) {
       "budget_min",
       "budget_max",
       "parking_min",
-      "floors_min",
-      "floors_max",
-      "age_max",
       "do_not_publish",
-      "amenities",
     ];
     return keys.some((k) => Boolean(filters[k])) || filters.advanced === "1";
   }, [filters]);
@@ -258,8 +246,7 @@ export function PropertySearchForm({ options, filters }: Props) {
         ) : null}
       </section>
 
-      <form
-        method="get"
+      <LiveFilterForm
         action="/app/properties"
         className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4"
       >
@@ -329,6 +316,21 @@ export function PropertySearchForm({ options, filters }: Props) {
               ))}
             </select>
           </label>
+          <label className="col-span-2 text-sm font-medium">
+            Apartment complex
+            <select
+              name="complex"
+              defaultValue={filters.complex}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">All complexes</option>
+              {complexes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -340,29 +342,15 @@ export function PropertySearchForm({ options, filters }: Props) {
             {showAdvanced ? "Hide advanced filters" : "Show advanced filters"}
           </button>
           <button
-            type="submit"
-            className="ml-auto rounded-full bg-[var(--brand)] px-5 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
-          >
-            Apply filters
-          </button>
-          <Link
-            href="/app/properties"
-            className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
+            type="reset"
+            className="ml-auto rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
           >
             Clear
-          </Link>
+          </button>
         </div>
 
         {showAdvanced ? (
           <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--line)] pt-4 xl:grid-cols-4">
-            <label className="text-sm font-medium">
-              Sub-type
-              <input
-                name="property_subtype"
-                defaultValue={filters.property_subtype}
-                className={`${inputClass} mt-1`}
-              />
-            </label>
             <label className="text-sm font-medium">
               Contact type
               <select
@@ -407,23 +395,6 @@ export function PropertySearchForm({ options, filters }: Props) {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="text-sm font-medium">
-              Agent / created by
-              <input
-                name="agent"
-                defaultValue={filters.agent}
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Purpose / suitable for
-              <input
-                name="purpose"
-                defaultValue={filters.purpose}
-                placeholder="e.g. Office, Retail"
-                className={`${inputClass} mt-1`}
-              />
             </label>
             <label className="text-sm font-medium">
               View
@@ -562,45 +533,9 @@ export function PropertySearchForm({ options, filters }: Props) {
                 className={`${inputClass} mt-1`}
               />
             </label>
-            <label className="text-sm font-medium">
-              Floors min
-              <input
-                name="floors_min"
-                defaultValue={filters.floors_min}
-                inputMode="numeric"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Floors max
-              <input
-                name="floors_max"
-                defaultValue={filters.floors_max}
-                inputMode="numeric"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="text-sm font-medium">
-              Age max (years)
-              <input
-                name="age_max"
-                defaultValue={filters.age_max}
-                inputMode="decimal"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
-            <label className="col-span-2 text-sm font-medium xl:col-span-4">
-              Amenities contain
-              <input
-                name="amenities"
-                defaultValue={filters.amenities}
-                placeholder="e.g. Pool, CCTV"
-                className={`${inputClass} mt-1`}
-              />
-            </label>
           </div>
         ) : null}
-      </form>
+      </LiveFilterForm>
     </div>
   );
 }
