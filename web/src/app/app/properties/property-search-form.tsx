@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RangeFilter } from "@/components/range-filter";
+import { CitySelect } from "@/components/city-select";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import type { FormOptions } from "@/lib/form-options";
@@ -194,15 +195,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
-            City
-            <input
-              name="city"
-              defaultValue={filters.city}
-              placeholder="City"
-              className={`${inputClass} mt-1`}
-            />
-          </label>
+          <CitySelect defaultValue={filters.city} className={inputClass} autoSubmit />
           <label className="text-sm font-medium">
             Opportunity
             <select

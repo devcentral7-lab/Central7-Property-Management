@@ -1,19 +1,27 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { LEGACY_CITIES } from "@/lib/cities";
 
 export function CitySelect({
   value,
   onChange,
   className,
+  defaultValue = "",
+  autoSubmit = false,
 }: {
-  value: string;
-  onChange: (city: string) => void;
+  value?: string;
+  onChange?: (city: string) => void;
   className: string;
+  defaultValue?: string;
+  /** Optional city filter that submits its form after selecting a city. */
+  autoSubmit?: boolean;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+  const [selected, setSelected] = useState(defaultValue);
+  const cityValue = value ?? selected;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(-1);
@@ -21,8 +29,42 @@ export function CitySelect({
     city.toLowerCase().includes((query ?? "").trim().toLowerCase()),
   );
 
+  useEffect(() => {
+    if (!autoSubmit) return;
+    const form = field.current?.form;
+    if (!form) return;
+    const sync = () => {
+      setSelected(field.current?.value ?? "");
+      setQuery(null);
+      setOpen(false);
+      setActive(-1);
+      input.current?.setCustomValidity("");
+    };
+    const reset = () => queueMicrotask(sync);
+    const clear = () => {
+      if (field.current) field.current.value = "";
+      sync();
+    };
+    form.addEventListener("reset", reset);
+    form.addEventListener("filters-cleared", clear);
+    return () => {
+      form.removeEventListener("reset", reset);
+      form.removeEventListener("filters-cleared", clear);
+    };
+  }, [autoSubmit]);
+
+  function commit(city: string) {
+    setSelected(city);
+    onChange?.(city);
+    if (autoSubmit && field.current) {
+      field.current.value = city;
+      input.current?.setCustomValidity("");
+      field.current.form?.requestSubmit();
+    }
+  }
+
   function select(city: string) {
-    onChange(city);
+    commit(city);
     setQuery(null);
     setOpen(false);
     setActive(-1);
@@ -37,15 +79,16 @@ export function CitySelect({
 
   return (
     <div className="min-w-0">
-      <label htmlFor={id} className="block text-[13px] font-medium text-[var(--ink)]">
-        City<span className="ml-0.5 text-[var(--brand)]" aria-hidden>*</span>
+      {autoSubmit ? <input ref={field} type="hidden" name="city" defaultValue={defaultValue} /> : null}
+      <label htmlFor={id} className={autoSubmit ? "block text-sm font-medium" : "block text-[13px] font-medium text-[var(--ink)]"}>
+        City{!autoSubmit ? <span className="ml-0.5 text-[var(--brand)]" aria-hidden>*</span> : null}
       </label>
       <div className="relative mt-1.5">
         <input
           ref={input}
           id={id}
-          name="city"
-          required
+          name={autoSubmit ? undefined : "city"}
+          required={!autoSubmit}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={open}
@@ -53,17 +96,19 @@ export function CitySelect({
           aria-activedescendant={open && active >= 0 ? `${id}-${active}` : undefined}
           autoComplete="off"
           placeholder="Select city"
-          value={query ?? value}
+          value={query ?? cityValue}
           className={`${className} pr-10`}
           onFocus={() => setOpen(true)}
           onChange={(event) => {
+            if (autoSubmit) event.stopPropagation();
             const text = event.target.value;
             setOpen(true);
             setActive(-1);
             const match = LEGACY_CITIES.find((city) => city.toLowerCase() === text.trim().toLowerCase());
             setQuery(match ?? text);
-            if (match) onChange(match);
-            event.target.setCustomValidity(text && !match ? "Select a city from the list." : "");
+            if (match) commit(match);
+            else if (autoSubmit && !text.trim()) commit("");
+            event.target.setCustomValidity(!autoSubmit && text && !match ? "Select a city from the list." : "");
           }}
           onBlur={() => {
             setOpen(false);
@@ -126,8 +171,8 @@ export function CitySelect({
                 key={city}
                 id={`${id}-${index}`}
                 role="option"
-                aria-selected={city === value}
-                className={`cursor-pointer px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--bg-accent)] ${index === active || city === value ? "bg-[var(--bg-accent)]" : ""}`}
+                aria-selected={city === cityValue}
+                className={`cursor-pointer px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--bg-accent)] ${index === active || city === cityValue ? "bg-[var(--bg-accent)]" : ""}`}
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => select(city)}
               >

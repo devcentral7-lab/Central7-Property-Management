@@ -721,7 +721,7 @@ function PropertyFormInner({
         >
           <div
             className={`grid gap-x-4 gap-y-5 ${
-              isLand ? "sm:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+              isLand ? "sm:grid-cols-3" : isApartment && mode === "create" ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
             }`}
           >
             <Field label="Currency">
@@ -744,7 +744,7 @@ function PropertyFormInner({
                       ["Budget", "budget"],
                     ] as const)),
               ] as const
-            ).map(([label, name]) => (
+            ).filter(([, name]) => !(name === "budget" && isApartment && mode === "create")).map(([label, name]) => (
               <Field key={name} label={label}>
                 <CurrencyInput
                   name={name}

@@ -143,7 +143,7 @@ export function AddComplexButton({ locations }: { locations: string[] }) {
   );
 }
 
-export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; locations: string[] }) {
+export function ComplexesTable({ rows, locations, canManage = false }: { rows: ComplexListItem[]; locations: string[]; canManage?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
@@ -194,12 +194,14 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
   }
 
   function openEdit(c: ComplexListItem) {
+    if (!canManage) return;
     setError(null);
     setViewing(null);
     setEditing(c);
   }
 
   function openDelete(c: ComplexListItem) {
+    if (!canManage) return;
     setError(null);
     setViewing(null);
     setMoveTo("");
@@ -236,6 +238,7 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
   }
 
   function actions(c: ComplexListItem) {
+    if (!canManage) return null;
     return (
       <div className="flex items-center justify-end gap-0.5" data-row-ignore>
         <button type="button" disabled={pending} onClick={() => openEdit(c)} title="Edit" aria-label={`Edit ${c.name}`} className={iconButtonClass}>
@@ -283,9 +286,9 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
               <th className="px-4 py-3 font-semibold">Built</th>
               <th className="px-4 py-3 font-semibold">Amenities</th>
               <th className="px-4 py-3 font-semibold">Listings</th>
-              <th className="px-5 py-3 text-right font-semibold">
+              {canManage ? <th className="px-5 py-3 text-right font-semibold">
                 <span className="sr-only">Actions</span>
-              </th>
+              </th> : null}
             </tr>
           </thead>
           <tbody>
@@ -299,7 +302,7 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
                 <td className="px-4 py-3 tabular-nums">{c.built_year ?? muted}</td>
                 <td className="px-4 py-3 tabular-nums">{c.amenities.length || muted}</td>
                 <td className="px-4 py-3">{usage(c)}</td>
-                <td className="px-5 py-2">{actions(c)}</td>
+                {canManage ? <td className="px-5 py-2">{actions(c)}</td> : null}
               </ClickableRow>
             ))}
           </tbody>
@@ -329,7 +332,7 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
             </span>
             <p className="text-sm font-semibold">{rows.length ? "No matching complexes" : "No complexes yet"}</p>
             <p className="text-xs text-[var(--muted)]">
-              {rows.length ? "Try a different search or filter." : "Add an apartment complex to get started."}
+              {rows.length ? "Try a different search or filter." : canManage ? "Add an apartment complex to get started." : "No apartment complexes available yet."}
             </p>
           </div>
         ) : null}
@@ -412,7 +415,7 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
               ) : null}
             </div>
 
-            <div className="flex gap-2 sm:justify-end">
+            {canManage ? <div className="flex gap-2 sm:justify-end">
               <button type="button" onClick={() => openDelete(viewing)} className={`flex-1 sm:flex-none ${secondaryButtonClass} text-[var(--danger)]`}>
                 <Icon name="trash" className="h-4 w-4" />
                 Delete
@@ -421,7 +424,7 @@ export function ComplexesTable({ rows, locations }: { rows: ComplexListItem[]; l
                 <Icon name="edit" className="h-4 w-4" />
                 Edit
               </button>
-            </div>
+            </div> : null}
           </div>
         ) : null}
       </PopupDialog>

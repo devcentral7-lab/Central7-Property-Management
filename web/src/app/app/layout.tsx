@@ -37,6 +37,7 @@ export default async function AppLayout({
   const nav: SidebarNavItem[] = [
     { href: "/app", label: "My Dashboard", icon: "home", match: "exact" },
     ...propertyNav,
+    { href: "/app/complexes", label: "Apartment Complexes", icon: "building" },
     ...(isAdmin
       ? ([
           {
@@ -45,7 +46,6 @@ export default async function AppLayout({
             icon: "users",
             match: "exact",
           },
-          { href: "/app/complexes", label: "Apartment Complexes", icon: "building" },
           { href: "/app/activity", label: "Activity Log", icon: "activity" },
         ] as SidebarNavItem[])
       : []),
