@@ -90,66 +90,6 @@ function Chevron() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Hero                                                                */
-/* ------------------------------------------------------------------ */
-
-function HeroStats({
-  total,
-  active,
-  added,
-  period,
-}: {
-  total: number;
-  active: number;
-  added: number;
-  period: string;
-}) {
-  const activeShare = total ? (active / total) * 100 : 0;
-  return (
-    <div className="grid gap-3 sm:gap-4 md:grid-cols-3">
-      <Link
-        href="/app/properties"
-        className="group relative overflow-hidden rounded-2xl bg-[var(--sidebar)] p-5 text-white transition hover:brightness-110 sm:p-6"
-      >
-        <span
-          aria-hidden
-          className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-[var(--brand)]/25 blur-2xl"
-        />
-        <p className="relative text-sm font-medium text-white/65">Total listings</p>
-        <p className="relative mt-2 font-display text-4xl font-semibold tabular-nums">
-          {total.toLocaleString()}
-        </p>
-        <p className="relative mt-1 text-xs text-white/55">All time · every status</p>
-      </Link>
-
-      <Link
-        href="/app/properties?status=Active"
-        className="relative overflow-hidden rounded-2xl bg-[var(--brand)] p-5 text-white transition hover:bg-[var(--brand-deep)] sm:p-6"
-      >
-        <p className="text-sm font-medium text-white/80">Active listings</p>
-        <p className="mt-2 font-display text-4xl font-semibold tabular-nums">
-          {active.toLocaleString()}
-        </p>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/25">
-          <div className="h-full rounded-full bg-white" style={{ width: `${activeShare}%` }} />
-        </div>
-        <p className="mt-1.5 text-xs text-white/80">
-          {activeShare.toFixed(1)}% of all listings
-        </p>
-      </Link>
-
-      <div className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5 sm:p-6">
-        <p className="text-sm font-medium text-[var(--muted)]">Added</p>
-        <p className="mt-2 font-display text-4xl font-semibold tabular-nums text-[var(--ink)]">
-          {added.toLocaleString()}
-        </p>
-        <p className="mt-1 text-xs text-[var(--muted)]">{period}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Sections & stat tiles                                               */
 /* ------------------------------------------------------------------ */
 
@@ -832,7 +772,7 @@ export function AdminDashboard({
   data: AdminAnalytics;
   view?: DashboardView;
 }) {
-  const { kpis, overview: ov } = data;
+  const { overview: ov } = data;
   const period = data.rangeLabel;
   const socialOpen =
     ov.publish_on_social +
@@ -844,13 +784,6 @@ export function AdminDashboard({
 
   const stats = (
     <div className="space-y-4 sm:space-y-5">
-      <HeroStats
-        total={kpis.total}
-        active={kpis.active}
-        added={ov.properties_added}
-        period={period}
-      />
-
       <Section
         title="Company Overview"
         subtitle={`${period} activity and what's waiting now`}

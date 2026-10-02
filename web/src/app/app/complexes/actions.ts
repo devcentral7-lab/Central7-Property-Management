@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export type ComplexListItem = {
   id: string;
@@ -80,8 +81,8 @@ function friendlyError(message: string): string {
 }
 
 export async function listComplexes(): Promise<ComplexListItem[]> {
-  await requireAdmin();
-  const admin = createAdminClient();
+  await requireProfile();
+  const admin = await createClient();
   const [complexes, links] = await Promise.all([
     admin
       .from("apartment_complexes")
@@ -118,8 +119,9 @@ export async function listComplexListings(
   complexId: string,
 ): Promise<{ ok: true; rows: ComplexListing[] } | { ok: false; error: string }> {
   try {
-    await requireAdmin();
-    const { data, error } = await createAdminClient()
+    await requireProfile();
+    const client = await createClient();
+    const { data, error } = await client
       .from("properties")
       .select("ref_no, property_type, opportunity_type, status, price_total, currency")
       .eq("apartment_complex_id", complexId)
