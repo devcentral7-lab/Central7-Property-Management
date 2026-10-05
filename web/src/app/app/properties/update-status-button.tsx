@@ -8,10 +8,16 @@ import { PopupDialog } from "@/components/popup-dialog";
 export function UpdateStatusButton({
   refNo,
   options,
+  platforms,
+  defaultPlatforms = [],
   onDone,
 }: {
   refNo: string;
   options: string[];
+  /** Social media platforms offered when republishing. */
+  platforms: string[];
+  /** Platforms last requested for this listing; pre-ticked on Republish. */
+  defaultPlatforms?: string[];
   onDone?: () => void;
 }) {
   const router = useRouter();
@@ -19,8 +25,11 @@ export function UpdateStatusButton({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [action, setAction] = useState("Data Change");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const selectRef = useRef<HTMLSelectElement>(null);
   const commentRequired = action === "Data Change";
+  const isRepublish = action === "Republish";
+  const missingPlatforms = isRepublish && selectedPlatforms.length === 0;
 
   useEffect(() => {
     if (open) selectRef.current?.focus();
@@ -49,6 +58,7 @@ export function UpdateStatusButton({
         onClick={() => {
           setError(null);
           setAction("Data Change");
+          setSelectedPlatforms(defaultPlatforms.filter((p) => platforms.includes(p)));
           setOpen(true);
         }}
         className="inline-flex items-center gap-1.5 rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
@@ -85,6 +95,41 @@ export function UpdateStatusButton({
               ))}
             </select>
           </label>
+          {isRepublish ? (
+            <fieldset className="mt-3">
+              <legend className="text-sm font-medium">
+                Social media platforms{" "}
+                <span className="text-[var(--brand)]" aria-hidden>
+                  *
+                </span>
+              </legend>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {platforms.map((p) => (
+                  <label
+                    key={p}
+                    className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm transition hover:border-stone-300 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand)]/5"
+                  >
+                    <input
+                      type="checkbox"
+                      name="platforms"
+                      value={p}
+                      checked={selectedPlatforms.includes(p)}
+                      onChange={(e) =>
+                        setSelectedPlatforms((cur) =>
+                          e.target.checked ? [...cur, p] : cur.filter((x) => x !== p),
+                        )
+                      }
+                      className="h-4 w-4 shrink-0 accent-[var(--brand)]"
+                    />
+                    {p}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-[var(--muted)]">
+                An admin approves this before it goes to the social media queue.
+              </p>
+            </fieldset>
+          ) : null}
           <label className="mt-3 block text-sm font-medium">
             Comment{" "}
             {commentRequired ? (
@@ -122,7 +167,8 @@ export function UpdateStatusButton({
             </button>
             <button
               type="submit"
-              disabled={pending}
+              disabled={pending || missingPlatforms}
+              title={missingPlatforms ? "Select at least one platform" : undefined}
               className="flex-1 rounded-full bg-[var(--brand)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:cursor-wait disabled:opacity-70"
             >
               {pending ? "Saving…" : "Submit"}

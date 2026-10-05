@@ -73,7 +73,6 @@ function makeStyles(C: Palette) {
       justifyContent: "space-between",
       alignItems: "center",
     },
-    accentBar: { marginHorizontal: -PAD_X, height: 3, backgroundColor: C.accent },
     brand: { flexDirection: "row", alignItems: "center" },
     logoTile: {
       width: 46,
@@ -87,7 +86,6 @@ function makeStyles(C: Palette) {
     logo: { width: 42, height: 42, borderRadius: 6, objectFit: "cover" },
     brandName: { fontFamily: "Helvetica-Bold", fontSize: 15, color: C.white, letterSpacing: 1.6, lineHeight: 1.1 },
     brandSub: { fontSize: 7.5, color: "#ffffffb3", letterSpacing: 1.8, marginTop: 4, lineHeight: 1.1 },
-    headRight: { alignItems: "flex-end" },
     refPill: {
       paddingVertical: 4,
       paddingHorizontal: 10,
@@ -99,8 +97,6 @@ function makeStyles(C: Palette) {
       fontSize: 11,
       letterSpacing: 0.8,
     },
-    headDate: { fontSize: 7.5, color: "#ffffff99", marginTop: 5 },
-
     hero: { flexDirection: "row", alignItems: "center", marginTop: 16 },
     heroLeft: { flex: 1, paddingRight: 18 },
     eyebrow: {
@@ -110,7 +106,7 @@ function makeStyles(C: Palette) {
       letterSpacing: 1.4,
       textTransform: "uppercase",
     },
-    heading: { fontFamily: "Times-Bold", fontSize: 25, color: C.charcoal, marginTop: 6, lineHeight: 1.15 },
+    heading: { fontFamily: "Helvetica-Bold", fontSize: 24, color: C.charcoal, marginTop: 6, lineHeight: 1.15 },
     priceCard: {
       width: 180,
       paddingVertical: 12,
@@ -376,43 +372,31 @@ function Header({ data, logo, t }: { data: PropertyPdfData; logo: Buffer | null;
   const { s } = t;
   if (data.copy === "agent") {
     return (
-      <>
-        <View style={s.header} fixed>
-          <View>
-            <Text style={s.brandName}>PROPERTY DETAILS</Text>
-            <Text style={s.brandSub}>{data.eyebrow.replace(/\s+in$/, "").toUpperCase()}</Text>
-          </View>
-          <View style={s.headRight}>
-            <Text style={s.refPill}>{data.refNo}</Text>
-            <Text style={s.headDate}>{data.generatedAt}</Text>
-          </View>
+      <View style={s.header} fixed>
+        <View>
+          <Text style={s.brandName}>PROPERTY DETAILS</Text>
+          <Text style={s.brandSub}>{data.eyebrow.replace(/\s+in$/, "").toUpperCase()}</Text>
         </View>
-        <View style={s.accentBar} fixed />
-      </>
+        <Text style={s.refPill}>{data.refNo}</Text>
+      </View>
     );
   }
   return (
-    <>
-      <View style={s.header} fixed>
-        <View style={s.brand}>
-          {logo ? (
-            <View style={s.logoTile}>
-              {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
-              <Image style={s.logo} src={{ data: logo, format: "png" }} />
-            </View>
-          ) : null}
-          <View>
-            <Text style={s.brandName}>{data.company.name.toUpperCase()}</Text>
-            <Text style={s.brandSub}>{data.company.tagline.toUpperCase()}</Text>
+    <View style={s.header} fixed>
+      <View style={s.brand}>
+        {logo ? (
+          <View style={s.logoTile}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop */}
+            <Image style={s.logo} src={{ data: logo, format: "png" }} />
           </View>
-        </View>
-        <View style={s.headRight}>
-          <Text style={s.refPill}>{data.refNo}</Text>
-          <Text style={s.headDate}>{data.generatedAt}</Text>
+        ) : null}
+        <View>
+          <Text style={s.brandName}>{data.company.name.toUpperCase()}</Text>
+          <Text style={s.brandSub}>{data.company.tagline.toUpperCase()}</Text>
         </View>
       </View>
-      <View style={s.accentBar} fixed />
-    </>
+      <Text style={s.refPill}>{data.refNo}</Text>
+    </View>
   );
 }
 

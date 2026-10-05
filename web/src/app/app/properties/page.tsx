@@ -139,6 +139,7 @@ export default async function PropertiesPage({
         {outerTab === "mine" ? (
           <PropertyMinePanel
             target={target}
+            selfName={profile.display_name}
             page={page}
             isAdmin={isAdmin}
             filters={mineFiltersFromParams(sp)}

@@ -141,6 +141,8 @@ function ViewBody({
             <UpdateStatusButton
               refNo={data.refNo}
               options={data.statusChangeOptions}
+              platforms={data.options.platforms}
+              defaultPlatforms={data.lastPlatforms}
               onDone={onRefresh}
             />
           ) : null}
