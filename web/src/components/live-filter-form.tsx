@@ -9,6 +9,8 @@ const IMMEDIATE_INPUT_TYPES = new Set(["checkbox", "radio", "date", "month", "ra
 type Props = {
   children: ReactNode;
   className?: string;
+  /** Lets a reset button outside the form target it via `form={id}`. */
+  id?: string;
   /** Path to filter; defaults to the current page. */
   action?: string;
   /** Clear state outside the form, such as a paragraph search prompt. */
@@ -21,7 +23,7 @@ type Props = {
  * `data-default-value` or their first option). Fields use `defaultValue`; when the URL changes from outside
  * the form (tabs, sidebar, back button) they re-sync to the server-rendered values.
  */
-export function LiveFilterForm({ children, className = "", action, onClear }: Props) {
+export function LiveFilterForm({ children, className = "", id, action, onClear }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -114,6 +116,7 @@ export function LiveFilterForm({ children, className = "", action, onClear }: Pr
   return (
     <form
       ref={formRef}
+      id={id}
       role="search"
       aria-busy={pending}
       className={`relative ${className}`}

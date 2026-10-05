@@ -48,7 +48,7 @@ export async function approveSocialQueueItem(formData: FormData) {
 
   const { data: row, error: findErr } = await supabase
     .from("social_media_queue")
-    .select("id, ref_no, completed_at, approved_at")
+    .select("id, ref_no, completed_at, approved_at, requested_platforms")
     .eq("id", id)
     .single();
   if (findErr || !row) throw findErr ?? new Error("Queue item not found");
@@ -56,11 +56,20 @@ export async function approveSocialQueueItem(formData: FormData) {
     throw new Error("Already published — cannot approve again");
   }
 
+  const requested = (row.requested_platforms ?? []) as string[];
+  const chosen = new Set(formData.getAll("platforms").map((v) => str(v)));
+  const approved = requested.filter((p) => chosen.has(p));
+  const dropped = requested.filter((p) => !chosen.has(p));
+  if (requested.length && !approved.length) {
+    throw new Error("Select at least one platform to approve");
+  }
+
   const { error } = await supabase
     .from("social_media_queue")
     .update({
       approved_by: profile.display_name,
       approved_at: new Date().toISOString(),
+      requested_platforms: approved as typeof row.requested_platforms,
     })
     .eq("id", id);
   if (error) throw error;
@@ -73,7 +82,53 @@ export async function approveSocialQueueItem(formData: FormData) {
     subjectType: "property",
     subjectId: row.id,
     subjectLabel: row.ref_no,
-    summary: `Approved social media queue item ${row.ref_no}`,
+    summary: approved.length
+      ? `Approved ${row.ref_no} for ${approved.join(", ")}`
+      : `Approved social media queue item ${row.ref_no}`,
+    details: dropped.length ? { approved, not_approved: dropped } : undefined,
+  });
+
+  revalidateQueue();
+}
+
+export async function declineSocialQueueItem(formData: FormData) {
+  const profile = await requireAdmin();
+  const supabase = await createClient();
+  const id = str(formData.get("id"));
+  const reason = str(formData.get("reason"));
+  if (!id) throw new Error("Missing queue item");
+
+  const { data: row, error: findErr } = await supabase
+    .from("social_media_queue")
+    .select("id, ref_no, approved_action, requested_platforms")
+    .eq("id", id)
+    .is("approved_at", null)
+    .is("completed_at", null)
+    .maybeSingle();
+  if (findErr) throw findErr;
+  if (!row) throw new Error("This request was already approved or removed");
+
+  const { error } = await supabase
+    .from("social_media_queue")
+    .delete()
+    .eq("id", id)
+    .is("approved_at", null)
+    .is("completed_at", null);
+  if (error) throw error;
+
+  await logAudit({
+    category: "queue",
+    action: "decline",
+    actorName: profile.display_name,
+    actorKind: "staff",
+    subjectType: "property",
+    subjectId: row.id,
+    subjectLabel: row.ref_no,
+    summary: `Declined ${row.approved_action ?? "social media"} request for ${row.ref_no}`,
+    details: {
+      reason: reason || null,
+      platforms: row.requested_platforms,
+    },
   });
 
   revalidateQueue();

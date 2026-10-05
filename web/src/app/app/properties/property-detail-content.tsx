@@ -94,6 +94,12 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
             <UpdateStatusButton
               refNo={property.ref_no}
               options={options.statusChangeOptions}
+              platforms={options.platforms}
+              defaultPlatforms={
+                events.find(
+                  (e) => Array.isArray(e.requested_platforms) && e.requested_platforms.length,
+                )?.requested_platforms ?? []
+              }
             />
           ) : null}
           <ActivityButton refNo={property.ref_no} events={events} />

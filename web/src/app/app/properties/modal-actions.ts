@@ -11,6 +11,16 @@ function s(v: unknown): string {
   return String(v);
 }
 
+/** Platforms on the newest event that requested any (events newest first). */
+function lastRequestedPlatforms(events: { requested_platforms?: unknown }[]): string[] {
+  for (const e of events) {
+    if (Array.isArray(e.requested_platforms) && e.requested_platforms.length) {
+      return e.requested_platforms.map(String);
+    }
+  }
+  return [];
+}
+
 export type PropertyModalEvent = {
   id: string;
   action: string;
@@ -32,6 +42,7 @@ export type PropertyModalData = {
   canChangeStatus: boolean;
   canManagePhotos: boolean;
   statusChangeOptions: string[];
+  lastPlatforms: string[];
   complexes: ComplexOption[];
   options: FormOptions;
   initialDoNotPublish: boolean;
@@ -73,7 +84,7 @@ export async function getPropertyModalData(
         supabase
           .from("property_status_events")
           .select(
-            "id, occurred_at, actor_name, action, comment, assigned_to",
+            "id, occurred_at, actor_name, action, comment, assigned_to, requested_platforms",
           )
           .eq("ref_no", refNo)
           .is("archived_at", null)
@@ -125,6 +136,7 @@ export async function getPropertyModalData(
         canChangeStatus: isAdmin || isOwner,
         canManagePhotos: isAdmin || isOwner,
         statusChangeOptions: options.statusChangeOptions,
+        lastPlatforms: lastRequestedPlatforms(events ?? []),
         complexes: (complexes ?? []) as ComplexOption[],
         options,
         initialDoNotPublish: Boolean(property.do_not_publish),

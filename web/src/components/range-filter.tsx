@@ -12,8 +12,16 @@ type Props = {
   ceiling: number;
   step?: number;
   money?: boolean;
+  /** Show slider labels in millions, e.g. "1,000 Mn". */
+  millions?: boolean;
   inputClassName: string;
 };
+
+function sliderLabel(n: number, millions: boolean) {
+  return millions
+    ? `${(n / 1_000_000).toLocaleString("en-US")} Mn`
+    : n.toLocaleString("en-US");
+}
 
 function amount(value: string): number | null {
   if (!value.trim()) return null;
@@ -21,7 +29,7 @@ function amount(value: string): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, ceiling, step = 1, money = false, inputClassName }: Props) {
+export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, ceiling, step = 1, money = false, millions = false, inputClassName }: Props) {
   const minimum = useRef<HTMLInputElement>(null);
   const maximum = useRef<HTMLInputElement>(null);
   const [bounds, setBounds] = useState(() => [amount(defaultMin), amount(defaultMax)]);
@@ -101,7 +109,7 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
             step={step}
             value={index === 0 ? low : high}
             aria-label={`${label} ${index === 0 ? "minimum" : "maximum"}`}
-            aria-valuetext={String(index === 0 ? low : high)}
+            aria-valuetext={sliderLabel(index === 0 ? low : high, millions)}
             data-range-filter="true"
             className="range-filter-handle absolute inset-x-0 top-0 h-8 w-full"
             style={{ zIndex: index === 0 && low === limit ? 2 : index }}
@@ -110,8 +118,8 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
         ))}
       </div>
       <div className="flex justify-between text-xs tabular-nums text-[var(--muted)]">
-        <span>0</span>
-        <span>{limit.toLocaleString("en-US")}</span>
+        <span>{sliderLabel(0, millions)}</span>
+        <span>{sliderLabel(limit, millions)}</span>
       </div>
     </fieldset>
   );

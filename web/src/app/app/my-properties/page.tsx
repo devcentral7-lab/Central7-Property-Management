@@ -41,6 +41,7 @@ export default async function MyPropertiesPage({
       <div className="mt-5 sm:mt-6">
         <PropertyMinePanel
           target={target}
+          selfName={profile.display_name}
           page={page}
           isAdmin={isAdmin}
           filters={mineFiltersFromParams(sp)}

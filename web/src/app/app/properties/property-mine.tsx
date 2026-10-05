@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyCard } from "@/lib/types";
 import { RangeFilter } from "@/components/range-filter";
+import { CitySelect } from "@/components/city-select";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { StatusBadge } from "@/components/status-badge";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
@@ -32,6 +33,8 @@ const inputClass = "w-full rounded-xl border border-[var(--line)] px-3 py-2 text
 
 type Props = {
   target: string;
+  /** Signed-in user's display name; the staff picker resets to it. */
+  selfName: string;
   page: number;
   isAdmin: boolean;
   filters: MinePropertyFilters;
@@ -41,6 +44,7 @@ type Props = {
 
 export async function PropertyMinePanel({
   target,
+  selfName,
   page,
   isAdmin,
   filters,
@@ -75,8 +79,12 @@ export async function PropertyMinePanel({
       .select("display_name")
       .order("display_name");
     staffNames = [
-      ...new Set((staff ?? []).map((s) => s.display_name as string).filter(Boolean)),
-    ];
+      ...new Set([
+        ...(staff ?? []).map((s) => s.display_name as string).filter(Boolean),
+        target,
+        selfName,
+      ]),
+    ].sort((a, b) => a.localeCompare(b));
   }
 
   const rows = (data ?? []) as PropertyCard[];
@@ -106,19 +114,18 @@ export async function PropertyMinePanel({
           {isAdmin ? (
             <label className="col-span-2 text-sm font-medium xl:col-span-1">
               Staff member
-              <input
+              <select
                 name="user"
                 defaultValue={target}
-                placeholder="Staff name"
-                list="staff-names"
-                autoComplete="off"
+                data-default-value={selfName}
                 className={`${inputClass} mt-1`}
-              />
-              <datalist id="staff-names">
+              >
                 {staffNames.map((name) => (
-                  <option key={name} value={name} />
+                  <option key={name} value={name}>
+                    {name === selfName ? `${name} (me)` : name}
+                  </option>
                 ))}
-              </datalist>
+              </select>
             </label>
           ) : null}
           <label className={`col-span-2 text-sm font-medium ${isAdmin ? "xl:col-span-1" : ""}`}>
@@ -172,16 +179,7 @@ export async function PropertyMinePanel({
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
-            City
-            <input
-              name="city"
-              defaultValue={filters.city}
-              placeholder="City"
-              autoComplete="off"
-              className={`${inputClass} mt-1`}
-            />
-          </label>
+          <CitySelect defaultValue={filters.city} className={inputClass} autoSubmit />
           <label className="text-sm font-medium">
             Added from
             <input

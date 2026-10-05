@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { loadFormOptions } from "@/lib/form-options";
@@ -370,6 +371,11 @@ export async function updatePropertyStatus(formData: FormData) {
   if (action === "Data Change" && !comment) {
     throw new Error("Describe what needs to change.");
   }
+  const chosenPlatforms = new Set(formData.getAll("platforms").map((v) => str(v)));
+  const republishPlatforms = options.platforms.filter((p) => chosenPlatforms.has(p));
+  if (action === "Republish" && !republishPlatforms.length) {
+    throw new Error("Select at least one social media platform to republish on.");
+  }
 
   const { data: property, error } = await supabase
     .from("properties")
@@ -425,6 +431,7 @@ export async function updatePropertyStatus(formData: FormData) {
     action,
     comment,
     assigned_to: assignedTo,
+    requested_platforms: action === "Republish" ? republishPlatforms : [],
   });
 
   await logAudit({
@@ -441,24 +448,16 @@ export async function updatePropertyStatus(formData: FormData) {
       next_status: nextStatus,
       comment: comment || null,
       assigned_to: assignedTo,
+      platforms: action === "Republish" ? republishPlatforms : undefined,
     },
   });
 
+  // Agents may file requests but RLS limits queue reads/updates to queue
+  // operators; access was already checked above.
+  const queue = createAdminClient();
+
   if (["Drop", "Lost", "Hold", "Closed"].includes(action)) {
-    await supabase.from("social_media_queue").upsert(
-      {
-        property_id: property.id,
-        ref_no: property.ref_no,
-        approved_action: action,
-        approved_by: null,
-        approved_at: null,
-        platform_dates: {},
-        completed_at: null,
-      },
-      { onConflict: "ref_no" },
-    );
-  } else if (action === "Republish") {
-    const { data: existing } = await supabase
+    const { data: existing } = await queue
       .from("social_media_queue")
       .select("requested_platforms")
       .eq("ref_no", property.ref_no)
@@ -475,16 +474,32 @@ export async function updatePropertyStatus(formData: FormData) {
         .maybeSingle();
       platforms = (lastRequest?.requested_platforms ?? []) as string[];
     }
-    if (!platforms.length) platforms = options.platforms;
-
-    const { error: queueErr } = await supabase.from("social_media_queue").upsert(
+    // Never posted anywhere: nothing to take down, so no approval needed.
+    if (platforms.length) {
+      const { error: queueErr } = await queue.from("social_media_queue").upsert(
+        {
+          property_id: property.id,
+          ref_no: property.ref_no,
+          approved_action: action,
+          approved_by: null,
+          approved_at: null,
+          requested_platforms: platforms,
+          platform_dates: {},
+          completed_at: null,
+        },
+        { onConflict: "ref_no" },
+      );
+      if (queueErr) throw queueErr;
+    }
+  } else if (action === "Republish") {
+    const { error: queueErr } = await queue.from("social_media_queue").upsert(
       {
         property_id: property.id,
         ref_no: property.ref_no,
         approved_action: "Republish",
         approved_by: null,
         approved_at: null,
-        requested_platforms: platforms,
+        requested_platforms: republishPlatforms,
         platform_dates: {},
         completed_at: null,
       },

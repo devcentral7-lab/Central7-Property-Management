@@ -11,6 +11,9 @@ import type { FormOptions } from "@/lib/form-options";
 const inputClass =
   "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm";
 
+const PRICE_CEILING = 1_000_000_000;
+const PRICE_STEP = 1_000_000;
+
 export type SearchFilterValues = {
   q: string;
   status: string;
@@ -62,8 +65,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
       "land_max",
       "floor_min",
       "floor_max",
-      "price_min",
-      "price_max",
       "budget_min",
       "budget_max",
       "parking_min",
@@ -120,14 +121,23 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
           <h2 className="font-display text-base font-semibold">
             Quick search
           </h2>
-          <button
-            type="button"
-            onClick={runParagraphSearch}
-            disabled={pending || !paragraph.trim()}
-            className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
-          >
-            {pending ? "Searching…" : "Search properties"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={runParagraphSearch}
+              disabled={pending || !paragraph.trim()}
+              className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+            >
+              {pending ? "Searching…" : "Search properties"}
+            </button>
+            <button
+              type="reset"
+              form="property-filters"
+              className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
+            >
+              Clear
+            </button>
+          </div>
         </div>
         <textarea
           value={paragraph}
@@ -148,6 +158,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
       </section>
 
       <LiveFilterForm
+        id="property-filters"
         action="/app/properties"
         onClear={clearSearch}
         className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4"
@@ -226,21 +237,29 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               ))}
             </select>
           </label>
+          <div className="col-span-2 grid grid-cols-1 xl:col-span-4">
+            <RangeFilter
+              label="Price"
+              minName="price_min"
+              maxName="price_max"
+              defaultMin={filters.price_min}
+              defaultMax={filters.price_max}
+              ceiling={PRICE_CEILING}
+              step={PRICE_STEP}
+              money
+              millions
+              inputClassName={inputClass}
+            />
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="mt-3">
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-sm font-semibold text-[var(--brand-deep)] hover:underline"
           >
             {showAdvanced ? "Hide advanced filters" : "Show advanced filters"}
-          </button>
-          <button
-            type="reset"
-            className="ml-auto rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
-          >
-            Clear
           </button>
         </div>
 
@@ -361,17 +380,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 defaultMax={filters.floor_max}
                 ceiling={50000}
                 step={100}
-                inputClassName={inputClass}
-              />
-              <RangeFilter
-                label="Price"
-                minName="price_min"
-                maxName="price_max"
-                defaultMin={filters.price_min}
-                defaultMax={filters.price_max}
-                ceiling={filters.currency === "USD" ? 1000000 : 100000000}
-                step={1000}
-                money
                 inputClassName={inputClass}
               />
               <RangeFilter
