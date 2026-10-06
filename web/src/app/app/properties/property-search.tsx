@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { splitCities } from "@/lib/city-list";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
@@ -69,7 +70,14 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   }
   if (filters.furnished) query = query.eq("furnished", filters.furnished);
   if (filters.currency) query = query.eq("currency", filters.currency);
-  if (filters.city) query = query.ilike("city", `%${filters.city}%`);
+  const cities = splitCities(filters.city);
+  if (cities.length === 1) {
+    query = query.ilike("city", `%${cities[0]}%`);
+  } else if (cities.length > 1) {
+    query = query.or(
+      cities.map((c) => `city.ilike."%${c.replace(/["\\]/g, "")}%"`).join(","),
+    );
+  }
   if (filters.view) query = query.ilike("view", `%${filters.view}%`);
   if (filters.do_not_publish === "true") {
     query = query.eq("do_not_publish", true);

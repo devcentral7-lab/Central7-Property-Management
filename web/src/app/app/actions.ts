@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { loadFormOptions } from "@/lib/form-options";
+import { loadCities } from "@/lib/cities-server";
+import { loadComplexOptions } from "@/lib/complexes-server";
 import { parseMapsLink } from "@/lib/maps-link";
 import { isDriveConfigured } from "@/lib/drive/photos";
 import {
@@ -15,7 +17,7 @@ import {
 } from "@/lib/gemini/extract-property";
 
 export type ExtractPropertyResult =
-  | { ok: true; fields: Record<string, string>; configured: true }
+  | { ok: true; fields: Record<string, string>; notes: string[]; configured: true }
   | { ok: false; error: string; configured: boolean };
 
 export async function extractPropertyFromParagraph(
@@ -37,9 +39,9 @@ export async function extractPropertyFromParagraph(
   }
 
   try {
-    const options = await loadFormOptions();
-    const fields = await extractPropertyFieldsWithGemini(paragraph, options);
-    return { ok: true, fields, configured: true };
+    const [options, cities, complexes] = await Promise.all([loadFormOptions(), loadCities(), loadComplexOptions()]);
+    const { fields, notes } = await extractPropertyFieldsWithGemini(paragraph, options, false, { cities, complexes });
+    return { ok: true, fields, notes, configured: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Extraction failed.";
     return { ok: false, error: message, configured: true };

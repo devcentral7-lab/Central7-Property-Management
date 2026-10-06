@@ -145,6 +145,50 @@ export function cityKey(raw: string): string {
   return cleanCityName(raw).toLowerCase();
 }
 
+/** "Colombo 4", "colombo-04" and "COLOMBO 04" share a key. */
+function matchKey(raw: string): string {
+  return cleanCityName(raw)
+    .toLowerCase()
+    .replace(/\d+/g, (d) => String(Number(d)))
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function words(raw: string): string {
+  return ` ${raw.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+}
+
+/**
+ * Maps free-text place names onto names from `list`, plus any list names and
+ * "Colombo 4, 5, 6" shorthand written in `text`. "Other" is never matched.
+ */
+export function matchCities(
+  candidates: readonly string[],
+  list: readonly string[],
+  text = "",
+): string[] {
+  const usable = list.filter((c) => c !== "Other");
+  const byKey = new Map(usable.map((c) => [matchKey(c), c]));
+  const found = new Set<string>();
+  const add = (raw: string) => {
+    const hit = byKey.get(matchKey(raw));
+    if (hit) found.add(hit);
+  };
+
+  candidates.forEach(add);
+
+  for (const m of text.matchAll(/colombo[\s-]*(\d{1,2}(?:\s*(?:,|\/|&|and)\s*\d{1,2})*)/gi)) {
+    for (const n of m[1].match(/\d{1,2}/g) ?? []) add(`Colombo ${n}`);
+  }
+
+  const haystack = words(text);
+  const named = usable.filter((c) => !/^colombo\W*\d/i.test(c) && haystack.includes(words(c)));
+  for (const c of named) {
+    if (!named.some((o) => o !== c && words(o).includes(words(c)))) found.add(c);
+  }
+
+  return [...found];
+}
+
 export function sortCities(list: readonly string[]): string[] {
   return [...list].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }

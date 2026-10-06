@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RangeFilter } from "@/components/range-filter";
-import { CitySelect } from "@/components/city-select";
+import { CityMultiSelect } from "@/components/city-multi-select";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import type { FormOptions } from "@/lib/form-options";
@@ -206,7 +206,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               ))}
             </select>
           </label>
-          <CitySelect defaultValue={filters.city} className={inputClass} autoSubmit />
+          <CityMultiSelect defaultValue={filters.city} />
           <label className="text-sm font-medium">
             Opportunity
             <select

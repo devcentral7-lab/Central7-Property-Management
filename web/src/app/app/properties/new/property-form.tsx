@@ -62,6 +62,10 @@ const EMPTY: PropertyFormValues = {
   internal_comments: "",
 };
 
+function splitList(value: string | undefined): string[] {
+  return (value ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
 type Props = {
   mode?: "create" | "edit";
   refNo?: string;
@@ -131,6 +135,7 @@ function PropertyFormInner({
   const [paragraph, setParagraph] = useState("");
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [aiError, setAiError] = useState(false);
+  const [aiNotes, setAiNotes] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
   const [amenityChecks, setAmenityChecks] = useState<Record<string, boolean>>(
     () =>
@@ -157,14 +162,8 @@ function PropertyFormInner({
     setValues((prev) => ({ ...prev, [name]: value }));
   }
 
-  function onPropertyTypeChange(nextType: string) {
-    if (nextType === "Land") {
-      setAmenityChecks((prev) =>
-        Object.fromEntries(Object.keys(prev).map((k) => [k, false])),
-      );
-    }
-    setValues((prev) => ({
-      ...prev,
+  function typeReset(nextType: string): PropertyFormValues {
+    return {
       ...(nextType === "Land" ? { amenities: "" } : {}),
       property_type: nextType,
       purpose: "",
@@ -180,11 +179,23 @@ function PropertyFormInner({
       view: "",
       suitable_for: "",
       built_up_area: "",
-    }));
+    };
+  }
+
+  function clearAmenityChecks() {
+    setAmenityChecks((prev) =>
+      Object.fromEntries(Object.keys(prev).map((k) => [k, false])),
+    );
+  }
+
+  function onPropertyTypeChange(nextType: string) {
+    if (nextType === "Land") clearAmenityChecks();
+    setValues((prev) => ({ ...prev, ...typeReset(nextType) }));
   }
 
   function runExtract() {
     setAiMessage(null);
+    setAiNotes([]);
     setAiError(false);
     startTransition(async () => {
       const result = await extractPropertyFromParagraph(paragraph);
@@ -193,54 +204,47 @@ function PropertyFormInner({
         setAiMessage(result.error);
         return;
       }
-      const keys = Object.keys(result.fields);
+      const { fields, notes } = result;
+      const keys = Object.keys(fields);
       if (!keys.length) {
         setAiError(true);
         setAiMessage("No fields found in that text. Try a richer paragraph.");
+        setAiNotes(notes);
         return;
       }
+
+      const typeChanged = Boolean(fields.property_type) && fields.property_type !== values.property_type;
+      const parts = (fields.amenities ?? "").split(",").map((a) => a.trim()).filter(Boolean);
+      const isListed = (p: string) => options.amenities.some((a) => a.toLowerCase() === p.toLowerCase());
+
+      if (typeChanged && fields.property_type === "Land") clearAmenityChecks();
+      if (parts.length && (fields.property_type || values.property_type) !== "Land") {
+        setAmenityChecks((checks) => {
+          const updated = { ...checks };
+          for (const a of options.amenities) {
+            if (parts.some((p) => p.toLowerCase() === a.toLowerCase())) updated[a] = true;
+          }
+          return updated;
+        });
+      }
+
       setValues((prev) => {
-        const next = { ...prev };
-        for (const [k, v] of Object.entries(result.fields)) {
+        const next = typeChanged ? { ...prev, ...typeReset(fields.property_type) } : { ...prev };
+        for (const [k, v] of Object.entries(fields)) {
           if (v && k !== "amenities") next[k] = v;
         }
-        if (
-          next.property_type === "Commercial Property" &&
-          next.purpose &&
-          !next.suitable_for
-        ) {
-          next.suitable_for = next.purpose;
-          next.purpose = "";
+        const extras = parts.filter((p) => !isListed(p));
+        if (extras.length && next.property_type !== "Land") {
+          next.amenities = [...new Set([...splitList(next.amenities), ...extras])].join(", ");
         }
-        if (!result.fields.comments && paragraph.trim()) {
-          next.comments = next.comments || paragraph.trim();
-        }
-        if (result.fields.amenities) {
-          const parts = result.fields.amenities
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean);
-          setAmenityChecks((checks) => {
-            const updated = { ...checks };
-            for (const a of options.amenities) {
-              if (parts.some((p) => p.toLowerCase() === a.toLowerCase())) {
-                updated[a] = true;
-              }
-            }
-            return updated;
-          });
-          next.amenities = parts
-            .filter(
-              (p) =>
-                !options.amenities.some(
-                  (a) => a.toLowerCase() === p.toLowerCase(),
-                ),
-            )
-            .join(", ");
+        // Raw notes can hold owner names and numbers, so they only go to staff-only comments.
+        if (!fields.comments && paragraph.trim() && !next.internal_comments) {
+          next.internal_comments = paragraph.trim();
         }
         return next;
       });
       setAiError(false);
+      setAiNotes(notes);
       setAiMessage(
         `Filled ${keys.length} field${keys.length === 1 ? "" : "s"} from the paragraph. Review before saving.`,
       );
@@ -337,6 +341,13 @@ function PropertyFormInner({
                 >
                   {aiMessage}
                 </p>
+              ) : null}
+              {aiNotes.length ? (
+                <ul className="mt-2 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  {aiNotes.map((n) => (
+                    <li key={n}>{n}</li>
+                  ))}
+                </ul>
               ) : null}
             </div>
             <button
