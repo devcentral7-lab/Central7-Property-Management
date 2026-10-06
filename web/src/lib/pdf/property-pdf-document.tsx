@@ -517,7 +517,7 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
         ) : null}
 
         {data.photos.length ? (
-          <View style={{ marginTop: 18 }}>
+          <View style={{ marginTop: 16 }} break>
             {Array.from({ length: Math.ceil(data.photos.length / 2) }, (_, row) => (
               <View key={row} wrap={false}>
                 {row === 0 ? (
