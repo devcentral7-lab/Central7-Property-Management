@@ -551,6 +551,40 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
   );
 }
 
-export function renderPropertyPdf(data: PropertyPdfData, logo: Buffer | null) {
-  return renderToBuffer(<PropertyPdf data={data} logo={logo} />);
+/** react-pdf (pdfkit) writes one uncompressed `/Type /Page` object per page. */
+function countPages(pdf: Buffer): number {
+  return pdf.toString("latin1").match(/\/Type\s*\/Page\b(?!s)/g)?.length ?? 0;
+}
+
+async function fitsFirstPage(
+  data: PropertyPdfData,
+  logo: Buffer | null,
+  amenityCount: number,
+): Promise<boolean> {
+  const trial = { ...data, amenities: data.amenities.slice(0, amenityCount), photos: [] };
+  return countPages(await renderToBuffer(<PropertyPdf data={trial} logo={logo} />)) <= 1;
+}
+
+/**
+ * Everything except photos belongs on page 1. When it doesn't fit, drop
+ * amenities from the end of the list until it does; if even none would fit,
+ * keep them all since trimming can't help.
+ */
+async function amenitiesForFirstPage(data: PropertyPdfData, logo: Buffer | null) {
+  const all = data.amenities;
+  if (!all.length || (await fitsFirstPage(data, logo, all.length))) return all;
+  if (!(await fitsFirstPage(data, logo, 0))) return all;
+  let lo = 0;
+  let hi = all.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (await fitsFirstPage(data, logo, mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  return all.slice(0, lo);
+}
+
+export async function renderPropertyPdf(data: PropertyPdfData, logo: Buffer | null) {
+  const amenities = await amenitiesForFirstPage(data, logo);
+  return renderToBuffer(<PropertyPdf data={{ ...data, amenities }} logo={logo} />);
 }
