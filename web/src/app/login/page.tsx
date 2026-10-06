@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
+import { Icon } from "@/app/app/user-management/ui";
 import { BrandLogo } from "@/components/brand-logo";
 import { createClient } from "@/lib/supabase/client";
 
@@ -13,6 +14,7 @@ function LoginForm() {
   const errorParam = params.get("error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(errorParam);
   const [loading, setLoading] = useState(false);
 
@@ -55,15 +57,28 @@ function LoginForm() {
       </label>
       <label className="block text-sm font-medium text-[var(--ink)]" suppressHydrationWarning>
         Password
-        <input
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="current-password"
-          suppressHydrationWarning
-          className="mt-1.5 w-full rounded-xl border border-[var(--line)] bg-[var(--bg)] px-3.5 py-3 text-[15px] outline-none transition focus:border-[var(--brand)] focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/25"
-        />
+        <span className="relative mt-1.5 block">
+          <input
+            type={showPassword ? "text" : "password"}
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            suppressHydrationWarning
+            className="w-full rounded-xl border border-[var(--line)] bg-[var(--bg)] py-3 pl-3.5 pr-12 text-[15px] outline-none transition focus:border-[var(--brand)] focus:bg-white focus:ring-2 focus:ring-[var(--brand)]/25"
+          />
+          <button
+            type="button"
+            onPointerDown={(e) => e.preventDefault()}
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            title={showPassword ? "Hide password" : "Show password"}
+            className="absolute inset-y-0 right-1.5 my-auto flex h-9 w-9 items-center justify-center rounded-lg text-[var(--muted)] transition hover:bg-[var(--bg-accent)] hover:text-[var(--ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
+          >
+            <Icon name={showPassword ? "eyeOff" : "eye"} className="h-5 w-5" />
+          </button>
+        </span>
       </label>
       {error ? (
         <p

@@ -20,6 +20,7 @@ export type SidebarNavItem = {
     | "users"
     | "agents"
     | "building"
+    | "map"
     | "activity"
     | "queue"
     | "account";
@@ -84,6 +85,13 @@ const icons: Record<SidebarNavItem["icon"], ReactNode> = {
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M4 21h16M6 21V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v17M15 9h3a1 1 0 0 1 1 1v11M9 7h3M9 11h3M9 15h3"
+    />
+  ),
+  map: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.8 12 21 12 21Zm0-9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"
     />
   ),
   activity: (

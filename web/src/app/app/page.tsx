@@ -1,6 +1,6 @@
 import { requireProfile } from "@/lib/auth";
 import { loadAdminAnalytics } from "@/lib/analytics";
-import { parseDashboardPeriod } from "@/lib/dashboard-period";
+import { colomboYear, parseDashboardRange } from "@/lib/dashboard-period";
 import { loadUserDashboard } from "@/lib/user-dashboard";
 import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
 import { UserDashboard } from "@/app/app/dashboard/user-dashboard";
@@ -17,8 +17,8 @@ export default async function AppHomePage({
     const first = (v: string | string[] | undefined) =>
       Array.isArray(v) ? v[0] : v;
     const view = first(sp.view) === "visuals" ? "visuals" : "stats";
-    const period = parseDashboardPeriod(first(sp.period));
-    const result = await loadAdminAnalytics(period).then(
+    const range = parseDashboardRange(first(sp.period), first(sp.year), colomboYear());
+    const result = await loadAdminAnalytics(range).then(
       (data) => ({ data, error: null }),
       (e: unknown) => ({
         data: null,

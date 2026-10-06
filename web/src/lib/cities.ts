@@ -133,3 +133,18 @@ export const LEGACY_CITIES: readonly string[] = [
   "Welisara",
   "Wellawaya",
 ];
+
+/** app_settings key for the admin-edited city list; until it is saved, LEGACY_CITIES is used. */
+export const CITIES_SETTING_KEY = "cities";
+
+export function cleanCityName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+export function cityKey(raw: string): string {
+  return cleanCityName(raw).toLowerCase();
+}
+
+export function sortCities(list: readonly string[]): string[] {
+  return [...list].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}

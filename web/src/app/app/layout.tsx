@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { signOut } from "@/app/app/actions";
 import { PropertyModalProvider } from "@/app/app/properties/property-modal";
+import { CitiesProvider } from "@/components/cities-context";
+import { loadCities } from "@/lib/cities-server";
 import { AppSidebar, type SidebarNavItem } from "./app-sidebar";
 import { NavigationPendingProvider, PendingMain } from "./navigation-pending";
 import { SIDEBAR_COOKIE } from "./sidebar-cookie";
@@ -21,10 +23,14 @@ export default async function AppLayout({
     redirect("/auth/continue");
   }
 
-  const sidebarCollapsed =
-    (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   const isAdmin = profile.role === "Admin";
-  const socialOk = isAdmin || (await canAccessSocialQueue(profile));
+  const [cookieStore, socialAccess, cities] = await Promise.all([
+    cookies(),
+    isAdmin ? true : canAccessSocialQueue(profile),
+    loadCities(),
+  ]);
+  const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
+  const socialOk = isAdmin || socialAccess;
 
   const propertyNav: SidebarNavItem[] = isAdmin
     ? [{ href: "/app/properties", label: "Properties", icon: "folder" }]
@@ -40,6 +46,7 @@ export default async function AppLayout({
     { href: "/app/complexes", label: "Apartment Complexes", icon: "building" },
     ...(isAdmin
       ? ([
+          { href: "/app/cities", label: "Cities", icon: "map" },
           {
             href: "/app/user-management",
             label: "Users",
@@ -62,24 +69,26 @@ export default async function AppLayout({
   ];
 
   return (
-    <PropertyModalProvider>
-      <NavigationPendingProvider>
-        <div className="flex min-h-screen flex-col bg-[var(--bg)] lg:flex-row">
-          <AppSidebar
-            items={nav}
-            displayName={profile.display_name}
-            role={profile.role}
-            signOutAction={signOut}
-            initialCollapsed={sidebarCollapsed}
-          />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <PendingMain className="flex-1 px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:overflow-auto lg:px-8">
-              {children}
-            </PendingMain>
+    <CitiesProvider cities={cities}>
+      <PropertyModalProvider>
+        <NavigationPendingProvider>
+          <div className="flex min-h-screen flex-col bg-[var(--bg)] lg:flex-row">
+            <AppSidebar
+              items={nav}
+              displayName={profile.display_name}
+              role={profile.role}
+              signOutAction={signOut}
+              initialCollapsed={sidebarCollapsed}
+            />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <PendingMain className="flex-1 px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:overflow-auto lg:px-8">
+                {children}
+              </PendingMain>
+            </div>
           </div>
-        </div>
-      </NavigationPendingProvider>
-      {modal}
-    </PropertyModalProvider>
+        </NavigationPendingProvider>
+        {modal}
+      </PropertyModalProvider>
+    </CitiesProvider>
   );
 }
