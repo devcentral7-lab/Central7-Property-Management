@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { LEGACY_CITIES } from "@/lib/cities";
+import { useCities } from "@/components/cities-context";
 
 export function CitySelect({
   value,
@@ -25,7 +25,8 @@ export function CitySelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(-1);
-  const cities = LEGACY_CITIES.filter((city) =>
+  const allCities = useCities();
+  const cities = allCities.filter((city) =>
     city.toLowerCase().includes((query ?? "").trim().toLowerCase()),
   );
 
@@ -104,7 +105,7 @@ export function CitySelect({
             const text = event.target.value;
             setOpen(true);
             setActive(-1);
-            const match = LEGACY_CITIES.find((city) => city.toLowerCase() === text.trim().toLowerCase());
+            const match = allCities.find((city) => city.toLowerCase() === text.trim().toLowerCase());
             setQuery(match ?? text);
             if (match) commit(match);
             else if (autoSubmit && !text.trim()) commit("");

@@ -229,7 +229,8 @@ export type IconName =
   | "eyeOff"
   | "calendar"
   | "logout"
-  | "lock";
+  | "lock"
+  | "pin";
 
 const PATHS: Record<IconName, ReactNode> = {
   users: (
@@ -305,6 +306,12 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <rect x="4" y="8.5" width="12" height="8.5" rx="2" />
       <path d="M6.5 8.5V6a3.5 3.5 0 0 1 7 0v2.5M10 12v2" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M10 17.5s5.5-5 5.5-9.5a5.5 5.5 0 0 0-11 0c0 4.5 5.5 9.5 5.5 9.5Z" />
+      <circle cx="10" cy="8" r="2" />
     </>
   ),
 };

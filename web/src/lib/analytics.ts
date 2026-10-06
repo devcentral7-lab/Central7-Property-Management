@@ -1,4 +1,9 @@
-import type { DashboardPeriod } from "@/lib/dashboard-period";
+import {
+  COLOMBO_OFFSET_MS,
+  colomboYear,
+  type DashboardPeriod,
+  type DashboardRange,
+} from "@/lib/dashboard-period";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 
@@ -45,6 +50,8 @@ export type AdminDetails = {
   cities: NamedCount[];
   doNotPublish: DoNotPublishRow[];
   socialDaily: SocialDailyRow[];
+  /** Long ranges group socialDaily by month (day = first of the month, remaining = month end). */
+  socialUnit: "day" | "month";
 };
 
 export type CompanyOverview = {
@@ -71,6 +78,9 @@ export type AgentContactSplit = {
 
 export type AdminAnalytics = {
   period: DashboardPeriod;
+  year: number;
+  currentYear: number;
+  firstYear: number;
   rangeLabel: string;
   fromIso: string;
   toIso: string;
@@ -94,6 +104,9 @@ export type AdminAnalytics = {
   activeCities: NamedCount[];
   activeCitiesOther: number;
   byDay: DayCount[];
+  /** byDay, or monthly totals (day = first of the month) when the range is too long to chart per day. */
+  trend: DayCount[];
+  trendUnit: "day" | "month";
   byCreator: NamedCount[];
   details: AdminDetails;
 };
@@ -104,23 +117,74 @@ function num(v: unknown): number {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** Sri Lanka is UTC+5:30 all year (no DST). */
-const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const PAGE = 1000;
+/** Longer ranges chart listings added per month instead of per day. */
+const MAX_TREND_DAYS = 400;
 
-function periodStart(period: DashboardPeriod, now: Date): Date {
-  if (period === "30d") return new Date(now.getTime() - 30 * DAY_MS);
-  const local = new Date(now.getTime() + COLOMBO_OFFSET_MS);
-  const y = local.getUTCFullYear();
-  const m = period === "month" ? local.getUTCMonth() : 0;
-  return new Date(Date.UTC(y, m, 1) - COLOMBO_OFFSET_MS);
+function colomboMidnight(y: number, m: number, d = 1): Date {
+  return new Date(Date.UTC(y, m, d) - COLOMBO_OFFSET_MS);
 }
 
-function periodLabel(period: DashboardPeriod, from: Date): string {
-  if (period === "30d") return "Last 30 days";
-  const local = new Date(from.getTime() + COLOMBO_OFFSET_MS);
-  return period === "month"
-    ? local.toLocaleString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })
-    : String(local.getUTCFullYear());
+function periodBounds(range: DashboardRange, now: Date, first: Date): { from: Date; to: Date } {
+  const local = new Date(now.getTime() + COLOMBO_OFFSET_MS);
+  if (range.period === "all") return { from: first < now ? first : now, to: now };
+  if (range.period === "month") {
+    return { from: colomboMidnight(local.getUTCFullYear(), local.getUTCMonth()), to: now };
+  }
+  const from = colomboMidnight(range.year, 0);
+  const end = colomboMidnight(range.year + 1, 0);
+  return { from, to: end < now ? end : now };
+}
+
+function periodLabel(range: DashboardRange, now: Date): string {
+  if (range.period === "all") return "All time";
+  if (range.period === "year") return String(range.year);
+  return new Date(now.getTime() + COLOMBO_OFFSET_MS).toLocaleString("en-GB", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function localDayKey(t: number): string {
+  return new Date(t + COLOMBO_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** Per-agent monthly counts for a past year, and daily counts for its December. */
+async function pastYearAgentBuckets(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  from: Date,
+  to: Date,
+): Promise<Pick<DetailsRaw, "monthly_by_agent" | "daily_by_agent">> {
+  const monthly = new Map<string, number>();
+  const daily = new Map<string, number>();
+  for (let start = 0; ; start += PAGE) {
+    const { data, error } = await supabase
+      .from("properties")
+      .select("created_at, created_by_name")
+      .gte("created_at", from.toISOString())
+      .lt("created_at", to.toISOString())
+      .order("id")
+      .range(start, start + PAGE - 1);
+    if (error) throw error;
+    for (const p of data ?? []) {
+      const key = localDayKey(Date.parse(p.created_at as string));
+      const agent = String(p.created_by_name ?? "").trim() || "(Unassigned)";
+      const month = `${key.slice(0, 7)}\u0000${agent}`;
+      monthly.set(month, (monthly.get(month) ?? 0) + 1);
+      if (key.slice(5, 7) === "12") {
+        const day = `${key.slice(8, 10)}\u0000${agent}`;
+        daily.set(day, (daily.get(day) ?? 0) + 1);
+      }
+    }
+    if (!data || data.length < PAGE) break;
+  }
+  const rows = (m: Map<string, number>): BucketRow[] =>
+    [...m.entries()].map(([k, value]) => {
+      const [bucket, agent] = k.split("\u0000");
+      return { bucket, agent, value };
+    });
+  return { monthly_by_agent: rows(monthly), daily_by_agent: rows(daily) };
 }
 
 type BucketRow = { bucket: string; agent: string; value: number | string };
@@ -200,6 +264,8 @@ function buildDetails(
       remainingRepublish: num(b.republish),
     };
   });
+  const socialMonthly = socialDaily.length > MAX_TREND_DAYS;
+  const social = socialMonthly ? groupSocialByMonth(socialDaily) : socialDaily;
 
   return {
     yearLabel: String(year),
@@ -211,17 +277,51 @@ function buildDetails(
     statusByType,
     cities: (raw.cities ?? []).map((c) => ({ name: String(c.name), value: num(c.value) })),
     doNotPublish: raw.do_not_publish ?? [],
-    socialDaily,
+    socialDaily: social,
+    socialUnit: socialMonthly ? "month" : "day",
   };
 }
 
-/** Aggregate-only Admin home metrics — never downloads property rows. */
-export async function loadAdminAnalytics(
-  period: DashboardPeriod = "30d",
-): Promise<AdminAnalytics> {
+function groupSocialByMonth(rows: SocialDailyRow[]): SocialDailyRow[] {
+  const months = new Map<string, SocialDailyRow>();
+  for (const r of rows) {
+    const day = `${r.day.slice(0, 7)}-01`;
+    const m = months.get(day);
+    if (!m) {
+      months.set(day, { ...r, day });
+      continue;
+    }
+    m.published += r.published;
+    m.republished += r.republished;
+    m.drop += r.drop;
+    m.lost += r.lost;
+    m.hold += r.hold;
+    m.closed += r.closed;
+    m.dataChange += r.dataChange;
+    m.remainingPublish = r.remainingPublish;
+    m.remainingRepublish = r.remainingRepublish;
+  }
+  return [...months.values()];
+}
+
+/**
+ * Admin home metrics from aggregate RPCs. The only row download is created_at and
+ * agent for a past year's by-agent tables, which the details RPC only builds for the current year.
+ */
+export async function loadAdminAnalytics(range: DashboardRange): Promise<AdminAnalytics> {
   const supabase = await createClient();
-  const to = new Date();
-  const from = periodStart(period, to);
+  const now = new Date();
+  const currentYear = colomboYear(now);
+  const { data: firstRow, error: firstErr } = await supabase
+    .from("properties")
+    .select("created_at")
+    .order("created_at")
+    .limit(1)
+    .maybeSingle();
+  if (firstErr) throw firstErr;
+  const first = firstRow?.created_at ? new Date(firstRow.created_at as string) : now;
+  const { from, to } = periodBounds(range, now, first);
+  const pastYear = range.period === "year" && range.year < currentYear;
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
@@ -238,6 +338,7 @@ export async function loadAdminAnalytics(
     breakdownRes,
     detailsRes,
     options,
+    pastYearBuckets,
   ] = await Promise.all([
     supabase.rpc("inventory_kpi_counts"),
     supabase.rpc("dashboard_listing_counts"),
@@ -273,6 +374,7 @@ export async function loadAdminAnalytics(
     supabase.rpc("dashboard_inventory_breakdowns", { p_city_limit: 11 }),
     supabase.rpc("admin_dashboard_details", { p_from: fromIso, p_to: toIso }),
     loadFormOptions(),
+    pastYear ? pastYearAgentBuckets(supabase, from, to) : null,
   ]);
 
   const errors = [
@@ -327,12 +429,19 @@ export async function loadAdminAnalytics(
     dayMap.set(key, num(row.cnt));
   }
   const byDay: DayCount[] = [];
-  const days = Math.max(1, Math.ceil((to.getTime() - from.getTime()) / DAY_MS));
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(to.getTime() - i * DAY_MS);
-    const key = d.toISOString().slice(0, 10);
+  const lastDay = localDayKey(to.getTime() - 1);
+  for (let t = Date.parse(localDayKey(from.getTime())); ; t += DAY_MS) {
+    const key = new Date(t).toISOString().slice(0, 10);
     byDay.push({ day: key, count: dayMap.get(key) ?? 0 });
+    if (key >= lastDay) break;
   }
+  const monthly = byDay.length > MAX_TREND_DAYS;
+  const trend = monthly
+    ? [...byDay.reduce((m, d) => {
+        const key = `${d.day.slice(0, 7)}-01`;
+        return m.set(key, (m.get(key) ?? 0) + d.count);
+      }, new Map<string, number>())].map(([day, count]) => ({ day, count }))
+    : byDay;
 
   const breakdown = (breakdownRes.data ?? {}) as {
     opportunity?: { name: string; value: number }[];
@@ -364,8 +473,11 @@ export async function loadAdminAnalytics(
   ) as CompanyOverview;
 
   return {
-    period,
-    rangeLabel: periodLabel(period, from),
+    period: range.period,
+    year: range.year,
+    currentYear,
+    firstYear: Math.min(colomboYear(first), currentYear),
+    rangeLabel: periodLabel(range, now),
     fromIso,
     toIso,
     overview,
@@ -410,12 +522,18 @@ export async function loadAdminAnalytics(
       .filter((c) => isCatchAll(c.name))
       .reduce((s, c) => s + c.value, 0),
     byDay,
+    trend,
+    trendUnit: monthly ? "month" : "day",
     byCreator: (
       (creatorRes.data ?? []) as Array<{
         created_by_name: string;
         cnt: number | string;
       }>
     ).map((r) => ({ name: r.created_by_name, value: num(r.cnt) })),
-    details: buildDetails((detailsRes.data ?? {}) as DetailsRaw, options, to),
+    details: buildDetails(
+      { ...((detailsRes.data ?? {}) as DetailsRaw), ...pastYearBuckets },
+      options,
+      pastYear ? new Date(to.getTime() - 1) : now,
+    ),
   };
 }

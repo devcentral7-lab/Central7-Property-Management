@@ -35,6 +35,12 @@
   border-radius: 6px;
 }
 
+/* Password fields have their own show/hide button; hide Edge's built-in one. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 :root {
   --bg: #f4f4f5;
   --bg-accent: #ececef;

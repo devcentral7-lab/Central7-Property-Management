@@ -669,8 +669,8 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
       />
 
       <Section
-        title="Social Media Daily Activity"
-        subtitle={`${period} · items marked done on the social media queue, and what was still waiting at the end of each day`}
+        title={d.socialUnit === "month" ? "Social Media Monthly Activity" : "Social Media Daily Activity"}
+        subtitle={`${period} · items marked done on the social media queue, and what was still waiting at the end of each ${d.socialUnit}`}
         icon="share"
       >
         {social.length ? (
@@ -678,7 +678,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
             <table className="w-full min-w-max text-sm">
               <thead>
                 <tr>
-                  <th className={`${stickyTh} text-left`}>Date</th>
+                  <th className={`${stickyTh} text-left`}>{d.socialUnit === "month" ? "Month" : "Date"}</th>
                   {socialCols.map((c) => (
                     <th key={c.key} className={`${stickyTh} text-right`}>
                       {c.label}
@@ -691,7 +691,9 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
               <tbody>
                 {social.map((r) => (
                   <tr key={r.day} className="border-t border-[var(--line)] hover:bg-[var(--bg-accent)]/40">
-                    <td className="whitespace-nowrap py-2.5 pr-3 font-medium">{shortDate(r.day)}</td>
+                    <td className="whitespace-nowrap py-2.5 pr-3 font-medium">
+                      {d.socialUnit === "month" ? monthName(r.day.slice(0, 7)) : shortDate(r.day)}
+                    </td>
                     {socialCols.map((c) => (
                       <td key={c.key} className="py-2.5 pr-3 text-right">
                         <Num value={r[c.key] as number} />
@@ -923,8 +925,11 @@ export function AdminDashboard({
         </ChartPanel>
       </div>
 
-      <ChartPanel title="Listings Added" subtitle={`${period} · per day, dashed line = daily average`}>
-        <TrendChart data={data.byDay} />
+      <ChartPanel
+        title="Listings Added"
+        subtitle={`${period} · per ${data.trendUnit}, dashed line = ${data.trendUnit === "month" ? "monthly" : "daily"} average`}
+      >
+        <TrendChart data={data.trend} unit={data.trendUnit} />
       </ChartPanel>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -1006,7 +1011,12 @@ export function AdminDashboard({
           </h1>
         </div>
         <Suspense fallback={null}>
-          <PeriodSelect period={data.period} />
+          <PeriodSelect
+            period={data.period}
+            year={data.year}
+            currentYear={data.currentYear}
+            firstYear={data.firstYear}
+          />
         </Suspense>
       </div>
 

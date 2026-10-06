@@ -457,7 +457,18 @@ function formatDay(day: string) {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
 }
 
-export function TrendChart({ data }: { data: DayCount[] }) {
+function formatMonth(day: string, long = false) {
+  const d = new Date(`${day}T00:00:00Z`);
+  return d.toLocaleDateString("en-GB", {
+    month: long ? "long" : "short",
+    year: long ? "numeric" : "2-digit",
+    timeZone: "UTC",
+  });
+}
+
+export function TrendChart({ data, unit = "day" }: { data: DayCount[]; unit?: "day" | "month" }) {
+  const perMonth = unit === "month";
+  const label = (day: string, long = false) => (perMonth ? formatMonth(day, long) : formatDay(day));
   const svgRef = useRef<SVGSVGElement>(null);
   const [active, setActive] = useState<number | null>(null);
   const { ref, tip, show, hide } = useTip();
@@ -488,7 +499,7 @@ export function TrendChart({ data }: { data: DayCount[] }) {
     const i = Math.min(data.length - 1, Math.max(0, Math.round(ratio * (data.length - 1))));
     setActive(i);
     const d = data[i];
-    show(e, formatDay(d.day), [
+    show(e, label(d.day, true), [
       { label: "Added", value: d.count.toLocaleString(), color: BRAND.red },
       { label: "Period average", value: avg.toFixed(1) },
     ]);
@@ -503,10 +514,11 @@ export function TrendChart({ data }: { data: DayCount[] }) {
           Total <span className="font-semibold tabular-nums text-[var(--ink)]">{total.toLocaleString()}</span>
         </span>
         <span>
-          Daily average <span className="font-semibold tabular-nums text-[var(--ink)]">{avg.toFixed(1)}</span>
+          {perMonth ? "Monthly" : "Daily"} average{" "}
+          <span className="font-semibold tabular-nums text-[var(--ink)]">{avg.toFixed(1)}</span>
         </span>
         <span>
-          Busiest day{" "}
+          Busiest {perMonth ? "month" : "day"}{" "}
           <span className="font-semibold tabular-nums text-[var(--ink)]">{max.toLocaleString()}</span>
         </span>
       </div>
@@ -515,7 +527,7 @@ export function TrendChart({ data }: { data: DayCount[] }) {
         viewBox={`0 0 ${w} ${h}`}
         className="h-[210px] w-full touch-pan-y sm:h-[250px]"
         role="img"
-        aria-label="Listings added per day"
+        aria-label={`Listings added per ${unit}`}
         onPointerMove={onMove}
         onPointerDown={onMove}
         onPointerLeave={() => {
@@ -561,7 +573,7 @@ export function TrendChart({ data }: { data: DayCount[] }) {
           .filter((_, i) => (i % step === 0 && points.length - 1 - i >= step / 2) || i === points.length - 1)
           .map((p) => (
             <text key={p.day} x={p.x} y={h - 8} textAnchor="middle" fill={BRAND.axis} fontSize={10}>
-              {formatDay(p.day)}
+              {label(p.day)}
             </text>
           ))}
         <rect x={pad.l} y={pad.t} width={innerW} height={innerH} fill="transparent" />
