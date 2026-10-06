@@ -15,9 +15,22 @@ const OPTIONS = [
   },
 ] as const;
 
+const MENU_WIDTH = 256;
+const EDGE_GAP = 8;
+
 export function ExportPdfButton({ refNo }: { refNo: string }) {
   const [open, setOpen] = useState(false);
+  const [alignLeft, setAlignLeft] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  function toggle() {
+    if (!open && ref.current) {
+      // Open toward whichever side has room so the menu stays on screen.
+      const rect = ref.current.getBoundingClientRect();
+      setAlignLeft(rect.right - MENU_WIDTH < EDGE_GAP);
+    }
+    setOpen((v) => !v);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -44,7 +57,7 @@ export function ExportPdfButton({ refNo }: { refNo: string }) {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         className="inline-flex items-center gap-1.5 rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
       >
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4" aria-hidden>
@@ -55,7 +68,10 @@ export function ExportPdfButton({ refNo }: { refNo: string }) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--card)] p-1 shadow-lg"
+          style={{ width: MENU_WIDTH }}
+          className={`absolute z-20 mt-2 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--card)] p-1 shadow-lg ${
+            alignLeft ? "left-0" : "right-0"
+          }`}
         >
           {OPTIONS.map((o) => (
             <a
