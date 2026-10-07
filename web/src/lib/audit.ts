@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuditInput = {
@@ -21,10 +22,15 @@ export type AuditInput = {
   details?: Record<string, unknown> | null;
 };
 
-/** Best-effort audit write — never throws to callers. */
+/**
+ * Best-effort audit write — never throws to callers. Only the server can write
+ * audit entries; the actor is the signed-in user, when there is one.
+ */
 export async function logAudit(input: AuditInput): Promise<void> {
   try {
-    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await (await createClient()).auth.getUser();
     let ip: string | null = null;
     let userAgent: string | null = null;
     try {
@@ -38,7 +44,8 @@ export async function logAudit(input: AuditInput): Promise<void> {
       /* headers() unavailable outside request */
     }
 
-    const { error } = await supabase.rpc("log_audit_event", {
+    const { error } = await createAdminClient().rpc("log_audit_event", {
+      p_actor_id: user?.id ?? null,
       p_category: input.category,
       p_action: input.action,
       p_actor_name: input.actorName ?? null,

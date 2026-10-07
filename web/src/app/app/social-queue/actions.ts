@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import { toResult, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 
 function str(v: FormDataEntryValue | null): string {
@@ -40,7 +41,31 @@ function missingPlatforms(
   return (requested ?? []).filter((p) => !(p in done));
 }
 
-export async function approveSocialQueueItem(formData: FormData) {
+export async function approveSocialQueueItem(formData: FormData): Promise<ActionResult> {
+  return toResult(() => approve(formData));
+}
+
+export async function declineSocialQueueItem(formData: FormData): Promise<ActionResult> {
+  return toResult(() => decline(formData));
+}
+
+export async function setSocialQueuePlatform(
+  id: string,
+  platform: string,
+  done: boolean,
+): Promise<ActionResult> {
+  return toResult(() => setPlatform(id, platform, done));
+}
+
+export async function publishSocialQueueItem(formData: FormData): Promise<ActionResult> {
+  return toResult(() => publish(formData));
+}
+
+export async function revertSocialQueueItem(formData: FormData): Promise<ActionResult> {
+  return toResult(() => revert(formData));
+}
+
+async function approve(formData: FormData) {
   const profile = await requireAdmin();
   const supabase = await createClient();
   const id = str(formData.get("id"));
@@ -91,7 +116,7 @@ export async function approveSocialQueueItem(formData: FormData) {
   revalidateQueue();
 }
 
-export async function declineSocialQueueItem(formData: FormData) {
+async function decline(formData: FormData) {
   const profile = await requireAdmin();
   const supabase = await createClient();
   const id = str(formData.get("id"));
@@ -134,11 +159,7 @@ export async function declineSocialQueueItem(formData: FormData) {
   revalidateQueue();
 }
 
-export async function setSocialQueuePlatform(
-  id: string,
-  platform: string,
-  done: boolean,
-) {
+async function setPlatform(id: string, platform: string, done: boolean) {
   const profile = await requireQueueOperator();
   if (!id || !platform) throw new Error("Missing queue item or platform");
   const supabase = await createClient();
@@ -174,7 +195,7 @@ export async function setSocialQueuePlatform(
   revalidatePath("/app/social-queue");
 }
 
-export async function publishSocialQueueItem(formData: FormData) {
+async function publish(formData: FormData) {
   const profile = await requireQueueOperator();
   const supabase = await createClient();
   const id = str(formData.get("id"));
@@ -221,7 +242,7 @@ export async function publishSocialQueueItem(formData: FormData) {
   revalidateQueue();
 }
 
-export async function revertSocialQueueItem(formData: FormData) {
+async function revert(formData: FormData) {
   const profile = await requireQueueOperator();
   const supabase = await createClient();
   const id = str(formData.get("id"));

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import { toResult, type ActionResult } from "@/lib/action-result";
 import {
   FORM_LIST_KEYS,
   type FormListKey,
@@ -30,7 +31,11 @@ function normalizeItems(raw: string[]): string[] {
   return out;
 }
 
-export async function saveFormList(key: string, items: string[]) {
+export async function saveFormList(key: string, items: string[]): Promise<ActionResult> {
+  return toResult(() => writeFormList(key, items));
+}
+
+async function writeFormList(key: string, items: string[]) {
   await requireAdmin();
   if (!(FORM_LIST_KEYS as readonly string[]).includes(key)) {
     throw new Error("Unknown list");

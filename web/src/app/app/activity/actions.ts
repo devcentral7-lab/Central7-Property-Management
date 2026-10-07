@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import { toResult, type ActionResult } from "@/lib/action-result";
 import { createClient } from "@/lib/supabase/server";
 
 /** Queue actions after which the listing is live on its platforms. */
@@ -15,7 +16,13 @@ export type ResolveDataChangeResult = { queued: boolean; message: string };
  * media, it goes straight to the social media queue (pre-approved) so the
  * posts get updated too.
  */
-export async function resolveDataChange(id: string): Promise<ResolveDataChangeResult> {
+export async function resolveDataChange(
+  id: string,
+): Promise<ActionResult<ResolveDataChangeResult>> {
+  return toResult(() => resolve(id));
+}
+
+async function resolve(id: string): Promise<ResolveDataChangeResult> {
   const profile = await requireProfile();
   if (profile.role !== "Admin") {
     throw new Error("Only Admin can complete data change requests");

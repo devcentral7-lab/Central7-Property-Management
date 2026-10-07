@@ -54,11 +54,12 @@ export function FormListEditor({
     setError(false);
     startTransition(async () => {
       try {
-        await saveFormList(listKey, items);
-        setMessage("Saved.");
-      } catch (e) {
+        const result = await saveFormList(listKey, items);
+        setError(!result.ok);
+        setMessage(result.ok ? "Saved." : result.error);
+      } catch {
         setError(true);
-        setMessage(e instanceof Error ? e.message : "Save failed.");
+        setMessage("Save failed.");
       }
     });
   }
