@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
+import { LiveFilterForm } from "@/components/live-filter-form";
 import {
   QueueItemCard,
   type PlatformDates,
@@ -22,7 +23,18 @@ type QueueProperty = {
 } | null;
 
 const SELECT =
-  "id, ref_no, approved_action, approved_by, approved_at, completed_at, requested_platforms, platform_dates, property:properties(opportunity_type, property_type, city, status, contact_name, contact_phone_1)";
+  "id, ref_no, approved_action, approved_by, approved_at, completed_at, requested_platforms, platform_dates, comment, property:properties(opportunity_type, property_type, city, status, contact_name, contact_phone_1)";
+
+const STATUS_OPTIONS = [
+  "Publish",
+  "New Ad Published",
+  "Republish",
+  "Data Change",
+  "Drop",
+  "Lost",
+  "Hold",
+  "Closed",
+];
 
 function one(v: string | string[] | undefined) {
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
@@ -53,7 +65,11 @@ export default async function SocialQueuePage({
   const sp = await searchParams;
   const tab =
     one(sp.tab).toLowerCase() === "published" ? "published" : "pending";
+  const requestedStatus = one(sp.status);
+  const status = STATUS_OPTIONS.includes(requestedStatus) ? requestedStatus : "";
   const supabase = await createClient();
+
+  const statusMatch = status ? { approved_action: status } : {};
 
   // Only approved (or done) items appear here — pending approval stays on Activity.
   // Separate query chains avoid Supabase TS "excessively deep" errors.
@@ -64,6 +80,7 @@ export default async function SocialQueuePage({
           .select(SELECT)
           .not("approved_at", "is", null)
           .not("completed_at", "is", null)
+          .match(statusMatch)
           .order("completed_at", { ascending: false })
           .limit(100)
       : await supabase
@@ -71,21 +88,23 @@ export default async function SocialQueuePage({
           .select(SELECT)
           .not("approved_at", "is", null)
           .is("completed_at", null)
+          .match(statusMatch)
           .order("approved_at", { ascending: false })
           .limit(100);
 
   if (error) return <p className="text-[var(--danger)]">{error.message}</p>;
 
+  const statusQs = status ? `status=${encodeURIComponent(status)}` : "";
   const tabs = [
     {
       id: "pending" as const,
       label: "Pending",
-      href: "/app/social-queue",
+      href: `/app/social-queue${statusQs ? `?${statusQs}` : ""}`,
     },
     {
       id: "published" as const,
-      label: "Published",
-      href: "/app/social-queue?tab=published",
+      label: "Done",
+      href: `/app/social-queue?tab=published${statusQs ? `&${statusQs}` : ""}`,
     },
   ];
 
@@ -99,7 +118,8 @@ export default async function SocialQueuePage({
         as you post it — Done unlocks once every platform is ticked.
       </p>
 
-      <div className="tab-scroll -mx-4 mt-5 border-b border-[var(--line)] px-4 pb-3 sm:mx-0 sm:mt-6 sm:px-0">
+      <div className="mt-5 flex flex-col gap-3 border-b border-[var(--line)] pb-3 sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
+      <div className="tab-scroll -mx-4 px-4 sm:mx-0 sm:px-0">
         {tabs.map((t) => {
           const active = t.id === tab;
           return (
@@ -116,6 +136,26 @@ export default async function SocialQueuePage({
             </Link>
           );
         })}
+      </div>
+
+      <LiveFilterForm action="/app/social-queue" className="sm:shrink-0">
+        <input type="hidden" name="tab" value={tab === "published" ? "published" : ""} readOnly />
+        <label className="flex items-center gap-2 text-sm font-medium">
+          Status
+          <select
+            name="status"
+            defaultValue={status}
+            className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm sm:w-48"
+          >
+            <option value="">All statuses</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+      </LiveFilterForm>
       </div>
 
       <p className="mt-4 text-sm text-[var(--muted)]">
@@ -157,6 +197,12 @@ export default async function SocialQueuePage({
                     </span>
                   ) : null}
                 </div>
+
+                {row.approved_action === "Data Change" && row.comment ? (
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <span className="font-semibold">What changed:</span> {row.comment}
+                  </p>
+                ) : null}
 
                 <div className="mt-2 space-y-0.5 text-sm text-[var(--muted)]">
                   {summary.length || property?.status ? (
@@ -208,8 +254,10 @@ export default async function SocialQueuePage({
         })}
         {!rows.length ? (
           <li className="rounded-2xl border border-[var(--line)] bg-[var(--card)] px-4 py-8 text-center text-sm text-[var(--muted)]">
-            {tab === "published"
-              ? "No published items yet."
+            {status
+              ? `No ${tab === "published" ? "done" : "pending"} ${status} items.`
+              : tab === "published"
+              ? "No done items yet."
               : "No pending items. Approve requests from the Activity log first."}
           </li>
         ) : null}
