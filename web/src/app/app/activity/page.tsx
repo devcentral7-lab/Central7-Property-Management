@@ -6,6 +6,7 @@ import {
   SocialQueueStatusBadge,
   type SocialQueueStatus,
 } from "@/app/app/social-queue/queue-actions";
+import { DataChangeActions } from "@/app/app/activity/data-change-actions";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { LinkRow } from "@/components/clickable-row";
 import { LiveFilterForm } from "@/components/live-filter-form";
@@ -34,6 +35,13 @@ type FeedRow = {
   queue_id?: string;
   queue_status?: SocialQueueStatus;
   queue_platforms?: string[];
+  data_change?: {
+    id: string;
+    resolved_at: string | null;
+    resolved_by: string | null;
+    resolution_note: string | null;
+    queue_status: SocialQueueStatus | null;
+  };
 };
 
 function EventRow({
@@ -88,6 +96,7 @@ function IntentPill({ intent }: { intent: string }) {
 
 const CATEGORIES = [
   { id: "social", label: "Social media approvals" },
+  { id: "data_change", label: "Data changes" },
   { id: "queue", label: "Social media queue" },
   { id: "auth", label: "Logins" },
   { id: "property", label: "Properties" },
@@ -147,6 +156,7 @@ export default async function ActivityPage({
     { data: auditRows, error: auditErr },
     { data: workflowRows, error: wfErr },
     { data: socialRows, error: socialErr },
+    { data: dataChangeRows, error: dataChangeErr },
   ] = await Promise.all([
     supabase
       .from("audit_log")
@@ -173,12 +183,21 @@ export default async function ActivityPage({
       .neq("requested_platforms", "{}")
       .order("created_at", { ascending: false })
       .limit(100),
+    supabase
+      .from("property_status_events")
+      .select(
+        "id, occurred_at, ref_no, actor_name, comment, assigned_to, resolved_at, resolved_by, resolution_note, property:properties(property_type, opportunity_type, city)",
+      )
+      .eq("action", "Data Change")
+      .is("archived_at", null)
+      .order("occurred_at", { ascending: false })
+      .limit(200),
   ]);
 
-  if (auditErr || wfErr || socialErr) {
+  if (auditErr || wfErr || socialErr || dataChangeErr) {
     return (
       <p className="text-[var(--danger)]">
-        {auditErr?.message || wfErr?.message || socialErr?.message}
+        {auditErr?.message || wfErr?.message || socialErr?.message || dataChangeErr?.message}
       </p>
     );
   }
@@ -287,6 +306,59 @@ export default async function ActivityPage({
     });
   }
 
+  const resolvedRefs = [
+    ...new Set((dataChangeRows ?? []).filter((r) => r.resolved_at).map((r) => r.ref_no)),
+  ];
+  const dataChangeQueue = new Map<string, { approved_at: string | null; completed_at: string | null }>();
+  if (resolvedRefs.length) {
+    const { data: queueRows } = await supabase
+      .from("social_media_queue")
+      .select("ref_no, approved_at, completed_at")
+      .eq("approved_action", "Data Change")
+      .in("ref_no", resolvedRefs);
+    for (const row of queueRows ?? []) dataChangeQueue.set(row.ref_no, row);
+  }
+
+  let openDataChanges = 0;
+  for (const row of dataChangeRows ?? []) {
+    if (!row.resolved_at) openDataChanges += 1;
+    const property = (Array.isArray(row.property) ? row.property[0] : row.property) as {
+      property_type: string | null;
+      opportunity_type: string | null;
+      city: string | null;
+    } | null;
+    const queueRow = dataChangeQueue.get(row.ref_no);
+    // Queue rows are per ref; only the request that created this item owns it.
+    const sentToQueue =
+      row.resolved_at &&
+      queueRow?.approved_at &&
+      new Date(queueRow.approved_at).getTime() === new Date(row.resolved_at).getTime();
+    feed.push({
+      id: `dc-${row.id}`,
+      occurred_at: row.occurred_at,
+      category: "data_change",
+      action: "data_change_request",
+      actor_name: row.actor_name,
+      actor_kind: row.actor_name ? "requested" : null,
+      subject_label: row.ref_no,
+      subject_href: `/app/properties/${row.ref_no}`,
+      summary: row.comment || "No details given",
+      detail_lines: [
+        [property?.property_type, property?.opportunity_type, property?.city]
+          .filter(Boolean)
+          .join(" · "),
+        row.assigned_to ? `assigned: ${row.assigned_to}` : "",
+      ].filter(Boolean),
+      data_change: {
+        id: row.id,
+        resolved_at: row.resolved_at,
+        resolved_by: row.resolved_by,
+        resolution_note: row.resolution_note,
+        queue_status: sentToQueue && queueRow ? socialStatus(queueRow) : null,
+      },
+    });
+  }
+
   feed.sort(
     (a, b) =>
       new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
@@ -367,6 +439,16 @@ export default async function ActivityPage({
               }`}
             >
               {c.label}
+              {c.id === "data_change" && openDataChanges ? (
+                <span
+                  className={`ml-1.5 inline-flex min-w-5 justify-center rounded-full px-1.5 text-[10px] leading-4 ${
+                    active ? "bg-white text-[var(--brand)]" : "bg-[var(--brand)] text-white"
+                  }`}
+                  title={`${openDataChanges} to do`}
+                >
+                  {openDataChanges}
+                </span>
+              ) : null}
             </Link>
           );
         })}
@@ -442,6 +524,17 @@ export default async function ActivityPage({
                   status={e.queue_status}
                   mode="activity"
                   platforms={e.queue_platforms}
+                />
+              </div>
+            ) : null}
+            {e.data_change ? (
+              <div className="mt-3 border-t border-[var(--line)] pt-3" data-row-ignore>
+                <DataChangeActions
+                  id={e.data_change.id}
+                  resolvedAt={e.data_change.resolved_at}
+                  resolvedBy={e.data_change.resolved_by}
+                  note={e.data_change.resolution_note}
+                  queueStatus={e.data_change.queue_status}
                 />
               </div>
             ) : null}
@@ -532,6 +625,16 @@ export default async function ActivityPage({
                         status={e.queue_status}
                         mode="activity"
                         platforms={e.queue_platforms}
+                      />
+                    </div>
+                  ) : e.data_change ? (
+                    <div data-row-ignore>
+                      <DataChangeActions
+                        id={e.data_change.id}
+                        resolvedAt={e.data_change.resolved_at}
+                        resolvedBy={e.data_change.resolved_by}
+                        note={e.data_change.resolution_note}
+                        queueStatus={e.data_change.queue_status}
                       />
                     </div>
                   ) : (

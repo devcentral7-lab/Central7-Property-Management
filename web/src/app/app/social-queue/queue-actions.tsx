@@ -187,7 +187,7 @@ export type SocialQueueStatus = "pending" | "approved" | "published";
 export function queueStatusLabel(status: SocialQueueStatus) {
   if (status === "pending") return "Pending approval";
   if (status === "approved") return "Pending publish";
-  return "Published";
+  return "Done";
 }
 
 export function SocialQueueStatusBadge({ status }: { status: SocialQueueStatus }) {
