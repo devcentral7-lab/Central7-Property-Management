@@ -7,7 +7,9 @@ import type {
   AgentContactSplit,
   SocialDailyRow,
 } from "@/lib/analytics";
+import type { FinanceDashboard } from "@/lib/finance-shared";
 import { PropertyLink } from "@/app/app/properties/property-modal";
+import { RevenueSummary } from "@/app/app/finance/revenue-summary";
 import { PeriodSelect } from "@/app/app/dashboard/period-select";
 import { RefSearch } from "@/app/app/dashboard/ref-search";
 import {
@@ -39,7 +41,8 @@ type IconName =
   | "calendar"
   | "tag"
   | "eyeOff"
-  | "pin";
+  | "pin"
+  | "wallet";
 
 function Icon({ name, className = "h-4 w-4" }: { name: IconName; className?: string }) {
   const paths: Record<IconName, string> = {
@@ -57,6 +60,7 @@ function Icon({ name, className = "h-4 w-4" }: { name: IconName; className?: str
     clock: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
     table: "M3 5h18v14H3zM3 10h18M9 10v9",
     chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    wallet: "M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 3h18M7 15h3",
   };
   return (
     <svg
@@ -108,7 +112,6 @@ function Section({
 }) {
   return (
     <details
-      open
       className="group min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)]"
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
@@ -770,9 +773,12 @@ function ChartPanel({
 export function AdminDashboard({
   data,
   view = "stats",
+  finance,
 }: {
   data: AdminAnalytics;
   view?: DashboardView;
+  /** `query` is the Finance page filter matching the dashboard period. */
+  finance?: { dashboard: FinanceDashboard; query: string } | null;
 }) {
   const { overview: ov } = data;
   const period = data.rangeLabel;
@@ -837,6 +843,28 @@ export function AdminDashboard({
           />
         </div>
       </Section>
+
+      {finance ? (
+        <Section
+          title="Sale, Rental & Fees"
+          subtitle={`${period} · invoices by revenue type`}
+          icon="wallet"
+        >
+          <RevenueSummary
+            dashboard={finance.dashboard}
+            typeHref={(type) => `/app/finance?${finance.query}&type=${encodeURIComponent(type)}#invoices`}
+            outstandingHref={`/app/finance?${finance.query}&status=outstanding#invoices`}
+          />
+          <div className="mt-4 text-right">
+            <Link
+              href={`/app/finance?${finance.query}`}
+              className="text-sm font-semibold text-[var(--brand)] hover:underline"
+            >
+              Open Finance →
+            </Link>
+          </div>
+        </Section>
+      ) : null}
 
       <Section
         title="Properties Added By Agent"
