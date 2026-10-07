@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import { toResult, type ActionResult } from "@/lib/action-result";
 import { loadFormOptions } from "@/lib/form-options";
 import { loadCities } from "@/lib/cities-server";
 import { loadComplexOptions } from "@/lib/complexes-server";
@@ -197,17 +198,22 @@ async function buildPropertyPayload(formData: FormData) {
   };
 }
 
-export async function createProperty(formData: FormData) {
-  await saveProperty(formData);
+export async function createProperty(formData: FormData): Promise<ActionResult> {
+  const result = await toResult(() => saveProperty(formData));
+  if (!result.ok) return result;
   redirect("/app/my-properties");
 }
 
-export async function createPropertyForImageUpload(formData: FormData) {
-  await requireProfile();
-  if (!isDriveConfigured()) {
-    throw new Error("Image uploads are not configured. Please contact an administrator.");
-  }
-  return saveProperty(formData);
+export async function createPropertyForImageUpload(
+  formData: FormData,
+): Promise<ActionResult<{ id: string; ref_no: string }>> {
+  return toResult(async () => {
+    await requireProfile();
+    if (!isDriveConfigured()) {
+      throw new Error("Image uploads are not configured. Please contact an administrator.");
+    }
+    return saveProperty(formData);
+  });
 }
 
 async function saveProperty(formData: FormData) {
@@ -258,7 +264,7 @@ async function saveProperty(formData: FormData) {
       (settings?.value as { new_listing_admin?: string } | null)?.new_listing_admin ||
       "Keerthie";
 
-    await supabase.from("property_status_events").insert({
+    const { error: eventErr } = await supabase.from("property_status_events").insert({
       property_id: property.id,
       ref_no: property.ref_no,
       actor_id: profile.id,
@@ -268,9 +274,11 @@ async function saveProperty(formData: FormData) {
       requested_platforms: platforms,
       assigned_to: assignedTo,
     });
+    if (eventErr) console.error("saveProperty status event", eventErr.message);
 
     if (platforms.length > 0) {
-      const { error: queueErr } = await supabase.from("social_media_queue").upsert(
+      // Only Admin may write the queue under RLS; any staff member may list a property.
+      const { error: queueErr } = await createAdminClient().from("social_media_queue").upsert(
         {
           property_id: property.id,
           ref_no: property.ref_no,
@@ -314,7 +322,13 @@ async function saveProperty(formData: FormData) {
   return property;
 }
 
-export async function updateProperty(formData: FormData) {
+export async function updateProperty(formData: FormData): Promise<ActionResult> {
+  const result = await toResult(() => editProperty(formData));
+  if (!result.ok) return result;
+  redirect("/app/properties");
+}
+
+async function editProperty(formData: FormData) {
   const profile = await requireProfile();
   if (profile.role !== "Admin") {
     throw new Error("Only Admins can edit listings. Use Update status → Data Change to request a change.");
@@ -356,10 +370,13 @@ export async function updateProperty(formData: FormData) {
   revalidatePath(`/app/properties/${refNo}`);
   revalidatePath("/app/properties");
   revalidatePath("/app/activity");
-  redirect("/app/properties");
 }
 
-export async function updatePropertyStatus(formData: FormData) {
+export async function updatePropertyStatus(formData: FormData): Promise<ActionResult> {
+  return toResult(() => changePropertyStatus(formData));
+}
+
+async function changePropertyStatus(formData: FormData) {
   const profile = await requireProfile();
   const supabase = await createClient();
   const options = await loadFormOptions();
@@ -405,8 +422,11 @@ export async function updatePropertyStatus(formData: FormData) {
     nextStatus = action;
   }
 
+  // RLS lets only Admin edit listings and the queue; owners were checked above.
+  const service = createAdminClient();
+
   if (nextStatus !== property.status) {
-    const { error: upErr } = await supabase
+    const { error: upErr } = await service
       .from("properties")
       .update({ status: nextStatus })
       .eq("id", property.id);
@@ -425,7 +445,7 @@ export async function updatePropertyStatus(formData: FormData) {
       "Keerthie";
   }
 
-  await supabase.from("property_status_events").insert({
+  const { error: eventErr } = await supabase.from("property_status_events").insert({
     property_id: property.id,
     ref_no: property.ref_no,
     actor_id: profile.id,
@@ -435,6 +455,7 @@ export async function updatePropertyStatus(formData: FormData) {
     assigned_to: assignedTo,
     requested_platforms: action === "Republish" ? republishPlatforms : [],
   });
+  if (eventErr) throw eventErr;
 
   await logAudit({
     category: "property",
@@ -454,12 +475,8 @@ export async function updatePropertyStatus(formData: FormData) {
     },
   });
 
-  // Agents may file requests but RLS limits queue reads/updates to queue
-  // operators; access was already checked above.
-  const queue = createAdminClient();
-
   if (["Drop", "Lost", "Hold", "Closed"].includes(action)) {
-    const { data: existing } = await queue
+    const { data: existing } = await service
       .from("social_media_queue")
       .select("requested_platforms")
       .eq("ref_no", property.ref_no)
@@ -478,7 +495,7 @@ export async function updatePropertyStatus(formData: FormData) {
     }
     // Never posted anywhere: nothing to take down, so no approval needed.
     if (platforms.length) {
-      const { error: queueErr } = await queue.from("social_media_queue").upsert(
+      const { error: queueErr } = await service.from("social_media_queue").upsert(
         {
           property_id: property.id,
           ref_no: property.ref_no,
@@ -494,7 +511,7 @@ export async function updatePropertyStatus(formData: FormData) {
       if (queueErr) throw queueErr;
     }
   } else if (action === "Republish") {
-    const { error: queueErr } = await queue.from("social_media_queue").upsert(
+    const { error: queueErr } = await service.from("social_media_queue").upsert(
       {
         property_id: property.id,
         ref_no: property.ref_no,
@@ -515,7 +532,13 @@ export async function updatePropertyStatus(formData: FormData) {
   revalidatePath("/app/social-queue");
 }
 
-export async function deleteProperty(formData: FormData) {
+export async function deleteProperty(formData: FormData): Promise<ActionResult> {
+  const result = await toResult(() => removeProperty(formData));
+  if (!result.ok) return result;
+  redirect("/app/properties");
+}
+
+async function removeProperty(formData: FormData) {
   const profile = await requireProfile();
   if (profile.role !== "Admin") {
     throw new Error("Only Admin can delete listings");
@@ -560,5 +583,4 @@ export async function deleteProperty(formData: FormData) {
   revalidatePath("/app/activity");
   revalidatePath("/search");
   revalidatePath("/app");
-  redirect("/app/properties");
 }

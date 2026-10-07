@@ -31,3 +31,8 @@ supabase/.branches/
 # Python caches from helper scripts
 __pycache__/
 *.pyc
+
+# Business spreadsheets (customer, invoice and owner data) stay local
+*.xlsx
+*.xls
+*.csv

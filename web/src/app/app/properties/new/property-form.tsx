@@ -252,15 +252,19 @@ function PropertyFormInner({
   }
 
   async function formAction(formData: FormData) {
-    if (mode === "edit") return updateProperty(formData);
-    if (!imageFiles.length && !savedProperty.current) return createProperty(formData);
     setSaveError(null);
+    if (mode === "edit" || (!imageFiles.length && !savedProperty.current)) {
+      const result = mode === "edit" ? await updateProperty(formData) : await createProperty(formData);
+      if (result && !result.ok) setSaveError(result.error);
+      return;
+    }
     setSavingImages(true);
     try {
       if (!savedProperty.current) {
-        const property = await createPropertyForImageUpload(formData);
-        savedProperty.current = property.ref_no;
-        setSavedRef(property.ref_no);
+        const result = await createPropertyForImageUpload(formData);
+        if (!result.ok) throw new Error(result.error);
+        savedProperty.current = result.data.ref_no;
+        setSavedRef(result.data.ref_no);
       }
       const finalRef = savedProperty.current;
       for (let index = 0; index < imageFiles.length; index++) {

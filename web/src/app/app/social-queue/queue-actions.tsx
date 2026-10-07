@@ -70,9 +70,10 @@ export function QueueItemCard({
     startTransition(async () => {
       applyTick({ platform, done: nextDone });
       try {
-        await setSocialQueuePlatform(id, platform, nextDone);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not update platform");
+        const result = await setSocialQueuePlatform(id, platform, nextDone);
+        if (!result.ok) setError(result.error);
+      } catch {
+        setError("Could not update platform");
       }
     });
   }
@@ -83,10 +84,11 @@ export function QueueItemCard({
     setError(null);
     startTransition(async () => {
       try {
-        if (kind === "done") await publishSocialQueueItem(fd);
-        else await revertSocialQueueItem(fd);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not update item");
+        const result =
+          kind === "done" ? await publishSocialQueueItem(fd) : await revertSocialQueueItem(fd);
+        if (!result.ok) setError(result.error);
+      } catch {
+        setError("Could not update item");
       }
     });
   }
@@ -235,12 +237,17 @@ export function SocialQueueActions({
     setError(null);
     startTransition(async () => {
       try {
-        if (action === "approve") await approveSocialQueueItem(fd);
-        else if (action === "decline") await declineSocialQueueItem(fd);
-        else if (action === "publish") await publishSocialQueueItem(fd);
-        else await revertSocialQueueItem(fd);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not update item");
+        const result =
+          action === "approve"
+            ? await approveSocialQueueItem(fd)
+            : action === "decline"
+              ? await declineSocialQueueItem(fd)
+              : action === "publish"
+                ? await publishSocialQueueItem(fd)
+                : await revertSocialQueueItem(fd);
+        if (!result.ok) setError(result.error);
+      } catch {
+        setError("Could not update item");
       }
     });
   }

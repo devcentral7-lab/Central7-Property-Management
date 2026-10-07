@@ -41,12 +41,16 @@ export function UpdateStatusButton({
     setError(null);
     startTransition(async () => {
       try {
-        await updatePropertyStatus(fd);
+        const result = await updatePropertyStatus(fd);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
         setOpen(false);
         router.refresh();
         onDone?.();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not update status.");
+      } catch {
+        setError("Could not update status. Check your connection and try again.");
       }
     });
   }

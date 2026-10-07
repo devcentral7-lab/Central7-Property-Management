@@ -40,9 +40,10 @@ export function DataChangeActions({
     startTransition(async () => {
       try {
         const result = await resolveDataChange(id);
-        setMessage(result.message);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not update request");
+        if (result.ok) setMessage(result.data.message);
+        else setError(result.error);
+      } catch {
+        setError("Could not update request");
       }
     });
   }
