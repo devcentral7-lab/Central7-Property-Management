@@ -23,6 +23,7 @@ export type SidebarNavItem = {
     | "map"
     | "activity"
     | "queue"
+    | "finance"
     | "account";
   match?: "exact" | "prefix";
 };
@@ -106,6 +107,13 @@ const icons: Record<SidebarNavItem["icon"], ReactNode> = {
       strokeLinecap="round"
       strokeLinejoin="round"
       d="M4 6h16M4 12h16M4 18h10"
+    />
+  ),
+  finance: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm0 3h18M7 15h3"
     />
   ),
   account: (

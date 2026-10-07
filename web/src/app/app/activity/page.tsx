@@ -103,6 +103,7 @@ const CATEGORIES = [
   { id: "staff", label: "Staff" },
   { id: "partner", label: "Partners" },
   { id: "settings", label: "Settings" },
+  { id: "finance", label: "Finance" },
   { id: "workflow", label: "Workflow" },
 ] as const;
 
@@ -218,7 +219,9 @@ export default async function ActivityPage({
       subject_href:
         row.subject_type === "property" && row.subject_label
           ? `/app/properties/${row.subject_label}`
-          : null,
+          : row.subject_type === "invoice" && row.subject_id
+            ? `/app/finance/invoices/${row.subject_id}`
+            : null,
       summary: row.summary,
       detail_lines: details,
     });

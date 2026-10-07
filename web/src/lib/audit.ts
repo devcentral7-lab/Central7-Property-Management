@@ -9,6 +9,7 @@ export type AuditInput = {
     | "partner"
     | "settings"
     | "queue"
+    | "finance"
     | "other";
   action: string;
   actorName?: string | null;
