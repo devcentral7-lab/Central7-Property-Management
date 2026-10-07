@@ -3,7 +3,8 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RangeFilter } from "@/components/range-filter";
-import { CityMultiSelect } from "@/components/city-multi-select";
+import { useCities } from "@/components/cities-context";
+import { MultiSelectFilter } from "@/components/multi-select-filter";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import type { FormOptions } from "@/lib/form-options";
@@ -50,8 +51,12 @@ type Props = {
 
 export function PropertySearchForm({ options, filters, complexes }: Props) {
   const router = useRouter();
+  const cities = useCities();
+  const cityOptions = useMemo(() => cities.map((c) => ({ value: c, label: c })), [cities]);
+  const complexOptions = useMemo(() => complexes.map((c) => ({ value: c.id, label: c.name })), [complexes]);
   const hasAdvanced = useMemo(() => {
     const keys: (keyof SearchFilterValues)[] = [
+      "complex",
       "opportunity_type",
       "contact_type",
       "furnished",
@@ -206,8 +211,17 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               ))}
             </select>
           </label>
-          <CityMultiSelect defaultValue={filters.city} />
-          <label className="text-sm font-medium">
+          <MultiSelectFilter
+            name="city"
+            label="City"
+            options={cityOptions}
+            defaultValue={filters.city}
+            allLabel="All cities"
+            addLabel="Add city"
+            emptyLabel="No cities found"
+            className="xl:col-span-2"
+          />
+          <label className="text-sm font-medium xl:col-span-2">
             Opportunity
             <select
               name="opportunity_type"
@@ -218,21 +232,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               {options.opportunityTypes.map((t) => (
                 <option key={t} value={t}>
                   {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="col-span-2 text-sm font-medium">
-            Apartment complex
-            <select
-              name="complex"
-              defaultValue={filters.complex}
-              className={`${inputClass} mt-1`}
-            >
-              <option value="">All complexes</option>
-              {complexes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
                 </option>
               ))}
             </select>
@@ -266,6 +265,16 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
         {showAdvanced ? (
           <div className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
             <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <MultiSelectFilter
+                name="complex"
+                label="Apartment complex"
+                options={complexOptions}
+                defaultValue={filters.complex}
+                allLabel="All complexes"
+                addLabel="Add complex"
+                emptyLabel="No complexes found"
+                className="sm:col-span-2 xl:col-span-3"
+              />
               <label className="text-sm font-medium">
                 Contact Type
                 <select
