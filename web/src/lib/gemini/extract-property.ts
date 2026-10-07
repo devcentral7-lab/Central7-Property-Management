@@ -404,9 +404,7 @@ export async function extractPropertyFieldsWithGemini(
       .flatMap((v) => (Array.isArray(v) ? v : strVal(v).split(",")))
       .map(strVal)
       .filter(Boolean);
-    // The complex filter takes one complex; several narrow the search to their cities instead.
-    if (named.length === 1) fields.complex = named[0].id;
-    else for (const c of named) if (c.location) places.push(c.location);
+    if (named.length) fields.complex = named.map((c) => c.id).join(",");
     const matched = cities.length ? matchCities(places, cities, input) : places;
     if (matched.length) fields.city = matched.join(",");
     else delete fields.city;
