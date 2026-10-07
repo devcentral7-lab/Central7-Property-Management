@@ -54,6 +54,7 @@ export default async function AppLayout({
             match: "exact",
           },
           { href: "/app/activity", label: "Activity Log", icon: "activity" },
+          { href: "/app/finance", label: "Finance", icon: "finance" },
         ] as SidebarNavItem[])
       : []),
     ...(socialOk

@@ -13,6 +13,7 @@
     "migrate:sync": "tsx scripts/migrate/sync-legacy.ts",
     "migrate:update-view": "tsx scripts/migrate/update-view-from-excel.ts",
     "migrate:update-parking": "tsx scripts/migrate/update-parking-from-excel.ts",
+    "finance:import": "tsx scripts/migrate/import-invoices.ts",
     "seed:staff": "tsx scripts/seed-staff.ts",
     "seed:agent": "tsx scripts/seed-agent.ts",
     "drive:fix-nesting": "tsx web/scripts/drive/fix-nesting.ts",
