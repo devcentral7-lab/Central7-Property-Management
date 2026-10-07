@@ -23,6 +23,12 @@ const FILE = 'INVOICE Tracker.xlsx';
 const DRY = process.argv.includes('--dry');
 /** Directors: credited on invoices but no targets / quarterly chart. */
 const NON_SALES_AGENTS = new Set(['Keerthie', 'Sherden']);
+/** Targets the old dashboard hard-coded for years whose sheet has no target rows. */
+const LEGACY_TARGETS: { year: number; agent: string; target: number }[] = [
+  { year: 2022, agent: 'Theeban', target: 9600000 },
+  { year: 2022, agent: 'Chaminda', target: 9600000 },
+  { year: 2022, agent: 'Jeyandran', target: 1200000 },
+];
 
 type Category = 'C7 Brokering' | 'C7 Management' | 'Car Park' | 'Other';
 type RevenueType = 'Sale' | 'Rental' | 'Management Fee' | 'Car Park' | 'Other';
@@ -163,11 +169,10 @@ function parseSheet(name: string, ws: import('xlsx').WorkSheet) {
           if (a > 0) agents.push({ name: agent!, amount: a });
         }
       } else if (iAgent >= 0 && text(r[iAgent]) && category !== 'Car Park') {
-        const names = splitAgentNames(text(r[iAgent])!);
-        const share = Math.round((amount / names.length) * 100) / 100;
-        for (const n of names) agents.push({ name: n, amount: share });
+        // The old dashboard credited every named agent with the full amount.
+        for (const n of splitAgentNames(text(r[iAgent])!)) agents.push({ name: n, amount });
       }
-      const invoiceDate = date(r[iInvDate]) ?? date(r[iDue]) ?? date(r[iSent]);
+      const invoiceDate = date(r[iInvDate]) ?? date(r[iDue]) ?? date(r[iSent]) ?? date(r[iPayDate]);
       invoices.push({
         invoice_no: invNo,
         invoice_date: invoiceDate ?? `${year}-01-01`,
@@ -219,6 +224,9 @@ async function main() {
     const parsed = parseSheet(name, wb.Sheets[name]);
     invoices.push(...parsed.invoices);
     targets.push(...parsed.targets);
+  }
+  for (const t of LEGACY_TARGETS) {
+    if (!targets.some((x) => x.year === t.year && x.agent === t.agent)) targets.push(t);
   }
 
   // Validation report

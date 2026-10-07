@@ -1,6 +1,7 @@
 import { requireProfile } from "@/lib/auth";
 import { loadAdminAnalytics } from "@/lib/analytics";
 import { colomboYear, parseDashboardRange } from "@/lib/dashboard-period";
+import { loadFinanceSummary, todayIso } from "@/lib/finance";
 import { loadUserDashboard } from "@/lib/user-dashboard";
 import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
 import { UserDashboard } from "@/app/app/dashboard/user-dashboard";
@@ -18,15 +19,30 @@ export default async function AppHomePage({
       Array.isArray(v) ? v[0] : v;
     const view = first(sp.view) === "visuals" ? "visuals" : "stats";
     const range = parseDashboardRange(first(sp.period), first(sp.year), colomboYear());
-    const result = await loadAdminAnalytics(range).then(
-      (data) => ({ data, error: null }),
-      (e: unknown) => ({
-        data: null,
-        error: e instanceof Error ? e.message : "Could not load analytics.",
-      }),
-    );
+    const financeFilter =
+      range.period === "all"
+        ? { year: "all", month: "" }
+        : range.period === "month"
+          ? { year: String(range.year), month: String(Number(todayIso().slice(5, 7))) }
+          : { year: String(range.year), month: "" };
+    const [result, finance] = await Promise.all([
+      loadAdminAnalytics(range).then(
+        (data) => ({ data, error: null }),
+        (e: unknown) => ({
+          data: null,
+          error: e instanceof Error ? e.message : "Could not load analytics.",
+        }),
+      ),
+      loadFinanceSummary(financeFilter).then(
+        ({ dashboard }) => ({
+          dashboard,
+          query: new URLSearchParams(Object.entries(financeFilter).filter(([, v]) => v)).toString(),
+        }),
+        () => null,
+      ),
+    ]);
     if (result.data) {
-      return <AdminDashboard data={result.data} view={view} />;
+      return <AdminDashboard data={result.data} view={view} finance={finance} />;
     }
     return (
       <div>

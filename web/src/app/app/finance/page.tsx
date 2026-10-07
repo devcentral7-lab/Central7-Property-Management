@@ -17,6 +17,7 @@ import {
 } from "@/lib/finance";
 import { FinanceHeader, PaymentBadge, primaryButton, secondaryButton } from "./finance-ui";
 import { QuarterlyChart } from "./quarterly-chart";
+import { RevenueSummary, TYPE_COLOR } from "./revenue-summary";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -25,14 +26,6 @@ function one(v: string | string[] | undefined) {
 }
 
 const inputClass = "mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-normal";
-
-const TYPE_COLOR: Record<string, string> = {
-  Sale: BRAND.red,
-  Rental: BRAND.charcoal,
-  "Management Fee": BRAND.redSoft,
-  "Car Park": BRAND.stone,
-  Other: BRAND.stoneLight,
-};
 
 type IconName = "filter" | "wallet" | "user" | "chart" | "table" | "receipt";
 
@@ -107,45 +100,6 @@ function Section({
   );
 }
 
-function Tile({
-  label,
-  value,
-  detail,
-  color,
-  valueClass = "text-[var(--ink)]",
-  href,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-  color: string;
-  valueClass?: string;
-  href?: string;
-}) {
-  const inner = (
-    <>
-      <span aria-hidden className="absolute inset-y-3 left-0 w-1 rounded-r-full" style={{ background: color }} />
-      <p className="text-xs font-medium leading-snug text-[var(--muted)] sm:text-[13px]">{label}</p>
-      <div className="mt-auto pt-2">
-        <p className={`font-display text-2xl font-semibold tabular-nums sm:text-3xl ${valueClass}`}>{value}</p>
-        {detail ? <p className="mt-0.5 text-xs tabular-nums text-[var(--muted)]">{detail}</p> : null}
-      </div>
-    </>
-  );
-  const className =
-    "relative flex min-h-[104px] min-w-0 flex-col rounded-xl border border-[var(--line)] bg-[var(--card)] py-3 pl-4 pr-3 transition";
-  return href ? (
-    <Link
-      href={href}
-      className={`${className} hover:border-[var(--brand)]/40 hover:bg-[var(--brand)]/[0.02] hover:shadow-sm`}
-    >
-      {inner}
-    </Link>
-  ) : (
-    <div className={className}>{inner}</div>
-  );
-}
-
 const th = "whitespace-nowrap pb-2 pr-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]";
 const td = "py-2.5 pr-3";
 const num = "py-2.5 pr-3 text-right tabular-nums whitespace-nowrap";
@@ -180,8 +134,6 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
     return <p className="text-[var(--danger)]">{e instanceof Error ? e.message : "Could not load finance data"}</p>;
   }
   const { range, dashboard, invoices, agents, years } = data;
-  const { totals } = dashboard;
-  const typeTotal = dashboard.by_type.reduce((s, t) => s + Number(t.amount), 0);
   const agentName = agents.find((a) => a.id === filters.agent)?.name;
 
   const salesAgents = [...new Set(dashboard.quarterly.map((r) => r.agent))].sort();
@@ -328,59 +280,16 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
         </p>
       </LiveFilterForm>
 
-      <Section title="Sale, Rental & Fees" subtitle={period} icon="wallet">
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-            {dashboard.by_type.map((t) => (
-              <Tile
-                key={t.type}
-                label={t.type}
-                value={Number(t.count).toLocaleString()}
-                detail={formatLkr(t.amount)}
-                color={TYPE_COLOR[t.type]}
-                valueClass={t.type === "Sale" ? "text-[var(--brand)]" : Number(t.count) ? "text-[var(--ink)]" : "text-[var(--muted)]"}
-                href={`/app/finance${qs({ ...baseParams, type: t.type })}#invoices`}
-              />
-            ))}
-          </div>
-
-          <div>
-            <div className="flex h-2 overflow-hidden rounded-full bg-[var(--bg-accent)]">
-              {dashboard.by_type.map((t) =>
-                Number(t.amount) > 0 ? (
-                  <span
-                    key={t.type}
-                    title={`${t.type}: ${formatLkr(t.amount)}`}
-                    style={{ width: `${(Number(t.amount) / typeTotal) * 100}%`, background: TYPE_COLOR[t.type] }}
-                  />
-                ) : null,
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted)]">
-              {dashboard.by_type.map((t) => (
-                <span key={t.type} className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: TYPE_COLOR[t.type] }} aria-hidden />
-                  {t.type}
-                  <span className="font-semibold tabular-nums text-[var(--ink)]">
-                    {typeTotal ? Math.round((Number(t.amount) / typeTotal) * 100) : 0}%
-                  </span>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Tile label="Total invoiced" value={formatLkr(totals.invoiced)} color={BRAND.charcoal} />
-            <Tile label="Total received" value={formatLkr(totals.received)} color={BRAND.active} />
-            <Tile
-              label="Outstanding"
-              value={formatLkr(totals.outstanding)}
-              color={totals.outstanding > 0 ? BRAND.red : BRAND.stonePale}
-              valueClass={totals.outstanding > 0 ? "text-[var(--brand)]" : "text-[var(--muted)]"}
-              href={`/app/finance${qs({ ...baseParams, status: "outstanding" })}#invoices`}
-            />
-          </div>
-        </div>
+      <Section
+        title="Sale, Rental & Fees"
+        subtitle={agentName ? `${period} · amounts are ${agentName}'s commission share` : period}
+        icon="wallet"
+      >
+        <RevenueSummary
+          dashboard={dashboard}
+          typeHref={(type) => `/app/finance${qs({ ...baseParams, type })}#invoices`}
+          outstandingHref={`/app/finance${qs({ ...baseParams, status: "outstanding" })}#invoices`}
+        />
       </Section>
 
       <Section title={`By Agent — Targets ${range.year}`} subtitle="Commission credited per agent" icon="user">
@@ -473,7 +382,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
 
       <Section
         title="By Category"
-        subtitle={`Invoiced per year${agentName ? ` · ${agentName}` : ""}`}
+        subtitle={agentName ? `${agentName}'s commission share per year` : "Invoiced per year"}
         icon="table"
       >
         {catYears.length ? (

@@ -53,6 +53,20 @@ export async function loadFinance(f: FinanceFilters) {
   };
 }
 
+/** Just the dashboard figures (no invoice list), e.g. for the admin home page. */
+export async function loadFinanceSummary(f: Pick<FinanceFilters, "year" | "month">) {
+  const supabase = await createClient();
+  const range = resolveFinanceRange({ agent: "", quarter: "", from: "", to: "", type: "", status: "", q: "", ...f });
+  const { data, error } = await supabase.rpc("finance_dashboard", {
+    p_from: range.from,
+    p_to: range.to,
+    p_year: range.year,
+    p_agent: null,
+  });
+  if (error) throw new Error(error.message);
+  return { range, dashboard: data as FinanceDashboard };
+}
+
 export async function loadFinanceAgents() {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("finance_agents");
