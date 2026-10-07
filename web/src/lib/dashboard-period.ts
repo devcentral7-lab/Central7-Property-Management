@@ -16,7 +16,9 @@ export function colomboYear(now: Date = new Date()): number {
   return new Date(now.getTime() + COLOMBO_OFFSET_MS).getUTCFullYear();
 }
 
-/** `?year=YYYY` picks a calendar year, `?period=month|year` the current month or year; no params means All. */
+export const DEFAULT_DASHBOARD_PERIOD: DashboardPeriod = "month";
+
+/** `?year=YYYY` picks a calendar year, `?period=all|year` all time or the current year; no params means This Month. */
 export function parseDashboardRange(
   period: string | undefined,
   year: string | undefined,
@@ -24,6 +26,6 @@ export function parseDashboardRange(
 ): DashboardRange {
   const y = Number(year);
   if (Number.isInteger(y) && y >= 2000 && y <= currentYear) return { period: "year", year: y };
-  if (period === "month" || period === "year") return { period, year: currentYear };
-  return { period: "all", year: currentYear };
+  if (period === "all" || period === "month" || period === "year") return { period, year: currentYear };
+  return { period: DEFAULT_DASHBOARD_PERIOD, year: currentYear };
 }

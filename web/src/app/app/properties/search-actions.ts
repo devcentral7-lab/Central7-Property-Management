@@ -1,6 +1,8 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth";
+import { loadCities } from "@/lib/cities-server";
+import { loadComplexOptions } from "@/lib/complexes-server";
 import { loadFormOptions } from "@/lib/form-options";
 import {
   extractPropertyFieldsWithGemini,
@@ -66,8 +68,8 @@ export async function searchPropertiesByParagraph(
     return { ok: false, error: "Gemini API key is not configured." };
   }
   try {
-    const options = await loadFormOptions();
-    const fields = await extractPropertyFieldsWithGemini(text, options, true);
+    const [options, cities, complexes] = await Promise.all([loadFormOptions(), loadCities(), loadComplexOptions()]);
+    const { fields } = await extractPropertyFieldsWithGemini(text, options, true, { cities, complexes });
     const filters = paragraphFieldsToFilters(fields);
     if (!Object.keys(filters).length) {
       return { ok: false, error: "No filter details found. Include a city, property type, price, or room count." };

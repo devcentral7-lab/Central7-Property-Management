@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   DASHBOARD_PERIODS,
+  DEFAULT_DASHBOARD_PERIOD,
   type DashboardPeriod,
 } from "@/lib/dashboard-period";
 
@@ -27,7 +28,7 @@ export function PeriodSelect({
     sp.delete("period");
     sp.delete("year");
     if (next.year) sp.set("year", String(next.year));
-    else if (next.period && next.period !== "all") sp.set("period", next.period);
+    else if (next.period && next.period !== DEFAULT_DASHBOARD_PERIOD) sp.set("period", next.period);
     const qs = sp.toString();
     return qs ? `/app?${qs}` : "/app";
   }
@@ -63,7 +64,7 @@ export function PeriodSelect({
           value={period === "year" ? String(year) : ""}
           onChange={(e) => {
             const y = Number(e.target.value);
-            router.push(y ? hrefFor({ year: y }) : hrefFor({ period: "all" }));
+            router.push(y ? hrefFor({ year: y }) : hrefFor({ period: DEFAULT_DASHBOARD_PERIOD }));
           }}
           className={`appearance-none rounded-full border py-2 pl-4 pr-9 text-xs font-semibold outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]/20 sm:py-2.5 sm:text-sm ${
             period === "year" && year !== currentYear
