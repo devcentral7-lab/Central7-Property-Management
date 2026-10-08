@@ -1,5 +1,18 @@
 import { typeSpecificKeys } from "@/lib/property-fields";
 
+type Count = number | null | undefined;
+
+/** "3 / 2" for list columns; blank when neither is recorded. */
+export function bedsBaths(beds: Count, baths: Count): string {
+  if (beds == null && baths == null) return "";
+  return `${beds ?? ""} / ${baths ?? ""}`;
+}
+
+/** "3 bd / 2 ba", leaving out whichever isn't recorded. */
+export function bedsBathsShort(beds: Count, baths: Count): string {
+  return [beds != null ? `${beds} bd` : "", baths != null ? `${baths} ba` : ""].filter(Boolean).join(" / ");
+}
+
 export type DetailField = {
   label: string;
   value: string;

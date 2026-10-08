@@ -4,6 +4,7 @@ import { LiveFilterForm } from "@/components/live-filter-form";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
+import { bedsBaths, bedsBathsShort } from "@/lib/property-details";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -300,7 +301,7 @@ export default async function AgentSearchPage({
                     <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm">
                       <span className="font-semibold">{formatMoney(r.price_total, r.currency)}</span>
                       <span className="text-xs text-[var(--muted)]">
-                        {r.bedrooms ?? "—"} bd / {r.bathrooms ?? "—"} ba
+                        {bedsBathsShort(r.bedrooms, r.bathrooms)}
                       </span>
                     </div>
                   </Link>
@@ -348,7 +349,7 @@ export default async function AgentSearchPage({
                       </td>
                       <td className="px-4 py-3">{r.city || "—"}</td>
                       <td className="px-4 py-3">
-                        {r.bedrooms ?? "—"} / {r.bathrooms ?? "—"}
+                        {bedsBaths(r.bedrooms, r.bathrooms)}
                       </td>
                       <td className="px-4 py-3 text-[var(--muted)]">{sizeLabel(r)}</td>
                       <td className="px-4 py-3 font-medium">

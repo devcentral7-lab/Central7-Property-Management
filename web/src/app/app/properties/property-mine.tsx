@@ -8,6 +8,7 @@ import {
   type MinePropertyFilters,
 } from "@/lib/my-properties-filters";
 import { createClient } from "@/lib/supabase/server";
+import { bedsBaths, bedsBathsShort } from "@/lib/property-details";
 import type { PropertyCard } from "@/lib/types";
 import { RangeFilter } from "@/components/range-filter";
 import { CitySelect } from "@/components/city-select";
@@ -274,8 +275,7 @@ export async function PropertyMinePanel({
                 {formatMoney(r.price_total, r.currency)}
               </span>
               <span className="text-xs text-[var(--muted)]">
-                {r.bedrooms ?? "—"} bd / {r.bathrooms ?? "—"} ba ·{" "}
-                {formatDate(r.created_at)}
+                {[bedsBathsShort(r.bedrooms, r.bathrooms), formatDate(r.created_at)].filter(Boolean).join(" · ")}
               </span>
             </div>
           </PropertyRow>
@@ -321,7 +321,7 @@ export async function PropertyMinePanel({
                   <StatusBadge status={r.status} />
                 </td>
                 <td className="px-4 py-3">
-                  {r.bedrooms ?? "—"} / {r.bathrooms ?? "—"}
+                  {bedsBaths(r.bedrooms, r.bathrooms)}
                 </td>
                 <td className="px-4 py-3">
                   {formatMoney(r.price_total, r.currency)}

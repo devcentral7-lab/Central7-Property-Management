@@ -59,6 +59,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         }
         actions={
           <>
+            <a href={`/api/finance/invoices/${inv.id}/download?format=pdf`} download className={secondaryButton}>
+              Download PDF
+            </a>
+            <a href={`/api/finance/invoices/${inv.id}/download?format=xlsx`} download className={secondaryButton}>
+              Download Excel
+            </a>
             {!voided ? (
               <Link href={`/app/finance/invoices/${inv.id}/edit`} className={secondaryButton}>
                 Edit invoice
@@ -108,13 +114,18 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
       <Card title="Details">
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Customer">{inv.customer_name || "—"}</Field>
+          <Field label="Client address">
+            {inv.customer_address ? <span className="whitespace-pre-line">{inv.customer_address}</span> : "—"}
+          </Field>
           <Field label="Sent">{formatDate(inv.sent_date)}</Field>
           <Field label="Revenue month">{revenueMonth}</Field>
           <Field label="Property">
             {inv.property_ref ? <PropertyLink refNo={inv.property_ref}>{inv.property_ref}</PropertyLink> : "—"}
           </Field>
           <div className="sm:col-span-2 lg:col-span-4">
-            <Field label="Details">{inv.details || "—"}</Field>
+            <Field label="Description of service">
+              <span className="whitespace-pre-line">{inv.details || "—"}</span>
+            </Field>
           </div>
           <Field label="C7 booking">{inv.c7_booking === null ? "—" : formatLkr(inv.c7_booking)}</Field>
           <Field label="Category">{inv.category}</Field>
