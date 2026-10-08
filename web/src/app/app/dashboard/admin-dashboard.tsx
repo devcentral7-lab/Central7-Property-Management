@@ -102,16 +102,19 @@ function Section({
   subtitle,
   icon,
   aside,
+  defaultOpen = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   icon: IconName;
   aside?: React.ReactNode;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <details
+      open={defaultOpen}
       className="group min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)]"
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-4 sm:px-5 [&::-webkit-details-marker]:hidden">
@@ -796,6 +799,7 @@ export function AdminDashboard({
         title="Company Overview"
         subtitle={`${period} activity and what's waiting now`}
         icon="grid"
+        defaultOpen
         aside={
           socialOpen + approvalsOpen > 0 ? (
             <span className="hidden rounded-full bg-[var(--brand)] px-2.5 py-1 text-xs font-semibold text-white sm:inline">
@@ -849,6 +853,7 @@ export function AdminDashboard({
           title="Sale, Rental & Fees"
           subtitle={`${period} · invoices by revenue type`}
           icon="wallet"
+          defaultOpen
         >
           <RevenueSummary
             dashboard={finance.dashboard}
@@ -870,6 +875,7 @@ export function AdminDashboard({
         title="Properties Added By Agent"
         subtitle={`${period} · Direct vs Partner contacts`}
         icon="user"
+        defaultOpen
       >
         {data.byAgent.length ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

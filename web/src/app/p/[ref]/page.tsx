@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { bedsBaths } from "@/lib/property-details";
 import { PublicPropertyPhotos } from "@/app/p/[ref]/public-property-photos";
 
 export default async function PublicPropertyPage({
@@ -38,7 +39,7 @@ export default async function PublicPropertyPage({
           ["Address", data.address],
           ["Land", data.land_size_perch],
           ["Floor area", data.floor_area_sqft],
-          ["Beds / Baths", `${data.bedrooms ?? "—"} / ${data.bathrooms ?? "—"}`],
+          ["Beds / Baths", bedsBaths(data.bedrooms, data.bathrooms)],
           ["View", data.view],
           [
             "Price",

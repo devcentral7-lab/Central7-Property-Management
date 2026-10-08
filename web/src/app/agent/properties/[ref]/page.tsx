@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { bedsBaths } from "@/lib/property-details";
 import { PublicPropertyPhotos } from "@/app/p/[ref]/public-property-photos";
 
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
@@ -67,7 +68,7 @@ export default async function AgentPropertyPage({
               <Fact label="City" value={data.city} />
               <Fact
                 label="Beds / Baths"
-                value={`${data.bedrooms ?? "—"} / ${data.bathrooms ?? "—"}`}
+                value={bedsBaths(data.bedrooms, data.bathrooms)}
               />
               <Fact
                 label="Land"

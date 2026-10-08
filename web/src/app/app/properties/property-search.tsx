@@ -3,6 +3,7 @@ import { splitListParam } from "@/lib/list-param";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
+import { bedsBaths, bedsBathsShort } from "@/lib/property-details";
 import {
   PropertySearchForm,
   type SearchFilterValues,
@@ -174,8 +175,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
                 {formatMoney(r.price_total, r.currency)}
               </span>
               <span className="text-xs text-[var(--muted)]">
-                {r.bedrooms ?? "—"} bd / {r.bathrooms ?? "—"} ba ·{" "}
-                {r.created_by_name || "—"}
+                {[bedsBathsShort(r.bedrooms, r.bathrooms), r.created_by_name || "—"].filter(Boolean).join(" · ")}
               </span>
             </div>
           </PropertyRow>
@@ -228,7 +228,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
                   <StatusBadge status={r.status} />
                 </td>
                 <td className="px-4 py-3">
-                  {r.bedrooms ?? "—"} / {r.bathrooms ?? "—"}
+                  {bedsBaths(r.bedrooms, r.bathrooms)}
                 </td>
                 <td className="px-4 py-3">
                   {formatMoney(r.price_total, r.currency)}

@@ -45,6 +45,7 @@ export function InvoiceForm({
   const [invoiceDate, setInvoiceDate] = useState(invoice?.invoice_date ?? todayIso());
   const [sentDate, setSentDate] = useState(invoice?.sent_date ?? (isNew ? todayIso() : ""));
   const [customer, setCustomer] = useState(invoice?.customer_name ?? "");
+  const [address, setAddress] = useState(invoice?.customer_address ?? "");
   const [details, setDetails] = useState(invoice?.details ?? "");
   const [propertyRef, setPropertyRef] = useState(invoice?.property_ref ?? defaultPropertyRef);
   const [category, setCategory] = useState<string>(invoice?.category ?? "C7 Brokering");
@@ -135,6 +136,7 @@ export function InvoiceForm({
       invoice_date: invoiceDate,
       sent_date: sentDate,
       customer_name: customer,
+      customer_address: address,
       details,
       category,
       revenue_type: revenueType,
@@ -214,18 +216,31 @@ export function InvoiceForm({
               className={inputClass}
             />
           </label>
-          <label className={`${labelClass} sm:col-span-2 lg:col-span-4`}>
-            Details
+          <label className={`${labelClass} sm:col-span-2`}>
+            Client address <span className="font-normal text-[var(--muted)]">(printed on the invoice)</span>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              rows={3}
+              placeholder={"No.33, 3/4, Kinrose Ave,\nColombo 04."}
+              className={inputClass}
+            />
+          </label>
+          <label className={`${labelClass} sm:col-span-2`}>
+            Description of service
             <textarea
               value={details}
               onChange={(e) => {
                 setDetails(e.target.value);
                 retype(category, e.target.value);
               }}
-              rows={2}
-              placeholder="Brokerage Commission - Apartment for Rent in …"
+              rows={3}
+              placeholder={"Brokerage Commission - Apartment for Rent in …\nClient: Mr. Wen\nRent Amount: 300,000.00"}
               className={inputClass}
             />
+            <span className="mt-1 block text-xs font-normal text-[var(--muted)]">
+              The first line prints in bold with the property ref; extra lines print below it in italics.
+            </span>
           </label>
           <label className={labelClass}>
             Category

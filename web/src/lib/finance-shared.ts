@@ -33,6 +33,7 @@ export type FinanceInvoiceDetail = {
   due_date: string | null;
   sent_date: string | null;
   customer_name: string | null;
+  customer_address: string | null;
   details: string;
   category: Category;
   revenue_type: RevenueType;

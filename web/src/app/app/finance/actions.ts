@@ -20,6 +20,7 @@ export type InvoiceInput = {
   invoice_date: string;
   sent_date: string;
   customer_name: string;
+  customer_address: string;
   details: string;
   category: string;
   revenue_type: string;
@@ -81,6 +82,7 @@ export async function saveInvoice(input: InvoiceInput): Promise<ActionResult<{ i
         invoice_date: input.invoice_date,
         sent_date: DATE_RE.test(input.sent_date) ? input.sent_date : "",
         customer_name: input.customer_name,
+        customer_address: input.customer_address,
         details: input.details,
         category: input.category,
         revenue_type: input.revenue_type,
