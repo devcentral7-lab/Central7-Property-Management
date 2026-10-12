@@ -185,6 +185,10 @@ function makeStyles(C: Palette) {
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent, marginRight: 8 },
     amenityName: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: C.ink },
     paragraph: { fontSize: 10, color: C.ink, paddingVertical: 7, lineHeight: 1.45 },
+    points: { paddingVertical: 7 },
+    point: { flexDirection: "row", alignItems: "flex-start" },
+    pointDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.accent, marginTop: 5.5, marginRight: 8 },
+    pointText: { flex: 1, fontSize: 10, color: C.ink, lineHeight: 1.45 },
 
     footer: {
       position: "absolute",
@@ -413,7 +417,53 @@ function PriceCard({ data, t }: { data: PropertyPdfData; t: Theme }) {
   );
 }
 
-function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | null }) {
+/** "Other information": one point per line, or a plain paragraph when it's written as one. */
+type OtherInfo = { points: string[] } | { paragraph: string };
+
+const POINT_MARKER = /^\s*(?:[-*•·▪●◦–—]|\d+[.)])\s+/;
+
+function toOtherInfo(text: string | null): OtherInfo | null {
+  const lines = (text ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(POINT_MARKER, "").trim())
+    .filter(Boolean);
+  if (!lines.length) return null;
+  return lines.length > 1 ? { points: lines } : { paragraph: lines[0] };
+}
+
+function infoSize(info: OtherInfo | null): number {
+  if (!info) return 0;
+  return "points" in info ? info.points.length : info.paragraph.split(/\s+/).length;
+}
+
+/** The first `size` points or words, marked with "…" when something was cut. */
+function shortenInfo(info: OtherInfo | null, size: number): OtherInfo | null {
+  if (!info || size <= 0) return null;
+  if (size >= infoSize(info)) return info;
+  if ("points" in info) {
+    const points = info.points.slice(0, size);
+    points[points.length - 1] += " …";
+    return { points };
+  }
+  return { paragraph: `${info.paragraph.split(/\s+/).slice(0, size).join(" ")} …` };
+}
+
+function OtherInfoCard({ info, t }: { info: OtherInfo; t: Theme }) {
+  const { s } = t;
+  if ("paragraph" in info) return <Text style={s.paragraph}>{info.paragraph}</Text>;
+  return (
+    <View style={s.points}>
+      {info.points.map((p, i) => (
+        <View key={i} style={s.point} wrap={false}>
+          <View style={s.pointDot} />
+          <Text style={s.pointText}>{p}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function PropertyPdf({ data, info, logo }: { data: PropertyPdfData; info: OtherInfo | null; logo: Buffer | null }) {
   const t = THEMES[data.copy];
   const { s } = t;
   const branded = data.copy === "client";
@@ -486,10 +536,10 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
           </Section>
         ) : null}
 
-        {data.description ? (
+        {info ? (
           <Section title={branded ? "Other information" : "About this property"} t={t}>
             <View style={s.card}>
-              <Text style={s.paragraph}>{data.description}</Text>
+              <OtherInfoCard info={info} t={t} />
             </View>
           </Section>
         ) : null}
@@ -562,33 +612,47 @@ function countPages(pdf: Buffer): number {
 
 async function fitsFirstPage(
   data: PropertyPdfData,
+  info: OtherInfo | null,
   logo: Buffer | null,
   amenityCount: number,
 ): Promise<boolean> {
   const trial = { ...data, amenities: data.amenities.slice(0, amenityCount), photos: [] };
-  return countPages(await renderToBuffer(<PropertyPdf data={trial} logo={logo} />)) <= 1;
+  return countPages(await renderToBuffer(<PropertyPdf data={trial} info={info} logo={logo} />)) <= 1;
+}
+
+/** Largest n in [0, max] where `fits(n)` holds, assuming fits(0) does. */
+async function largestFitting(max: number, fits: (n: number) => Promise<boolean>) {
+  let lo = 0;
+  let hi = max;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (await fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
 }
 
 /**
- * Everything except photos belongs on page 1. When it doesn't fit, drop
- * amenities from the end of the list until it does; if even none would fit,
- * keep them all since trimming can't help.
+ * Everything except photos belongs on page 1. When it doesn't fit, shorten
+ * "Other information" until it fits without amenities, then add back as many
+ * amenities as still fit. If even the bare details overflow, nothing is cut.
  */
-async function amenitiesForFirstPage(data: PropertyPdfData, logo: Buffer | null) {
+async function fitFirstPage(data: PropertyPdfData, logo: Buffer | null) {
+  const full = toOtherInfo(data.description);
   const all = data.amenities;
-  if (!all.length || (await fitsFirstPage(data, logo, all.length))) return all;
-  if (!(await fitsFirstPage(data, logo, 0))) return all;
-  let lo = 0;
-  let hi = all.length - 1;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (await fitsFirstPage(data, logo, mid)) lo = mid;
-    else hi = mid - 1;
+  if (await fitsFirstPage(data, full, logo, all.length)) return { info: full, amenities: all };
+  if (!(await fitsFirstPage(data, null, logo, 0))) return { info: full, amenities: all };
+
+  let info = full;
+  if (!(await fitsFirstPage(data, full, logo, 0))) {
+    const size = await largestFitting(infoSize(full) - 1, (n) => fitsFirstPage(data, shortenInfo(full, n), logo, 0));
+    info = shortenInfo(full, size);
   }
-  return all.slice(0, lo);
+  const count = await largestFitting(all.length, (n) => fitsFirstPage(data, info, logo, n));
+  return { info, amenities: all.slice(0, count) };
 }
 
 export async function renderPropertyPdf(data: PropertyPdfData, logo: Buffer | null) {
-  const amenities = await amenitiesForFirstPage(data, logo);
-  return renderToBuffer(<PropertyPdf data={{ ...data, amenities }} logo={logo} />);
+  const { info, amenities } = await fitFirstPage(data, logo);
+  return renderToBuffer(<PropertyPdf data={{ ...data, amenities }} info={info} logo={logo} />);
 }

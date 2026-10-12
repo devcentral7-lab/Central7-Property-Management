@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActivityButton } from "@/app/app/properties/activity-button";
-import { DeletePropertyButton } from "@/app/app/properties/[ref]/delete-property-button";
 import { ExportPdfButton } from "@/app/app/properties/export-pdf-button";
 import { UpdateStatusButton } from "@/app/app/properties/update-status-button";
 import {
@@ -32,7 +31,6 @@ export async function loadPropertyDetail(refNoRaw: string) {
       property.created_by_name === profile.display_name);
   const isAdmin = profile.role === "Admin";
   const canEdit = isAdmin;
-  const canDelete = isAdmin;
 
   const [{ data: events }, { data: complex }, options] =
     await Promise.all([
@@ -65,7 +63,6 @@ export async function loadPropertyDetail(refNoRaw: string) {
     details,
     options,
     canEdit,
-    canDelete,
     canChangeStatus: isAdmin || isOwner,
   };
 }
@@ -81,7 +78,6 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
     details,
     options,
     canEdit,
-    canDelete,
     canChangeStatus,
   } = await loadPropertyDetail(refNo);
 
@@ -112,7 +108,6 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
               Edit listing
             </Link>
           ) : null}
-          {canDelete ? <DeletePropertyButton refNo={property.ref_no} /> : null}
         </>
       }
     >

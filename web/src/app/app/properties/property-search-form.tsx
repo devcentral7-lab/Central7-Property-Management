@@ -250,22 +250,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               ))}
             </select>
           </label>
-          <label className="col-span-2 text-sm font-medium xl:col-span-1">
-            Currency
-            <select
-              name="currency"
-              defaultValue={filters.currency}
-              className={`${inputClass} mt-1`}
-            >
-              <option value="">All</option>
-              {options.currencies.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="col-span-2 grid grid-cols-1 xl:col-span-3">
+          <div className="col-span-2 grid grid-cols-1 xl:col-span-4">
             <RangeFilter
               label="Price"
               minName="price_min"
@@ -300,109 +285,123 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
           ) : null}
         </div>
 
-        {showAdvanced ? (
-          <div data-filter-group="advanced" className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
-            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <MultiSelectFilter
-                name="complex"
-                label="Apartment complex"
-                options={complexOptions}
-                defaultValue={filters.complex}
-                allLabel="All complexes"
-                addLabel="Add complex"
-                emptyLabel="No complexes found"
-                className="sm:col-span-2 xl:col-span-3"
+        {/* Hidden rather than unmounted so a closed section keeps its values, e.g. a currency from quick search. */}
+        <div data-filter-group="advanced" hidden={!showAdvanced} className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <MultiSelectFilter
+              name="complex"
+              label="Apartment complex"
+              options={complexOptions}
+              defaultValue={filters.complex}
+              allLabel="All complexes"
+              addLabel="Add complex"
+              emptyLabel="No complexes found"
+              className="sm:col-span-2 xl:col-span-3"
+            />
+            <label className="text-sm font-medium">
+              Contact Type
+              <select
+                name="contact_type"
+                defaultValue={filters.contact_type}
+                className={`${inputClass} mt-1`}
+              >
+                <option value="">All</option>
+                {options.contactTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Currency
+              <select
+                name="currency"
+                defaultValue={filters.currency}
+                className={`${inputClass} mt-1`}
+              >
+                <option value="">All</option>
+                {options.currencies.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              View
+              <input
+                name="view"
+                defaultValue={filters.view}
+                className={`${inputClass} mt-1`}
               />
-              <label className="text-sm font-medium">
-                Contact Type
-                <select
-                  name="contact_type"
-                  defaultValue={filters.contact_type}
-                  className={`${inputClass} mt-1`}
-                >
-                  <option value="">All</option>
-                  {options.contactTypes.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                View
-                <input
-                  name="view"
-                  defaultValue={filters.view}
-                  className={`${inputClass} mt-1`}
-                />
-              </label>
-              <label className="text-sm font-medium">
-                Do Not Publish
-                <select
-                  name="do_not_publish"
-                  defaultValue={filters.do_not_publish}
-                  className={`${inputClass} mt-1`}
-                >
-                  <option value="">Any</option>
-                  <option value="false">Publishable only</option>
-                  <option value="true">Do not publish only</option>
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                Parking Min
-                <input
-                  name="parking_min"
-                  defaultValue={filters.parking_min}
-                  inputMode="decimal"
-                  className={`${inputClass} mt-1`}
-                />
-              </label>
-            </div>
-            <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <RangeFilter
-                label="Beds"
-                minName="bedrooms_min"
-                maxName="bedrooms_max"
-                defaultMin={filters.bedrooms_min}
-                defaultMax={filters.bedrooms_max}
-                inputClassName={inputClass}
+            </label>
+            <label className="text-sm font-medium">
+              Do Not Publish
+              <select
+                name="do_not_publish"
+                defaultValue={filters.do_not_publish}
+                className={`${inputClass} mt-1`}
+              >
+                <option value="">Any</option>
+                <option value="false">Publishable only</option>
+                <option value="true">Do not publish only</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Parking Min
+              <input
+                name="parking_min"
+                defaultValue={filters.parking_min}
+                inputMode="decimal"
+                className={`${inputClass} mt-1`}
               />
-              <RangeFilter
-                label="Baths"
-                minName="bathrooms_min"
-                maxName="bathrooms_max"
-                defaultMin={filters.bathrooms_min}
-                defaultMax={filters.bathrooms_max}
-                inputClassName={inputClass}
-              />
-              <RangeFilter
-                label="Land (Perches)"
-                minName="land_min"
-                maxName="land_max"
-                defaultMin={filters.land_min}
-                defaultMax={filters.land_max}
-                inputClassName={inputClass}
-              />
-              <RangeFilter
-                label="Floor Area (Sqft)"
-                minName="floor_min"
-                maxName="floor_max"
-                defaultMin={filters.floor_min}
-                defaultMax={filters.floor_max}
-                inputClassName={inputClass}
-              />
-              <RangeFilter
-                label="Budget"
-                minName="budget_min"
-                maxName="budget_max"
-                defaultMin={filters.budget_min}
-                defaultMax={filters.budget_max}
-                money
-                inputClassName={inputClass}
-              />
-            </div>
+            </label>
           </div>
-        ) : null}
+          <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <RangeFilter
+              label="Beds"
+              minName="bedrooms_min"
+              maxName="bedrooms_max"
+              defaultMin={filters.bedrooms_min}
+              defaultMax={filters.bedrooms_max}
+              inputClassName={inputClass}
+            />
+            <RangeFilter
+              label="Baths"
+              minName="bathrooms_min"
+              maxName="bathrooms_max"
+              defaultMin={filters.bathrooms_min}
+              defaultMax={filters.bathrooms_max}
+              inputClassName={inputClass}
+            />
+            <RangeFilter
+              label="Land (Perches)"
+              minName="land_min"
+              maxName="land_max"
+              defaultMin={filters.land_min}
+              defaultMax={filters.land_max}
+              inputClassName={inputClass}
+            />
+            <RangeFilter
+              label="Floor Area (Sqft)"
+              minName="floor_min"
+              maxName="floor_max"
+              defaultMin={filters.floor_min}
+              defaultMax={filters.floor_max}
+              inputClassName={inputClass}
+            />
+            <RangeFilter
+              label="Budget"
+              minName="budget_min"
+              maxName="budget_max"
+              defaultMin={filters.budget_min}
+              defaultMax={filters.budget_max}
+              money
+              inputClassName={inputClass}
+            />
+          </div>
+        </div>
       </LiveFilterForm>
     </div>
   );

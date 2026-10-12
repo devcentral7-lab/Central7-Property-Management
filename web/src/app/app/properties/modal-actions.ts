@@ -38,7 +38,6 @@ export type PropertyModalData = {
   details: PropertyDetailsModel;
   events: PropertyModalEvent[];
   canEdit: boolean;
-  canDelete: boolean;
   canChangeStatus: boolean;
   canManagePhotos: boolean;
   statusChangeOptions: string[];
@@ -77,7 +76,6 @@ export async function getPropertyModalData(
         property.created_by_name === profile.display_name);
     const isAdmin = profile.role === "Admin";
     const canEdit = isAdmin;
-    const canDelete = isAdmin;
 
     const [{ data: events }, { data: complex }, options] =
       await Promise.all([
@@ -132,7 +130,6 @@ export async function getPropertyModalData(
           occurred_at: e.occurred_at,
         })),
         canEdit,
-        canDelete,
         canChangeStatus: isAdmin || isOwner,
         canManagePhotos: isAdmin || isOwner,
         statusChangeOptions: options.statusChangeOptions,
