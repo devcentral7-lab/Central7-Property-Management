@@ -9,6 +9,7 @@ import { logAudit } from "@/lib/audit";
 import { toResult, type ActionResult } from "@/lib/action-result";
 import { loadFormOptions } from "@/lib/form-options";
 import { loadCities } from "@/lib/cities-server";
+import { matchCities } from "@/lib/cities";
 import { loadComplexOptions } from "@/lib/complexes-server";
 import { parseMapsLink } from "@/lib/maps-link";
 import { isDriveConfigured } from "@/lib/drive/photos";
@@ -80,13 +81,14 @@ function str(v: FormDataEntryValue | null): string {
 }
 
 async function buildPropertyPayload(formData: FormData) {
-  const options = await loadFormOptions();
+  const [options, cities] = await Promise.all([loadFormOptions(), loadCities()]);
   const propertyType = str(formData.get("property_type"));
   const opportunityType = str(formData.get("opportunity_type"));
   const contactType = str(formData.get("contact_type"));
   const contactName = str(formData.get("contact_name"));
   const contact1 = str(formData.get("contact_phone_1"));
-  const city = str(formData.get("city"));
+  const typedCity = str(formData.get("city"));
+  const city = typedCity && (matchCities([typedCity], cities)[0] ?? typedCity);
 
   if (!contactName || !contact1 || !opportunityType || !propertyType || !city || !contactType) {
     throw new Error("Contact type, contact name, phone, opportunity, type, and city are required.");

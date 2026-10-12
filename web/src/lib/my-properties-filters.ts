@@ -1,5 +1,7 @@
 /** Filters for "My properties" — shared by the list page and the Excel export so both match. */
 
+import { cityLikePattern } from "@/lib/cities";
+
 export type MinePropertyFilters = {
   q: string;
   status: string;
@@ -105,7 +107,7 @@ export function applyMineFilters<Q extends Filterable<Q>>(query: Q, f: MinePrope
   if (f.opportunity_type) q = q.eq("opportunity_type", f.opportunity_type);
   if (f.property_type) q = q.eq("property_type", f.property_type);
   if (f.currency) q = q.eq("currency", f.currency);
-  if (f.city) q = q.ilike("city", `%${f.city}%`);
+  if (cityLikePattern(f.city)) q = q.ilike("city", cityLikePattern(f.city));
 
   const bedroomsMin = numOrNull(f.bedrooms_min);
   const priceMin = numOrNull(f.price_min);

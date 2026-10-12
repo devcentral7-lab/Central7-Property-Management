@@ -515,9 +515,13 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
             ) : null}
           </View>
         ) : null}
+        <Footer data={data} t={t} />
+      </Page>
 
-        {data.photos.length ? (
-          <View style={{ marginTop: 16 }} break>
+      {data.photos.length ? (
+        <Page size="A4" style={s.page}>
+          <Header data={data} logo={logo} t={t} />
+          <View style={{ marginTop: 16 }}>
             {Array.from({ length: Math.ceil(data.photos.length / 2) }, (_, row) => (
               <View key={row} wrap={false}>
                 {row === 0 ? (
@@ -544,9 +548,9 @@ function PropertyPdf({ data, logo }: { data: PropertyPdfData; logo: Buffer | nul
               </View>
             ))}
           </View>
-        ) : null}
-        <Footer data={data} t={t} />
-      </Page>
+          <Footer data={data} t={t} />
+        </Page>
+      ) : null}
     </Document>
   );
 }

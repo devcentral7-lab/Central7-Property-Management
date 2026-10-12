@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MoneyInput, formatMoneyInput } from "@/components/money-input";
+import { clearedHere } from "@/components/live-filter-form";
 
 type Props = {
   label: string;
@@ -44,7 +45,9 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
     const sync = () => queueMicrotask(() => {
       setBounds([amount(minimum.current?.value ?? ""), amount(maximum.current?.value ?? "")]);
     });
-    const clear = () => setBounds([null, null]);
+    const clear = (event: Event) => {
+      if (clearedHere(event, minimum.current)) setBounds([null, null]);
+    };
     form.addEventListener("reset", sync);
     form.addEventListener("filters-cleared", clear);
     return () => {

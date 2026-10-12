@@ -13,6 +13,19 @@ const RANGE_PAIRS = [
   ["floor_area_sqft", "floor_min", "floor_max"],
 ] as const;
 
+/** Filters shown above "Show advanced filters"; quick search fills only these. */
+const QUICK_SEARCH_KEYS = [
+  "status", "property_type", "city", "opportunity_type", "furnished", "currency", "price_min", "price_max",
+] as const;
+
+export function quickSearchFilters(filters: Partial<SearchFilterValues>): Partial<SearchFilterValues> {
+  const out: Partial<SearchFilterValues> = {};
+  for (const key of QUICK_SEARCH_KEYS) {
+    if (filters[key]) out[key] = filters[key];
+  }
+  return out;
+}
+
 /** Map extracted description fields to the same filters used by the results table. */
 export function paragraphFieldsToFilters(fields: Record<string, string>): Partial<SearchFilterValues> {
   const filters: Partial<SearchFilterValues> = {};

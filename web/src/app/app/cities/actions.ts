@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-import { CITIES_SETTING_KEY, cityKey, cleanCityName, sortCities } from "@/lib/cities";
+import { CITIES_SETTING_KEY, cityKey, citySpellingKey, cleanCityName, sortCities } from "@/lib/cities";
 import { loadCities } from "@/lib/cities-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -53,7 +53,7 @@ export async function addCity(raw: string): Promise<Result> {
     if (!name) return { ok: false, error: "Enter a city name." };
     if (name.length > MAX_NAME) return { ok: false, error: `City names can be at most ${MAX_NAME} characters.` };
     const cities = await loadCities();
-    const existing = cities.find((c) => cityKey(c) === cityKey(name));
+    const existing = cities.find((c) => citySpellingKey(c) === citySpellingKey(name));
     if (existing) return { ok: false, error: `${existing} is already on the list.` };
 
     await saveCities([...cities, name]);

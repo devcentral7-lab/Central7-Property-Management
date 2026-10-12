@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { splitListParam } from "@/lib/list-param";
+import { clearedHere } from "@/components/live-filter-form";
 
 export type MultiSelectOption = { value: string; label: string };
 
@@ -51,7 +52,8 @@ export function MultiSelectFilter({
       setActive(-1);
     };
     const reset = () => queueMicrotask(sync);
-    const clear = () => {
+    const clear = (event: Event) => {
+      if (!clearedHere(event, field.current)) return;
       if (field.current) field.current.value = "";
       sync();
     };
