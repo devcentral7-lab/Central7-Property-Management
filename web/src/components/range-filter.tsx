@@ -10,7 +10,8 @@ type Props = {
   maxName: string;
   defaultMin: string;
   defaultMax: string;
-  ceiling: number;
+  /** Slider maximum; omit for min/max text fields only. */
+  ceiling?: number;
   step?: number;
   money?: boolean;
   /** Show slider labels in millions, e.g. "1,000 Mn". */
@@ -34,7 +35,7 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
   const minimum = useRef<HTMLInputElement>(null);
   const maximum = useRef<HTMLInputElement>(null);
   const [bounds, setBounds] = useState(() => [amount(defaultMin), amount(defaultMax)]);
-  const limit = Math.max(ceiling, bounds[0] ?? 0, bounds[1] ?? 0);
+  const limit = Math.max(ceiling ?? 0, bounds[0] ?? 0, bounds[1] ?? 0);
   const low = bounds[0] ?? 0;
   const high = Math.max(low, bounds[1] ?? limit);
 
@@ -100,30 +101,34 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
           );
         })}
       </div>
-      <div className="relative mx-2 mt-4 h-8">
-        <div className="absolute inset-x-0 top-3 h-1.5 rounded-full bg-stone-200" />
-        <div className="absolute top-3 h-1.5 rounded-full bg-[var(--brand)]" style={{ left: `${low / limit * 100}%`, right: `${100 - high / limit * 100}%` }} />
-        {([0, 1] as const).map((index) => (
-          <input
-            key={index}
-            type="range"
-            min={0}
-            max={limit}
-            step={step}
-            value={index === 0 ? low : high}
-            aria-label={`${label} ${index === 0 ? "minimum" : "maximum"}`}
-            aria-valuetext={sliderLabel(index === 0 ? low : high, millions)}
-            data-range-filter="true"
-            className="range-filter-handle absolute inset-x-0 top-0 h-8 w-full"
-            style={{ zIndex: index === 0 && low === limit ? 2 : index }}
-            onChange={(event) => slide(index, Number(event.currentTarget.value))}
-          />
-        ))}
-      </div>
-      <div className="flex justify-between text-xs tabular-nums text-[var(--muted)]">
-        <span>{sliderLabel(0, millions)}</span>
-        <span>{sliderLabel(limit, millions)}</span>
-      </div>
+      {ceiling === undefined ? null : (
+        <>
+          <div className="relative mx-2 mt-4 h-8">
+            <div className="absolute inset-x-0 top-3 h-1.5 rounded-full bg-stone-200" />
+            <div className="absolute top-3 h-1.5 rounded-full bg-[var(--brand)]" style={{ left: `${low / limit * 100}%`, right: `${100 - high / limit * 100}%` }} />
+            {([0, 1] as const).map((index) => (
+              <input
+                key={index}
+                type="range"
+                min={0}
+                max={limit}
+                step={step}
+                value={index === 0 ? low : high}
+                aria-label={`${label} ${index === 0 ? "minimum" : "maximum"}`}
+                aria-valuetext={sliderLabel(index === 0 ? low : high, millions)}
+                data-range-filter="true"
+                className="range-filter-handle absolute inset-x-0 top-0 h-8 w-full"
+                style={{ zIndex: index === 0 && low === limit ? 2 : index }}
+                onChange={(event) => slide(index, Number(event.currentTarget.value))}
+              />
+            ))}
+          </div>
+          <div className="flex justify-between text-xs tabular-nums text-[var(--muted)]">
+            <span>{sliderLabel(0, millions)}</span>
+            <span>{sliderLabel(limit, millions)}</span>
+          </div>
+        </>
+      )}
     </fieldset>
   );
 }
