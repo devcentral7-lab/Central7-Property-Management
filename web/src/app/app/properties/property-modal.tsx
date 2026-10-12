@@ -10,7 +10,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { ClickableRow } from "@/components/clickable-row";
-import { DeletePropertyButton } from "@/app/app/properties/[ref]/delete-property-button";
 import { ActivityButton } from "@/app/app/properties/activity-button";
 import { ExportPdfButton } from "@/app/app/properties/export-pdf-button";
 import { SharePdfButton } from "@/app/app/properties/share-pdf-button";
@@ -158,7 +157,6 @@ function ViewBody({
               Edit listing
             </button>
           ) : null}
-          {data.canDelete ? <DeletePropertyButton refNo={data.refNo} /> : null}
         </>
       }
     >
