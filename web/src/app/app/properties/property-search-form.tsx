@@ -365,8 +365,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 maxName="bedrooms_max"
                 defaultMin={filters.bedrooms_min}
                 defaultMax={filters.bedrooms_max}
-                ceiling={20}
-                step={1}
                 inputClassName={inputClass}
               />
               <RangeFilter
@@ -375,8 +373,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 maxName="bathrooms_max"
                 defaultMin={filters.bathrooms_min}
                 defaultMax={filters.bathrooms_max}
-                ceiling={20}
-                step={1}
                 inputClassName={inputClass}
               />
               <RangeFilter
@@ -385,8 +381,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 maxName="land_max"
                 defaultMin={filters.land_min}
                 defaultMax={filters.land_max}
-                ceiling={1000}
-                step={0.5}
                 inputClassName={inputClass}
               />
               <RangeFilter
@@ -395,8 +389,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 maxName="floor_max"
                 defaultMin={filters.floor_min}
                 defaultMax={filters.floor_max}
-                ceiling={50000}
-                step={100}
                 inputClassName={inputClass}
               />
               <RangeFilter
@@ -405,8 +397,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 maxName="budget_max"
                 defaultMin={filters.budget_min}
                 defaultMax={filters.budget_max}
-                ceiling={filters.currency === "USD" ? 1000000 : 100000000}
-                step={1000}
                 money
                 inputClassName={inputClass}
               />
