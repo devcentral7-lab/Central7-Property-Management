@@ -47,9 +47,9 @@ export function FinanceHeader({
         {back ? (
           <Link
             href={back.href}
-            className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--muted)] hover:text-[var(--brand)]"
+            className="mb-3 inline-flex items-center gap-2 rounded-xl border border-[var(--line)] bg-[var(--card)] px-3.5 py-2 text-sm font-semibold text-[var(--ink)] shadow-sm transition hover:border-[var(--brand)]/40 hover:bg-[var(--bg-accent)] hover:text-[var(--brand)]"
           >
-            <span aria-hidden>←</span> {back.label}
+            <span aria-hidden>←</span> Back to {back.label}
           </Link>
         ) : null}
         <p className="text-xs font-semibold uppercase tracking-wider text-[var(--brand)]">{eyebrow}</p>
