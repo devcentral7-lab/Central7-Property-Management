@@ -8,7 +8,7 @@ import {
   extractPropertyFieldsWithGemini,
   isGeminiConfigured,
 } from "@/lib/gemini/extract-property";
-import { paragraphFieldsToFilters } from "@/lib/paragraph-search-filters";
+import { paragraphFieldsToFilters, quickSearchFilters } from "@/lib/paragraph-search-filters";
 import type { SearchFilterValues } from "./property-search-form";
 import { createClient } from "@/lib/supabase/server";
 
@@ -70,9 +70,9 @@ export async function searchPropertiesByParagraph(
   try {
     const [options, cities, complexes] = await Promise.all([loadFormOptions(), loadCities(), loadComplexOptions()]);
     const { fields } = await extractPropertyFieldsWithGemini(text, options, true, { cities, complexes });
-    const filters = paragraphFieldsToFilters(fields);
+    const filters = quickSearchFilters(paragraphFieldsToFilters(fields));
     if (!Object.keys(filters).length) {
-      return { ok: false, error: "No filter details found. Include a city, property type, price, or room count." };
+      return { ok: false, error: "No filter details found. Include a city, property type, opportunity, furnishing, or price." };
     }
     return { ok: true, filters };
   } catch (error) {

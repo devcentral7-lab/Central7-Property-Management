@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { splitListParam } from "@/lib/list-param";
+import { cityLikePattern } from "@/lib/cities";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
@@ -71,15 +72,16 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (filters.contact_type) {
     query = query.eq("contact_type", filters.contact_type);
   }
-  if (filters.furnished) query = query.eq("furnished", filters.furnished);
+  // Most older listings never recorded furnishing, so blanks count as a possible match.
+  if (filters.furnished) {
+    query = query.or(`furnished.eq."${filters.furnished.replace(/["\\]/g, "")}",furnished.is.null`);
+  }
   if (filters.currency) query = query.eq("currency", filters.currency);
-  const cities = splitListParam(filters.city);
-  if (cities.length === 1) {
-    query = query.ilike("city", `%${cities[0]}%`);
-  } else if (cities.length > 1) {
-    query = query.or(
-      cities.map((c) => `city.ilike."%${c.replace(/["\\]/g, "")}%"`).join(","),
-    );
+  const cityPatterns = splitListParam(filters.city).map(cityLikePattern).filter(Boolean);
+  if (cityPatterns.length === 1) {
+    query = query.ilike("city", cityPatterns[0]);
+  } else if (cityPatterns.length > 1) {
+    query = query.or(cityPatterns.map((p) => `city.ilike."${p}"`).join(","));
   }
   if (filters.view) query = query.ilike("view", `%${filters.view}%`);
   if (filters.do_not_publish === "true") {

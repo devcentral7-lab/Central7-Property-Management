@@ -4,25 +4,31 @@ import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { toResult, type ActionResult } from "@/lib/action-result";
+import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 
 /** Queue actions after which the listing is live on its platforms. */
 const LIVE_ACTIONS = ["Publish", "Republish", "New Ad Published", "Data Change"];
 
-export type ResolveDataChangeResult = { queued: boolean; message: string };
+export type ResolveDataChangeResult =
+  | { queued: boolean; message: string; needsPlatforms?: false }
+  /** No platform record for this listing: nothing was saved; ask the Admin where it's posted. */
+  | { queued: false; message: string; needsPlatforms: true; platforms: string[] };
 
 /**
  * Admin marks a Data Change request as done. If the listing is live on social
  * media, it goes straight to the social media queue (pre-approved) so the
- * posts get updated too.
+ * posts get updated too. `chosenPlatforms` answers a `needsPlatforms` result;
+ * an empty array means the listing isn't on social media.
  */
 export async function resolveDataChange(
   id: string,
+  chosenPlatforms?: string[],
 ): Promise<ActionResult<ResolveDataChangeResult>> {
-  return toResult(() => resolve(id));
+  return toResult(() => resolve(id, chosenPlatforms));
 }
 
-async function resolve(id: string): Promise<ResolveDataChangeResult> {
+async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveDataChangeResult> {
   const profile = await requireProfile();
   if (profile.role !== "Admin") {
     throw new Error("Only Admin can complete data change requests");
@@ -65,13 +71,12 @@ async function resolve(id: string): Promise<ResolveDataChangeResult> {
   let platforms: string[] = [];
   let skipReason: string | null = null;
   let replaced: string | null = null;
+  let noPlatformRecord = false;
   const takenDown = existing && !LIVE_ACTIONS.includes(existing.approved_action ?? "");
   if (existing && !existing.completed_at && takenDown && !statusIsNewer) {
     platforms = (existing.requested_platforms ?? []) as string[];
     replaced = existing.approved_action;
-    if (!platforms.length) {
-      skipReason = `${request.ref_no} isn't posted on any social media platform, so there is nothing to update.`;
-    }
+    noPlatformRecord = !platforms.length;
   } else if (existing && !existing.completed_at) {
     skipReason = takenDown
       ? `${request.ref_no} was changed to ${existing.approved_action} after this request and is queued to come off social media, so there is nothing to update.`
@@ -93,6 +98,16 @@ async function resolve(id: string): Promise<ResolveDataChangeResult> {
         .maybeSingle();
       platforms = (lastRequest?.requested_platforms ?? []) as string[];
     }
+    noPlatformRecord = !platforms.length;
+  }
+
+  // Most listings were imported without a record of where they're posted, so the Admin says.
+  if (noPlatformRecord) {
+    const known = (await loadFormOptions()).platforms;
+    if (chosenPlatforms === undefined) {
+      return { queued: false, message: "", needsPlatforms: true, platforms: known };
+    }
+    platforms = known.filter((p) => chosenPlatforms.includes(p));
     if (!platforms.length) {
       skipReason = `${request.ref_no} isn't posted on any social media platform, so there is nothing to update.`;
     }

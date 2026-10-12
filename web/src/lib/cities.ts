@@ -146,11 +146,18 @@ export function cityKey(raw: string): string {
 }
 
 /** "Colombo 4", "colombo-04" and "COLOMBO 04" share a key. */
-function matchKey(raw: string): string {
+export function citySpellingKey(raw: string): string {
   return cleanCityName(raw)
     .toLowerCase()
     .replace(/\d+/g, (d) => String(Number(d)))
     .replace(/[^a-z0-9]/g, "");
+}
+const matchKey = citySpellingKey;
+
+/** ilike pattern that ignores spaces and punctuation, so "Colombo 04" also finds "Colombo-04". */
+export function cityLikePattern(raw: string): string {
+  const core = raw.replace(/[^\p{L}\p{N}]+/gu, "%").replace(/^%+|%+$/g, "");
+  return core ? `%${core}%` : "";
 }
 
 function words(raw: string): string {
@@ -167,7 +174,8 @@ export function matchCities(
   text = "",
 ): string[] {
   const usable = list.filter((c) => c !== "Other");
-  const byKey = new Map(usable.map((c) => [matchKey(c), c]));
+  const byKey = new Map<string, string>();
+  for (const c of usable) if (!byKey.has(matchKey(c))) byKey.set(matchKey(c), c);
   const found = new Set<string>();
   const add = (raw: string) => {
     const hit = byKey.get(matchKey(raw));
@@ -176,7 +184,7 @@ export function matchCities(
 
   candidates.forEach(add);
 
-  for (const m of text.matchAll(/colombo[\s-]*(\d{1,2}(?:\s*(?:,|\/|&|and)\s*\d{1,2})*)/gi)) {
+  for (const m of text.matchAll(/\bcol(?:ombo)?\.?[\s-]*(\d{1,2}(?:\s*(?:,|\/|&|and)\s*\d{1,2})*)/gi)) {
     for (const n of m[1].match(/\d{1,2}/g) ?? []) add(`Colombo ${n}`);
   }
 

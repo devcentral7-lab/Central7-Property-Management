@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { useCities } from "@/components/cities-context";
+import { clearedHere } from "@/components/live-filter-form";
 
 export function CitySelect({
   value,
@@ -42,7 +43,8 @@ export function CitySelect({
       input.current?.setCustomValidity("");
     };
     const reset = () => queueMicrotask(sync);
-    const clear = () => {
+    const clear = (event: Event) => {
+      if (!clearedHere(event, field.current)) return;
       if (field.current) field.current.value = "";
       sync();
     };

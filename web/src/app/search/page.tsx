@@ -5,6 +5,7 @@ import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 import type { PropertyCard } from "@/lib/types";
+import { cityLikePattern } from "@/lib/cities";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -34,7 +35,7 @@ export default async function PublicSearchPage({
     .range(from, to);
 
   if (propertyType) query = query.eq("property_type", propertyType);
-  if (city) query = query.ilike("city", `%${city}%`);
+  if (cityLikePattern(city)) query = query.ilike("city", cityLikePattern(city));
   if (q) query = query.or(`ref_no.ilike.%${q}%,city.ilike.%${q}%`);
 
   const { data, count, error } = await query;

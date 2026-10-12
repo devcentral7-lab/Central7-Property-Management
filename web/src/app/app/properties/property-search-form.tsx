@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { RangeFilter } from "@/components/range-filter";
 import { useCities } from "@/components/cities-context";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
-import { LiveFilterForm } from "@/components/live-filter-form";
+import { LiveFilterForm, clearFilterGroup } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import type { FormOptions } from "@/lib/form-options";
 
@@ -57,10 +57,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
   const hasAdvanced = useMemo(() => {
     const keys: (keyof SearchFilterValues)[] = [
       "complex",
-      "opportunity_type",
       "contact_type",
-      "furnished",
-      "currency",
       "view",
       "bedrooms_min",
       "bedrooms_max",
@@ -105,11 +102,11 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
           setParaError(result.error);
           return;
         }
-        const params = new URLSearchParams({ status: result.filters.status ?? "Active", advanced: "1" });
+        const params = new URLSearchParams({ status: result.filters.status ?? "Active" });
         for (const [key, value] of Object.entries(result.filters)) {
           if (value) params.set(key, value);
         }
-        setShowAdvanced(true);
+        setShowAdvanced(null);
         router.replace(`/app/properties?${params}`, { scroll: false });
         setFiltersFilled(true);
       } catch {
@@ -136,11 +133,11 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               {pending ? "Searching…" : "Search properties"}
             </button>
             <button
-              type="reset"
-              form="property-filters"
+              type="button"
+              onClick={() => clearFilterGroup("property-filters", "basic")}
               className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
             >
-              Clear
+              Clear normal filters
             </button>
           </div>
         </div>
@@ -165,12 +162,14 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
       <LiveFilterForm
         id="property-filters"
         action="/app/properties"
-        onClear={clearSearch}
+        onClear={(group) => {
+          if (group !== "advanced") clearSearch();
+        }}
         className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4"
       >
         {showAdvanced ? <input type="hidden" name="advanced" value="1" /> : null}
 
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div data-filter-group="basic" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <label className="col-span-2 text-sm font-medium">
             Keyword search
             <input
@@ -221,7 +220,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
             emptyLabel="No cities found"
             className="xl:col-span-2"
           />
-          <label className="text-sm font-medium xl:col-span-2">
+          <label className="text-sm font-medium">
             Opportunity
             <select
               name="opportunity_type"
@@ -236,7 +235,37 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               ))}
             </select>
           </label>
-          <div className="col-span-2 grid grid-cols-1 xl:col-span-4">
+          <label className="text-sm font-medium">
+            Furnished
+            <select
+              name="furnished"
+              defaultValue={filters.furnished}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">All</option>
+              {options.furnished.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="col-span-2 text-sm font-medium xl:col-span-1">
+            Currency
+            <select
+              name="currency"
+              defaultValue={filters.currency}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">All</option>
+              {options.currencies.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="col-span-2 grid grid-cols-1 xl:col-span-3">
             <RangeFilter
               label="Price"
               minName="price_min"
@@ -252,7 +281,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
@@ -260,10 +289,19 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
           >
             {showAdvanced ? "Hide advanced filters" : "Show advanced filters"}
           </button>
+          {showAdvanced ? (
+            <button
+              type="button"
+              onClick={() => clearFilterGroup("property-filters", "advanced")}
+              className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
+            >
+              Clear advanced filters
+            </button>
+          ) : null}
         </div>
 
         {showAdvanced ? (
-          <div className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
+          <div data-filter-group="advanced" className="mt-4 space-y-5 border-t border-[var(--line)] pt-4">
             <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <MultiSelectFilter
                 name="complex"
@@ -284,36 +322,6 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 >
                   <option value="">All</option>
                   {options.contactTypes.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                Furnished
-                <select
-                  name="furnished"
-                  defaultValue={filters.furnished}
-                  className={`${inputClass} mt-1`}
-                >
-                  <option value="">All</option>
-                  {options.furnished.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm font-medium">
-                Currency
-                <select
-                  name="currency"
-                  defaultValue={filters.currency}
-                  className={`${inputClass} mt-1`}
-                >
-                  <option value="">All</option>
-                  {options.currencies.map((t) => (
                     <option key={t} value={t}>
                       {t}
                     </option>

@@ -1,10 +1,26 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useTransition, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useTransition, type ReactNode } from "react";
 
 const TYPING_DELAY_MS = 400;
 const IMMEDIATE_INPUT_TYPES = new Set(["checkbox", "radio", "date", "month", "range"]);
+const CLEAR_GROUP_EVENT = "clear-filter-group";
+
+function groupOf(el: Element | null): string | null {
+  return el?.closest("[data-filter-group]")?.getAttribute("data-filter-group") ?? null;
+}
+
+/** Whether a "filters-cleared" event covers `el`: a full clear, or a clear of the group containing it. */
+export function clearedHere(event: Event, el: Element | null): boolean {
+  const group = (event as CustomEvent<{ group?: string } | null>).detail?.group;
+  return !group || groupOf(el) === group;
+}
+
+/** Clears only the fields inside `data-filter-group={group}` of the LiveFilterForm with this id. */
+export function clearFilterGroup(formId: string, group: string) {
+  document.getElementById(formId)?.dispatchEvent(new CustomEvent(CLEAR_GROUP_EVENT, { detail: { group } }));
+}
 
 type Props = {
   children: ReactNode;
@@ -13,8 +29,8 @@ type Props = {
   id?: string;
   /** Path to filter; defaults to the current page. */
   action?: string;
-  /** Clear state outside the form, such as a paragraph search prompt. */
-  onClear?: () => void;
+  /** Clear state outside the form, such as a paragraph search prompt. `group` is unset for a full clear. */
+  onClear?: (group?: string) => void;
 };
 
 /**
@@ -92,10 +108,11 @@ export function LiveFilterForm({ children, className = "", id, action, onClear }
     timer.current = setTimeout(apply, TYPING_DELAY_MS);
   }
 
-  function clearFields() {
+  function clearFields(group?: string) {
     const form = formRef.current;
     if (!form) return;
     for (const el of Array.from(form.elements)) {
+      if (group && groupOf(el) !== group) continue;
       if (el instanceof HTMLSelectElement) {
         if (el.dataset.defaultValue !== undefined) el.value = el.dataset.defaultValue;
         else el.selectedIndex = 0;
@@ -108,10 +125,21 @@ export function LiveFilterForm({ children, className = "", id, action, onClear }
         else el.value = "";
       }
     }
-    form.dispatchEvent(new Event("filters-cleared"));
-    onClear?.();
+    form.dispatchEvent(new CustomEvent("filters-cleared", { detail: group ? { group } : null }));
+    onClear?.(group);
     apply();
   }
+
+  const onClearGroup = useEffectEvent((event: Event) => {
+    clearFields((event as CustomEvent<{ group: string }>).detail.group);
+  });
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const handler = (event: Event) => onClearGroup(event);
+    form.addEventListener(CLEAR_GROUP_EVENT, handler);
+    return () => form.removeEventListener(CLEAR_GROUP_EVENT, handler);
+  }, []);
 
   return (
     <form

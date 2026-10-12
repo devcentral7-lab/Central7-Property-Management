@@ -5,6 +5,7 @@ import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import { createClient } from "@/lib/supabase/server";
 import { bedsBaths, bedsBathsShort } from "@/lib/property-details";
+import { cityLikePattern } from "@/lib/cities";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -98,7 +99,7 @@ export default async function AgentSearchPage({
     query = query.eq("opportunity_type", filters.opportunity_type);
   }
   if (filters.currency) query = query.eq("currency", filters.currency);
-  if (filters.city) query = query.ilike("city", `%${filters.city}%`);
+  if (cityLikePattern(filters.city)) query = query.ilike("city", cityLikePattern(filters.city));
   if (filters.q) {
     const q = filters.q.replace(/[%_,()]/g, " ");
     query = query.or(`ref_no.ilike.%${q}%,city.ilike.%${q}%,address.ilike.%${q}%`);
