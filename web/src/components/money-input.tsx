@@ -2,9 +2,14 @@
 
 import type { InputHTMLAttributes, Ref } from "react";
 
+/** Digits and a single decimal point; anything else typed or pasted is dropped. */
+function numericText(value: string): string {
+  const [integer, ...rest] = value.replace(/[^\d.]/g, "").split(".");
+  return rest.length ? `${integer}.${rest.join("")}` : integer;
+}
+
 export function formatMoneyInput(value: string): string {
-  const raw = value.replace(/,/g, "");
-  if (!/^\d*(\.\d*)?$/.test(raw)) return value;
+  const raw = numericText(value);
   const [integer, decimal] = raw.split(".");
   return integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",") +
     (decimal === undefined ? "" : `.${decimal}`);
@@ -32,7 +37,7 @@ export function MoneyInput({ value, defaultValue, onValueChange, ...props }: Pro
         const input = event.currentTarget;
         const original = input.value;
         const caret = input.selectionStart ?? original.length;
-        const digitsBeforeCaret = original.slice(0, caret).replace(/,/g, "").length;
+        const digitsBeforeCaret = numericText(original.slice(0, caret)).length;
         const formatted = formatMoneyInput(original);
         input.value = formatted;
         let position = 0;

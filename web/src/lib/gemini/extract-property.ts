@@ -2,6 +2,7 @@ import type { FormOptions } from "@/lib/form-options";
 import {
   COMMERCIAL_SUBTYPES,
   CONTACT_TYPES,
+  FURNISHABLE_TYPES,
   FURNISHED_LIST,
   OPPORTUNITY_TYPES,
   PROPERTY_TYPES,
@@ -124,6 +125,9 @@ export function normalizeExtractedFields(
   const ptype = strVal(raw.property_type);
   if (lists.propertyTypes.includes(ptype)) {
     out.property_type = ptype;
+  } else if (ptype.toLowerCase() === "estate" && lists.propertyTypes.includes("Commercial Property")) {
+    out.property_type = "Commercial Property";
+    out.property_subtype = "Estate";
   }
 
   const subtype = strVal(raw.property_subtype).toLowerCase();
@@ -292,7 +296,8 @@ function tidyListingFields(fields: Record<string, string>) {
   if ((type === "Commercial Property" || type === "Land") && fields.purpose && !fields.suitable_for) {
     fields.suitable_for = fields.purpose;
   }
-  if (type !== "House" && type !== "Estate") delete fields.purpose;
+  if (type !== "House") delete fields.purpose;
+  if (!FURNISHABLE_TYPES.includes(type)) delete fields.furnished;
   const allowed = typeSpecificKeys(type);
   for (const k of TYPE_DETAIL_KEYS) if (!allowed.has(k)) delete fields[k];
   const comment = fields.comments?.toLowerCase();

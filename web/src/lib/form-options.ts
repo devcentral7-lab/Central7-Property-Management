@@ -69,16 +69,17 @@ function sortAlpha(arr: readonly string[] | string[]): string[] {
   return [...arr].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
+/** Used only if the saved lists can't be read; normally Admins set each list's order. */
 const FALLBACK: FormOptions = {
   amenities: sortAlpha(AMENITIES_LIST),
-  contactTypes: sortAlpha(CONTACT_TYPES),
-  opportunityTypes: sortAlpha(OPPORTUNITY_TYPES),
-  propertyTypes: sortAlpha(PROPERTY_TYPES),
-  furnished: sortAlpha(FURNISHED_LIST),
-  currencies: sortAlpha(["LKR", "USD"]),
-  statuses: sortAlpha(STATUS_LIST),
-  platforms: sortAlpha(SOCIAL_MEDIA_PLATFORMS),
-  statusChangeOptions: sortAlpha(STATUS_CHANGE_OPTIONS),
+  contactTypes: [...CONTACT_TYPES],
+  opportunityTypes: [...OPPORTUNITY_TYPES],
+  propertyTypes: [...PROPERTY_TYPES],
+  furnished: [...FURNISHED_LIST],
+  currencies: ["LKR", "USD"],
+  statuses: [...STATUS_LIST],
+  platforms: [...SOCIAL_MEDIA_PLATFORMS],
+  statusChangeOptions: [...STATUS_CHANGE_OPTIONS],
 };
 
 function asStringArray(value: unknown): string[] | null {
@@ -94,8 +95,7 @@ function fromRows(
 ): FormOptions {
   const map = new Map((rows ?? []).map((r) => [r.key, r.value]));
   const pick = (key: FormListKey, fallback: string[]) => {
-    const list = asStringArray(map.get(key));
-    return sortAlpha(list ?? fallback);
+    return asStringArray(map.get(key)) ?? fallback;
   };
 
   return {
