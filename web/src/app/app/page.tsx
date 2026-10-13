@@ -2,11 +2,10 @@ import { requireProfile } from "@/lib/auth";
 import { loadAdminAnalytics } from "@/lib/analytics";
 import { colomboYear, parseDashboardRange } from "@/lib/dashboard-period";
 import {
-  currentYear,
-  loadFinanceSummary,
+  loadCompanyPerformance,
   loadMyPerformance,
+  performanceYears,
   resolvePerformancePeriod,
-  todayIso,
 } from "@/lib/finance";
 import { loadUserDashboard } from "@/lib/user-dashboard";
 import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
@@ -25,13 +24,13 @@ export default async function AppHomePage({
       Array.isArray(v) ? v[0] : v;
     const view = first(sp.view) === "visuals" ? "visuals" : "stats";
     const range = parseDashboardRange(first(sp.period), first(sp.year), colomboYear());
-    const financeFilter =
-      range.period === "all"
-        ? { year: "all", month: "" }
-        : range.period === "month"
-          ? { year: String(range.year), month: String(Number(todayIso().slice(5, 7))) }
-          : { year: String(range.year), month: "" };
-    const [result, finance] = await Promise.all([
+    const salesPeriod = resolvePerformancePeriod({
+      from: first(sp.sales_from),
+      to: first(sp.sales_to),
+      month: first(sp.sales_month),
+      year: first(sp.sales_year),
+    });
+    const [result, companySales] = await Promise.all([
       loadAdminAnalytics(range).then(
         (data) => ({ data, error: null }),
         (e: unknown) => ({
@@ -39,16 +38,19 @@ export default async function AppHomePage({
           error: e instanceof Error ? e.message : "Could not load analytics.",
         }),
       ),
-      loadFinanceSummary(financeFilter).then(
-        ({ dashboard }) => ({
-          dashboard,
-          query: new URLSearchParams(Object.entries(financeFilter).filter(([, v]) => v)).toString(),
-        }),
-        () => null,
+      loadCompanyPerformance(salesPeriod).then(
+        (figures) => ({ figures, error: null }),
+        () => ({ figures: null, error: "Could not load company sales right now." }),
       ),
     ]);
     if (result.data) {
-      return <AdminDashboard data={result.data} view={view} finance={finance} />;
+      return (
+        <AdminDashboard
+          data={result.data}
+          view={view}
+          sales={{ ...companySales, period: salesPeriod, years: performanceYears(salesPeriod.year) }}
+        />
+      );
     }
     return (
       <div>
@@ -73,10 +75,7 @@ export default async function AppHomePage({
     month: param("month"),
     year: param("year"),
   });
-  const thisYear = currentYear();
-  const years = [...new Set([thisYear + 1, ...Array.from({ length: 6 }, (_, i) => thisYear - i), period.year])].sort(
-    (a, b) => b - a,
-  );
+  const years = performanceYears(period.year);
 
   const [result, performance] = await Promise.all([
     loadUserDashboard(profile.display_name).then(

@@ -11,6 +11,7 @@ import {
   type FinanceTargetRow,
   type MyPerformance,
   type PerformancePeriod,
+  type SalesFigures,
 } from "@/lib/finance-shared";
 
 export * from "@/lib/finance-shared";
@@ -55,20 +56,6 @@ export async function loadFinance(f: FinanceFilters) {
   };
 }
 
-/** Just the dashboard figures (no invoice list), e.g. for the admin home page. */
-export async function loadFinanceSummary(f: Pick<FinanceFilters, "year" | "month">) {
-  const supabase = await createClient();
-  const range = resolveFinanceRange({ agent: "", quarter: "", from: "", to: "", type: "", status: "", q: "", ...f });
-  const { data, error } = await supabase.rpc("finance_dashboard", {
-    p_from: range.from,
-    p_to: range.to,
-    p_year: range.year,
-    p_agent: null,
-  });
-  if (error) throw new Error(error.message);
-  return { range, dashboard: data as FinanceDashboard };
-}
-
 export async function loadFinanceAgents() {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("finance_agents");
@@ -104,9 +91,28 @@ export async function loadMyPerformance(period: PerformancePeriod) {
   const perf = data as MyPerformance;
   return {
     ...perf,
-    sales_value: Number(perf.sales_value),
-    quarterly: (perf.quarterly ?? []).map(Number),
+    ...salesFigures(perf),
     target: perf.target == null ? null : Number(perf.target),
+  };
+}
+
+/** Company-wide credited sales for the admin dashboard. */
+export async function loadCompanyPerformance(period: PerformancePeriod): Promise<SalesFigures> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("finance_company_performance", {
+    p_from: period.from,
+    p_to: period.to,
+    p_year: period.year,
+  });
+  if (error) throw new Error(error.message);
+  return salesFigures(data as SalesFigures);
+}
+
+function salesFigures(f: SalesFigures): SalesFigures {
+  return {
+    sales_value: Number(f.sales_value),
+    invoices: Number(f.invoices),
+    quarterly: (f.quarterly ?? []).map(Number),
   };
 }
 

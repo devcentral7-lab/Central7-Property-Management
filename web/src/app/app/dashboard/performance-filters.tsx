@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MONTH_NAMES, monthRangeFor, type PerformancePeriod } from "@/lib/finance-shared";
 
 const field =
@@ -17,8 +17,18 @@ function valuesOf(period: PerformancePeriod): Values {
   return { from: period.from, to: period.to, month: period.month, year: String(period.year) };
 }
 
-export function PerformanceFilters({ period, years }: { period: PerformancePeriod; years: number[] }) {
+export function PerformanceFilters({
+  period,
+  years,
+  paramPrefix = "",
+}: {
+  period: PerformancePeriod;
+  years: number[];
+  /** Prefix for the URL params, so they don't clash with other filters on the page. */
+  paramPrefix?: string;
+}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [values, setValues] = useState(() => valuesOf(period));
   const [synced, setSynced] = useState(period);
@@ -34,7 +44,8 @@ export function PerformanceFilters({ period, years }: { period: PerformancePerio
   }, []);
 
   function apply(next: Values) {
-    const query = new URLSearchParams(next).toString();
+    const query = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(next)) query.set(`${paramPrefix}${key}`, value);
     startTransition(() => router.replace(`/app?${query}`, { scroll: false }));
   }
 
