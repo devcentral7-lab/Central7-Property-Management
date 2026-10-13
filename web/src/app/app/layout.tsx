@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
+import { canAccessSocialQueue, isRealAdmin, requireProfile } from "@/lib/auth";
 import { signOut } from "@/app/app/actions";
+import { setViewMode } from "@/app/app/view-mode-actions";
 import { PropertyModalProvider } from "@/app/app/properties/property-modal";
 import { CitiesProvider } from "@/components/cities-context";
 import { loadCities } from "@/lib/cities-server";
@@ -77,11 +78,33 @@ export default async function AppLayout({
             <AppSidebar
               items={nav}
               displayName={profile.display_name}
-              role={profile.role}
+              role={profile.viewingAsUser ? "Admin" : profile.role}
               signOutAction={signOut}
               initialCollapsed={sidebarCollapsed}
+              viewSwitch={
+                isRealAdmin(profile)
+                  ? { mode: profile.viewingAsUser ? "user" : "admin", action: setViewMode }
+                  : undefined
+              }
             />
             <div className="flex min-w-0 flex-1 flex-col">
+              {profile.viewingAsUser ? (
+                <form
+                  action={setViewMode}
+                  className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-[var(--brand)]/20 bg-[var(--brand)]/[0.06] px-4 py-2 text-center text-sm text-[var(--brand-deep)]"
+                >
+                  <input type="hidden" name="mode" value="admin" />
+                  <span>
+                    You&apos;re viewing the app as a <strong>User</strong>. Admin pages and actions are hidden.
+                  </span>
+                  <button
+                    type="submit"
+                    className="rounded-full bg-[var(--brand)] px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--brand-deep)]"
+                  >
+                    Back to admin view
+                  </button>
+                </form>
+              ) : null}
               <PendingMain className="flex-1 px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:overflow-auto lg:px-8">
                 {children}
               </PendingMain>

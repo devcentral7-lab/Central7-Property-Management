@@ -9,6 +9,8 @@ import {
   type FinanceInvoice,
   type FinanceInvoiceDetail,
   type FinanceTargetRow,
+  type MyPerformance,
+  type PerformancePeriod,
 } from "@/lib/finance-shared";
 
 export * from "@/lib/finance-shared";
@@ -87,6 +89,25 @@ export async function loadNextInvoiceNo(date: string) {
   const { data, error } = await supabase.rpc("finance_next_invoice_no", { p_date: date });
   if (error) throw new Error(error.message);
   return String(data ?? "");
+}
+
+/** The signed-in staff member's own sales and target; null when no finance agent is linked to them. */
+export async function loadMyPerformance(period: PerformancePeriod) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("finance_my_performance", {
+    p_from: period.from,
+    p_to: period.to,
+    p_year: period.year,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const perf = data as MyPerformance;
+  return {
+    ...perf,
+    sales_value: Number(perf.sales_value),
+    quarterly: (perf.quarterly ?? []).map(Number),
+    target: perf.target == null ? null : Number(perf.target),
+  };
 }
 
 export async function loadTargets(year: number) {
