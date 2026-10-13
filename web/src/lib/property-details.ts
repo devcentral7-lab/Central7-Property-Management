@@ -147,6 +147,7 @@ export function buildPropertyDetails(
   ]).map((f) => (f.href?.startsWith("tel:") ? { ...f, phone: true } : f));
 
   const record = collect([
+    ["Agent ref no", attrs.agent_ref_no],
     ["Created by", p.created_by_name],
     [
       "Created",

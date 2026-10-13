@@ -119,6 +119,8 @@ async function buildPropertyPayload(formData: FormData) {
   ];
 
   const type_attributes: Record<string, unknown> = {};
+  const agentRefNo = str(formData.get("agent_ref_no")).slice(0, 50);
+  if (agentRefNo) type_attributes.agent_ref_no = agentRefNo;
   if (propertyType === "Land" || propertyType === "Commercial Property") {
     type_attributes.suitable_for = str(formData.get("suitable_for")) || null;
   }

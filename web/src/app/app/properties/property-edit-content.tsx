@@ -49,6 +49,7 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
           initialDoNotPublish={Boolean(property.do_not_publish)}
           initialAmenities={knownAmenities}
           initialValues={{
+            agent_ref_no: s(attrs.agent_ref_no),
             contact_type: s(property.contact_type),
             contact_name: s(property.contact_name),
             contact_phone_1: s(property.contact_phone_1),
