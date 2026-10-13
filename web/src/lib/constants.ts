@@ -2,12 +2,13 @@
 
 export const OPPORTUNITY_TYPES = ["Sell", "Rent Out"] as const;
 export const PROPERTY_TYPES = [
+  "Apartment",
   "House",
   "Land",
-  "Apartment",
   "Commercial Property",
-  "Estate",
 ] as const;
+/** Property types where the Furnished field applies. */
+export const FURNISHABLE_TYPES: readonly string[] = ["Apartment", "House", "Commercial Property"];
 export const COMMERCIAL_SUBTYPES = [
   "Estate",
   "Warehouse",

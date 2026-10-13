@@ -8,6 +8,7 @@ import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { toResult, type ActionResult } from "@/lib/action-result";
 import { loadFormOptions } from "@/lib/form-options";
+import { FURNISHABLE_TYPES } from "@/lib/constants";
 import { loadCities } from "@/lib/cities-server";
 import { matchCities } from "@/lib/cities";
 import { loadComplexOptions } from "@/lib/complexes-server";
@@ -119,8 +120,8 @@ async function buildPropertyPayload(formData: FormData) {
   ];
 
   const type_attributes: Record<string, unknown> = {};
-  const agentRefNo = str(formData.get("agent_ref_no")).slice(0, 50);
-  if (agentRefNo) type_attributes.agent_ref_no = agentRefNo;
+  const partnerRefNo = contactType === "Partner" ? str(formData.get("agent_ref_no")).slice(0, 50) : "";
+  if (partnerRefNo) type_attributes.agent_ref_no = partnerRefNo;
   if (propertyType === "Land" || propertyType === "Commercial Property") {
     type_attributes.suitable_for = str(formData.get("suitable_for")) || null;
   }
@@ -139,8 +140,15 @@ async function buildPropertyPayload(formData: FormData) {
   }
 
   let furnished: string | null = str(formData.get("furnished")) || null;
-  if (furnished && !options.furnished.includes(furnished)) {
+  if (furnished && (!options.furnished.includes(furnished) || !FURNISHABLE_TYPES.includes(propertyType))) {
     furnished = null;
+  }
+
+  const price_total = num(formData.get("price_total"));
+  const price_per_perch = num(formData.get("price_per_perch"));
+  const price_per_sqft = num(formData.get("price_per_sqft"));
+  if (price_total == null && price_per_perch == null && price_per_sqft == null) {
+    throw new Error("Enter at least one price: Price, Price per Perch or Price per Sqft.");
   }
 
   let currency = str(formData.get("currency")) || "LKR";
@@ -184,9 +192,9 @@ async function buildPropertyPayload(formData: FormData) {
       apartment_floor: str(formData.get("apartment_floor")) || null,
       view: str(formData.get("view")) || null,
       currency,
-      price_per_perch: num(formData.get("price_per_perch")),
-      price_per_sqft: num(formData.get("price_per_sqft")),
-      price_total: num(formData.get("price_total")),
+      price_per_perch,
+      price_per_sqft,
+      price_total,
       budget: num(formData.get("budget")),
       furnished,
       status,

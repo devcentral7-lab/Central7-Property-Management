@@ -50,7 +50,7 @@ export function PropertyImageAttachments({ files, configured, disabled, classNam
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-base font-semibold">Property Images</h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Images upload when you save the property.</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Images will be uploaded when you save the property.</p>
         </div>
         <button type="button" disabled={!configured || disabled || preparing} onClick={() => picker.current?.click()}
           className="rounded-xl border border-[var(--brand)] px-4 py-2 text-sm font-semibold text-[var(--brand)] hover:bg-[var(--brand)]/5 disabled:cursor-not-allowed disabled:opacity-50">
