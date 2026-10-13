@@ -85,6 +85,79 @@ export type FinanceDashboard = {
   quarterly: { agent: string; quarter: number; amount: number }[];
 };
 
+/** A staff member's own figures for their dashboard (from finance_my_performance). */
+export type MyPerformance = {
+  agent: string;
+  sales_value: number;
+  invoices: number;
+  /** Credited sales for Q1–Q4 of the chosen year. */
+  quarterly: number[];
+  target: number | null;
+};
+
+export type PerformancePeriod = {
+  from: string;
+  to: string;
+  /** "" means the whole year. */
+  month: string;
+  year: number;
+  label: string;
+};
+
+export function currentMonth() {
+  return Number(todayIso().slice(5, 7));
+}
+
+function monthOrYearRange(year: number, month: number) {
+  return month >= 1 && month <= 12
+    ? { from: `${year}-${pad(month)}-01`, to: `${year}-${pad(month)}-${pad(lastDay(year, month))}` }
+    : { from: `${year}-01-01`, to: `${year}-12-31` };
+}
+
+/** Month / Year pick the range; valid From / To dates override it. Defaults to this month. */
+export function resolvePerformancePeriod(p: {
+  from?: string;
+  to?: string;
+  month?: string;
+  year?: string;
+}): PerformancePeriod {
+  const thisYear = currentYear();
+  const parsedYear = Number(p.year);
+  const year = parsedYear >= 2000 && parsedYear <= 2100 ? parsedYear : thisYear;
+  const monthNum = p.month === undefined ? currentMonth() : Number(p.month);
+  const month = monthNum >= 1 && monthNum <= 12 ? String(monthNum) : "";
+  const base = monthOrYearRange(year, Number(month));
+  let from = p.from && DATE_RE.test(p.from) ? p.from : base.from;
+  let to = p.to && DATE_RE.test(p.to) ? p.to : base.to;
+  if (from > to) [from, to] = [to, from];
+  const label =
+    from === base.from && to === base.to
+      ? month
+        ? `${MONTH_NAMES[Number(month) - 1]} ${year}`
+        : `All of ${year}`
+      : `${formatDate(from)} – ${formatDate(to)}`;
+  return { from, to, month, year, label };
+}
+
+export function monthRangeFor(year: number, month: string) {
+  return monthOrYearRange(year, Number(month));
+}
+
+export const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 export type FinanceInvoice = {
   id: string;
   invoice_no: string;

@@ -138,6 +138,22 @@ body {
   animation: skeleton-shimmer 1.3s ease-in-out infinite;
 }
 
+@keyframes filter-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+@keyframes view-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
 @keyframes skeleton-shimmer {
   to {
     transform: translateX(100%);

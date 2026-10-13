@@ -230,7 +230,9 @@ export type IconName =
   | "calendar"
   | "logout"
   | "lock"
-  | "pin";
+  | "pin"
+  | "target"
+  | "trend";
 
 const PATHS: Record<IconName, ReactNode> = {
   users: (
@@ -314,6 +316,14 @@ const PATHS: Record<IconName, ReactNode> = {
       <circle cx="10" cy="8" r="2" />
     </>
   ),
+  target: (
+    <>
+      <circle cx="10" cy="10" r="7.5" />
+      <circle cx="10" cy="10" r="4.5" />
+      <circle cx="10" cy="10" r="1.5" />
+    </>
+  ),
+  trend: <path d="M3 14.5 8 9.5l3 3 6-6.5M12.5 6H17v4.5" />,
 };
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {

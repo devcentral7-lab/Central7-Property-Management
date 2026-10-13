@@ -1,7 +1,13 @@
 import { requireProfile } from "@/lib/auth";
 import { loadAdminAnalytics } from "@/lib/analytics";
 import { colomboYear, parseDashboardRange } from "@/lib/dashboard-period";
-import { loadFinanceSummary, todayIso } from "@/lib/finance";
+import {
+  currentYear,
+  loadFinanceSummary,
+  loadMyPerformance,
+  resolvePerformancePeriod,
+  todayIso,
+} from "@/lib/finance";
 import { loadUserDashboard } from "@/lib/user-dashboard";
 import { AdminDashboard } from "@/app/app/dashboard/admin-dashboard";
 import { UserDashboard } from "@/app/app/dashboard/user-dashboard";
@@ -56,13 +62,35 @@ export default async function AppHomePage({
     );
   }
 
-  const result = await loadUserDashboard(profile.display_name).then(
-    (data) => ({ data, error: null }),
-    (e: unknown) => ({
-      data: null,
-      error: e instanceof Error ? e.message : "Could not load your dashboard.",
-    }),
+  const sp = await searchParams;
+  const param = (key: string) => {
+    const v = sp[key];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  const period = resolvePerformancePeriod({
+    from: param("from"),
+    to: param("to"),
+    month: param("month"),
+    year: param("year"),
+  });
+  const thisYear = currentYear();
+  const years = [...new Set([thisYear + 1, ...Array.from({ length: 6 }, (_, i) => thisYear - i), period.year])].sort(
+    (a, b) => b - a,
   );
+
+  const [result, performance] = await Promise.all([
+    loadUserDashboard(profile.display_name).then(
+      (data) => ({ data, error: null }),
+      (e: unknown) => ({
+        data: null,
+        error: e instanceof Error ? e.message : "Could not load your dashboard.",
+      }),
+    ),
+    loadMyPerformance(period).then(
+      (data) => ({ data, error: null }),
+      () => ({ data: null, error: "Could not load your sales figures right now." }),
+    ),
+  ]);
 
   if (!result.data) {
     return (
@@ -77,5 +105,11 @@ export default async function AppHomePage({
     );
   }
 
-  return <UserDashboard name={profile.display_name} data={result.data} />;
+  return (
+    <UserDashboard
+      name={profile.display_name}
+      data={result.data}
+      performance={{ ...performance, period, years }}
+    />
+  );
 }

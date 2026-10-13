@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useOptimistic, useState, type ReactNode } from "react";
+import { useFormStatus } from "react-dom";
 import { BrandLogo } from "@/components/brand-logo";
+import type { ViewMode } from "@/lib/view-mode";
 import { usePendingNavigation } from "./navigation-pending";
 import { SIDEBAR_COOKIE } from "./sidebar-cookie";
 
@@ -164,13 +166,143 @@ function isActive(
   return true;
 }
 
+type ViewSwitchProps = {
+  mode: ViewMode;
+  action: (formData: FormData) => Promise<void>;
+};
+
 type Props = {
   items: SidebarNavItem[];
   displayName: string;
   role: string;
   signOutAction: () => Promise<void>;
   initialCollapsed?: boolean;
+  /** Only passed for Admins. */
+  viewSwitch?: ViewSwitchProps;
 };
+
+const SPRING = "duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] motion-reduce:transition-none";
+
+function ViewIcon({ mode, className = "h-4 w-4" }: { mode: ViewMode; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {mode === "admin" ? (
+        <path d="M12 3 5 6v5.5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6l-7-3Zm-2.8 9.2 2 2 4-4.2" />
+      ) : (
+        <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8.5c0-3.3 3.1-5.5 7-5.5s7 2.2 7 5.5" />
+      )}
+    </svg>
+  );
+}
+
+function ViewOption({ mode, shown }: { mode: ViewMode; shown: ViewMode }) {
+  const { pending } = useFormStatus();
+  const active = mode === shown;
+  return (
+    <button
+      type="submit"
+      name="mode"
+      value={mode}
+      disabled={active || pending}
+      aria-pressed={active}
+      className={`relative z-10 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-colors duration-300 disabled:cursor-default ${
+        active ? "text-white" : "text-white/55 hover:text-white"
+      }`}
+    >
+      <ViewIcon
+        mode={mode}
+        className={`h-4 w-4 transition-transform ${SPRING} ${active ? "scale-110" : "scale-90"}`}
+      />
+      {mode === "admin" ? "Admin" : "User"}
+    </button>
+  );
+}
+
+function SegmentedViewSwitch({ shown }: { shown: ViewMode }) {
+  const { pending } = useFormStatus();
+  return (
+    <div
+      role="group"
+      aria-label="Switch view"
+      className="relative grid grid-cols-2 rounded-xl bg-black/25 p-1 ring-1 ring-inset ring-white/10"
+    >
+      <span
+        aria-hidden
+        className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--brand-deep)] shadow-[0_6px_18px_-6px_rgba(200,16,46,0.85)] ring-1 ring-inset ring-white/15 transition-transform ${SPRING} ${
+          shown === "user" ? "translate-x-full" : "translate-x-0"
+        } ${pending ? "animate-pulse" : ""}`}
+      />
+      <ViewOption mode="admin" shown={shown} />
+      <ViewOption mode="user" shown={shown} />
+    </div>
+  );
+}
+
+function CompactViewSwitch({ shown }: { shown: ViewMode }) {
+  const { pending } = useFormStatus();
+  const next: ViewMode = shown === "admin" ? "user" : "admin";
+  const label = `Viewing as ${shown === "admin" ? "Admin" : "User"} · switch to ${next === "admin" ? "Admin" : "User"} view`;
+  return (
+    <button
+      type="submit"
+      name="mode"
+      value={next}
+      disabled={pending}
+      title={label}
+      aria-label={label}
+      className="relative h-[4.25rem] w-9 rounded-full bg-black/25 ring-1 ring-inset ring-white/10 transition hover:ring-white/25 disabled:cursor-wait"
+    >
+      <span
+        aria-hidden
+        className={`absolute left-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[var(--brand)] to-[var(--brand-deep)] text-white shadow-[0_6px_14px_-4px_rgba(200,16,46,0.85)] transition-transform ${SPRING} ${
+          shown === "user" ? "translate-y-[2.25rem]" : "translate-y-0"
+        } ${pending ? "animate-pulse" : ""}`}
+      >
+        <ViewIcon mode={shown} className="h-3.5 w-3.5" />
+      </span>
+    </button>
+  );
+}
+
+function ViewSwitch({ mode, action, collapsed }: ViewSwitchProps & { collapsed: boolean }) {
+  // Slides to the picked side straight away; settles on the server's mode after the reload.
+  const [shown, setShown] = useOptimistic(mode);
+  async function switchView(formData: FormData) {
+    setShown(formData.get("mode") === "user" ? "user" : "admin");
+    await action(formData);
+  }
+
+  if (collapsed) {
+    return (
+      <form action={switchView} className="flex justify-center border-b border-white/10 px-3 py-3">
+        <CompactViewSwitch shown={shown} />
+      </form>
+    );
+  }
+  return (
+    <form action={switchView} className="border-b border-white/10 px-4 py-3.5">
+      <div className="mb-2 flex items-center justify-between px-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/45">View as</p>
+        <span
+          key={shown}
+          className="animate-[view-fade_300ms_ease-out] text-[11px] text-white/45 motion-reduce:animate-none"
+        >
+          {shown === "admin" ? "Full access" : "Staff preview"}
+        </span>
+      </div>
+      <SegmentedViewSwitch shown={shown} />
+    </form>
+  );
+}
 
 function Brand({ compact = false }: { compact?: boolean }) {
   if (compact) {
@@ -203,6 +335,7 @@ function NavPanel({
   displayName,
   role,
   signOutAction,
+  viewSwitch,
   pathname,
   searchParams,
   collapsed = false,
@@ -213,6 +346,7 @@ function NavPanel({
 }) {
   return (
     <>
+      {viewSwitch ? <ViewSwitch {...viewSwitch} collapsed={collapsed} /> : null}
       <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-3 py-4">
         {items.map((item) => {
           const active = isActive(pathname, searchParams, item);
@@ -288,8 +422,13 @@ function NavPanel({
               <p className="truncate text-sm font-medium text-white">
                 {displayName}
               </p>
-              <p className="truncate text-xs text-white/55">
-                Logged in as: {role}
+              <p className="flex min-w-0 items-center gap-1.5 text-xs text-white/55">
+                <span className="truncate">Logged in as: {role}</span>
+                {viewSwitch?.mode === "user" ? (
+                  <span className="shrink-0 rounded-full bg-[var(--brand)]/25 px-1.5 py-px text-[10px] font-semibold text-white ring-1 ring-inset ring-[var(--brand)]/50">
+                    User view
+                  </span>
+                ) : null}
               </p>
             </div>
           </div>

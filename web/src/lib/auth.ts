@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
+import { VIEW_AS_COOKIE } from "@/lib/view-mode";
 
 export type AgentAccount = {
   id: string;
@@ -29,6 +31,10 @@ export async function getSessionActor(): Promise<SessionActor> {
     .maybeSingle();
 
   if (profile?.active) {
+    // The view switch can only narrow an Admin to User, never widen anyone's role.
+    if (profile.role === "Admin" && (await cookies()).get(VIEW_AS_COOKIE)?.value === "user") {
+      return { kind: "staff", profile: { ...(profile as Profile), role: "User", viewingAsUser: true } };
+    }
     return { kind: "staff", profile: profile as Profile };
   }
 
@@ -55,6 +61,11 @@ export async function requireAgent(): Promise<AgentAccount> {
   const actor = await getSessionActor();
   if (actor.kind !== "agent") throw new Error("Unauthorized");
   return actor.agent;
+}
+
+/** True for Admins, including while they are viewing the app as a User. */
+export function isRealAdmin(profile: Profile): boolean {
+  return profile.role === "Admin" || Boolean(profile.viewingAsUser);
 }
 
 export async function getOptionalProfile(): Promise<Profile | null> {

@@ -2,10 +2,25 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { BRAND, seriesColor, statusColor } from "@/app/app/dashboard/palette";
+import { PerformanceFilters } from "@/app/app/dashboard/performance-filters";
 import { RefSearch } from "@/app/app/dashboard/ref-search";
 import { Icon, StatCard, type IconName } from "@/app/app/user-management/ui";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  currentMonth,
+  currentYear,
+  formatLkr,
+  type MyPerformance,
+  type PerformancePeriod,
+} from "@/lib/finance-shared";
 import type { CountRow, UserDashboardData } from "@/lib/user-dashboard";
+
+export type PerformanceView = {
+  data: MyPerformance | null;
+  error: string | null;
+  period: PerformancePeriod;
+  years: number[];
+};
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -58,7 +73,7 @@ function Panel({
         </div>
         {action}
       </div>
-      <div className="flex-1 p-4 sm:p-5">{children}</div>
+      <div className="@container flex-1 p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -143,7 +158,158 @@ function OpportunitySplit({ rows, total }: { rows: CountRow[]; total: number }) 
   );
 }
 
-export function UserDashboard({ name, data }: { name: string; data: UserDashboardData }) {
+const QUARTER_COLORS = [BRAND.red, BRAND.charcoal, BRAND.redSoft, BRAND.stone];
+
+function MyPerformancePanel({ view }: { view: PerformanceView }) {
+  const { data, period } = view;
+  const thisQuarter = period.year === currentYear() ? Math.ceil(currentMonth() / 3) : 0;
+  return (
+    <Panel title="My Performance" subtitle="Sales credited to you" icon="trend">
+      <PerformanceFilters period={period} years={view.years} />
+      {data ? (
+        <>
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-2xl bg-[var(--sidebar)] px-5 py-4 text-white">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white/70">Sales value · {period.label}</p>
+              <p className="font-display text-3xl font-semibold tabular-nums sm:text-4xl">{formatLkr(data.sales_value)}</p>
+            </div>
+            <p className="text-xs text-white/60">
+              {data.invoices.toLocaleString()} {data.invoices === 1 ? "invoice" : "invoices"}
+            </p>
+          </div>
+
+          <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
+            My quarterly sales · {period.year}
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-3 @xl:grid-cols-4">
+            {[0, 1, 2, 3].map((i) => {
+              const amount = data.quarterly[i] ?? 0;
+              return (
+                <div
+                  key={i}
+                  className={`relative min-w-0 rounded-xl border bg-[var(--card)] py-3 pl-4 pr-3 ${
+                    thisQuarter === i + 1 ? "border-[var(--brand)]/40 bg-[var(--brand)]/[0.03]" : "border-[var(--line)]"
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-3 left-0 w-1 rounded-r-full"
+                    style={{ background: QUARTER_COLORS[i] }}
+                  />
+                  <p className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--muted)]">
+                    Q{i + 1}
+                    {thisQuarter === i + 1 ? (
+                      <span className="rounded-full bg-[var(--brand)]/10 px-1.5 py-px text-[10px] font-semibold text-[var(--brand-deep)]">
+                        Now
+                      </span>
+                    ) : null}
+                  </p>
+                  <p
+                    className={`mt-1 truncate font-display text-lg font-semibold tabular-nums ${
+                      amount ? "text-[var(--ink)]" : "text-[var(--muted)]"
+                    }`}
+                  >
+                    {formatLkr(amount)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p className="mt-5 rounded-xl bg-[var(--bg)] px-4 py-3 text-sm text-[var(--muted)]">
+          {view.error ?? "Your sales figures will show here once an admin links your login to a finance agent."}
+        </p>
+      )}
+    </Panel>
+  );
+}
+
+function TargetPanel({ view }: { view: PerformanceView }) {
+  const { data, period } = view;
+  const year = period.year;
+  const title = `Your ${year} Target`;
+  if (!data) return null;
+  if (!data.target) {
+    return (
+      <Panel title={title} subtitle="Yearly sales target" icon="target">
+        <EmptyNote>No target has been set for {year} yet.</EmptyNote>
+      </Panel>
+    );
+  }
+
+  const target = data.target;
+  const achieved = data.quarterly.reduce((s, q) => s + q, 0);
+  const remaining = Math.max(target - achieved, 0);
+  const progress = Math.round((achieved / target) * 100);
+  const thisYear = currentYear();
+  const monthsLeft = year === thisYear ? 12 - currentMonth() + 1 : year > thisYear ? 12 : 0;
+  const neededPerMonth = remaining && monthsLeft ? remaining / monthsLeft : 0;
+  const note =
+    remaining === 0
+      ? `Target reached, ${formatLkr(achieved - target)} above target.`
+      : monthsLeft === 0
+        ? `${year} ended ${formatLkr(remaining)} short of the target.`
+        : `Average about ${formatLkr(neededPerMonth)} per month for the rest of the year to hit your target.`;
+
+  return (
+    <Panel title={title} subtitle="Yearly sales target" icon="target">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-[var(--bg)] px-4 py-3">
+          <p className="text-xs font-medium text-[var(--muted)]">Remaining target</p>
+          <p className="truncate font-display text-2xl font-semibold tabular-nums text-[var(--brand)] sm:text-3xl">
+            {formatLkr(remaining)}
+          </p>
+        </div>
+        <div className="rounded-xl bg-[var(--bg)] px-4 py-3">
+          <p className="text-xs font-medium text-[var(--muted)]">Achieved so far</p>
+          <p className="font-display text-2xl font-semibold tabular-nums text-emerald-700 sm:text-3xl">{progress}%</p>
+        </div>
+      </div>
+
+      <div
+        className="mt-5 h-3 overflow-hidden rounded-full bg-[var(--bg-accent)]"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.min(progress, 100)}
+        aria-label={`${progress}% of the ${year} target achieved`}
+      >
+        <div
+          className="h-full rounded-full"
+          style={{
+            width: `${Math.min(progress, 100)}%`,
+            background: remaining === 0 ? BRAND.active : `linear-gradient(90deg, ${BRAND.redDeep}, ${BRAND.red})`,
+          }}
+        />
+      </div>
+
+      <dl className="mt-5 grid grid-cols-3 gap-3 text-center">
+        {[
+          ["Target", formatLkr(target)],
+          ["Achieved (year)", formatLkr(achieved)],
+          ["Needed / month", monthsLeft && remaining ? formatLkr(neededPerMonth) : "—"],
+        ].map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <dt className="text-xs font-medium text-[var(--muted)]">{label}</dt>
+            <dd className="mt-0.5 truncate text-sm font-semibold tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-4 text-xs text-[var(--muted)]">{note}</p>
+    </Panel>
+  );
+}
+
+export function UserDashboard({
+  name,
+  data,
+  performance,
+}: {
+  name: string;
+  data: UserDashboardData;
+  performance: PerformanceView;
+}) {
   const activeShare = pct(data.active, data.total);
 
   return (
@@ -154,7 +320,7 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
           <h1 className="font-display text-2xl font-semibold text-[var(--brand-deep)] sm:text-3xl">
             Welcome Back, {name}
           </h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">Here’s how your listings are doing.</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Here’s how your sales and listings are doing.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
@@ -173,6 +339,11 @@ export function UserDashboard({ name, data }: { name: string; data: UserDashboar
           </Link>
         </div>
       </header>
+
+      <div className={`grid gap-4 ${performance.data ? "xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
+        <MyPerformancePanel view={performance} />
+        <TargetPanel view={performance} />
+      </div>
 
       <RefSearch />
 
