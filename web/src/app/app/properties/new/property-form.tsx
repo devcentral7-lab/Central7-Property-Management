@@ -26,6 +26,7 @@ export type ComplexOption = { id: string; name: string };
 export type PropertyFormValues = Record<string, string>;
 
 const EMPTY: PropertyFormValues = {
+  agent_ref_no: "",
   contact_type: "",
   contact_name: "",
   contact_phone_1: "",
@@ -400,6 +401,14 @@ function PropertyFormInner({
                   : "Reference numbers can't be changed."}
               </FieldHint>
             </div>
+            <Field label="Agent Ref No">
+              <input
+                {...bind("agent_ref_no")}
+                maxLength={50}
+                placeholder="Agent's own reference (optional)"
+                className={inputBase}
+              />
+            </Field>
             <Field label="Opportunity" required>
               <select required {...bind("opportunity_type")} className={inputBase}>
                 <option value="">Select opportunity</option>
