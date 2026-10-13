@@ -28,7 +28,7 @@ export function DataChangeActions({
   resolvedBy: string | null;
   /** Whether it went to the social media queue, and why not if it didn't. */
   note: string | null;
-  /** Status of the "Data Change" social media queue item, if one was created. */
+  /** Status of the social media queue item this request created or approved, if any. */
   queueStatus: SocialQueueStatus | null;
 }) {
   const [pending, startTransition] = useTransition();

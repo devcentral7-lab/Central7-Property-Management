@@ -317,7 +317,6 @@ export default async function ActivityPage({
     const { data: queueRows } = await supabase
       .from("social_media_queue")
       .select("ref_no, approved_at, completed_at")
-      .eq("approved_action", "Data Change")
       .in("ref_no", resolvedRefs);
     for (const row of queueRows ?? []) dataChangeQueue.set(row.ref_no, row);
   }

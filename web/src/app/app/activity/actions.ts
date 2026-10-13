@@ -48,7 +48,7 @@ async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveD
   const [{ data: existing, error: queueReadErr }, { data: latestStatus }] = await Promise.all([
     supabase
       .from("social_media_queue")
-      .select("approved_action, approved_at, completed_at, requested_platforms")
+      .select("approved_action, approved_at, completed_at, requested_platforms, platform_dates, comment")
       .eq("ref_no", request.ref_no)
       .maybeSingle(),
     supabase
@@ -71,18 +71,22 @@ async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveD
   let platforms: string[] = [];
   let skipReason: string | null = null;
   let replaced: string | null = null;
+  /** A Publish/Republish still awaiting approval: approve it so it goes out with the new details. */
+  let approvedPending: string | null = null;
   let noPlatformRecord = false;
   const takenDown = existing && !LIVE_ACTIONS.includes(existing.approved_action ?? "");
   if (existing && !existing.completed_at && takenDown && !statusIsNewer) {
     platforms = (existing.requested_platforms ?? []) as string[];
     replaced = existing.approved_action;
     noPlatformRecord = !platforms.length;
+  } else if (existing && !existing.completed_at && !existing.approved_at && !takenDown) {
+    platforms = (existing.requested_platforms ?? []) as string[];
+    approvedPending = existing.approved_action;
+    noPlatformRecord = !platforms.length;
   } else if (existing && !existing.completed_at) {
     skipReason = takenDown
       ? `${request.ref_no} was changed to ${existing.approved_action} after this request and is queued to come off social media, so there is nothing to update.`
-      : existing.approved_at
-        ? `${request.ref_no} is already on the social media queue (${existing.approved_action}), so it will be posted with the updated details.`
-        : `${request.ref_no} is already waiting for social media approval (${existing.approved_action}), so it will be posted with the updated details.`;
+      : `${request.ref_no} is already on the social media queue (${existing.approved_action}), so it will be posted with the updated details.`;
   } else if (takenDown) {
     skipReason = `${request.ref_no} was taken off social media (${existing.approved_action}), so there is nothing to update.`;
   } else {
@@ -116,9 +120,11 @@ async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveD
   const now = new Date().toISOString();
   const message = skipReason
     ? skipReason
-    : `Sent ${request.ref_no} to the social media queue to update on ${platforms.join(", ")}.${
-        replaced ? ` It replaced the older ${replaced} item because this request is newer.` : ""
-      }`;
+    : approvedPending
+      ? `Approved the waiting ${approvedPending} for ${request.ref_no} and sent it to the social media queue (${platforms.join(", ")}), so it goes out with the updated details.`
+      : `Sent ${request.ref_no} to the social media queue to update on ${platforms.join(", ")}.${
+          replaced ? ` It replaced the older ${replaced} item because this request is newer.` : ""
+        }`;
   const { data: resolved, error: resolveErr } = await supabase
     .from("property_status_events")
     .update({ resolved_at: now, resolved_by: profile.display_name, resolution_note: message })
@@ -134,13 +140,15 @@ async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveD
       {
         property_id: request.property_id,
         ref_no: request.ref_no,
-        approved_action: "Data Change",
+        approved_action: approvedPending ?? "Data Change",
         approved_by: profile.display_name,
         approved_at: now,
         requested_platforms: platforms,
-        platform_dates: {},
+        platform_dates: approvedPending ? (existing?.platform_dates ?? {}) : {},
         completed_at: null,
-        comment: request.comment || null,
+        comment: approvedPending
+          ? [...new Set([existing?.comment, request.comment].filter(Boolean))].join(" · ") || null
+          : request.comment || null,
       },
       { onConflict: "ref_no" },
     );
@@ -169,6 +177,7 @@ async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveD
       comment: request.comment || null,
       social_media: queued ? undefined : skipReason,
       replaced_queue_item: replaced ?? undefined,
+      approved_queue_item: approvedPending ?? undefined,
     },
   });
 
