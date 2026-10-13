@@ -7,9 +7,10 @@ import type {
   AgentContactSplit,
   SocialDailyRow,
 } from "@/lib/analytics";
-import type { FinanceDashboard } from "@/lib/finance-shared";
+import type { PerformancePeriod, SalesFigures } from "@/lib/finance-shared";
 import { PropertyLink } from "@/app/app/properties/property-modal";
-import { RevenueSummary } from "@/app/app/finance/revenue-summary";
+import { PerformanceFilters } from "@/app/app/dashboard/performance-filters";
+import { SalesFiguresView } from "@/app/app/dashboard/sales-figures";
 import { PeriodSelect } from "@/app/app/dashboard/period-select";
 import { RefSearch } from "@/app/app/dashboard/ref-search";
 import {
@@ -776,12 +777,16 @@ function ChartPanel({
 export function AdminDashboard({
   data,
   view = "stats",
-  finance,
+  sales,
 }: {
   data: AdminAnalytics;
   view?: DashboardView;
-  /** `query` is the Finance page filter matching the dashboard period. */
-  finance?: { dashboard: FinanceDashboard; query: string } | null;
+  sales?: {
+    figures: SalesFigures | null;
+    error: string | null;
+    period: PerformancePeriod;
+    years: number[];
+  };
 }) {
   const { overview: ov } = data;
   const period = data.rangeLabel;
@@ -792,6 +797,37 @@ export function AdminDashboard({
     ov.lost_to_update_social;
   const approvalsOpen = ov.publish_pending_approval + ov.republish_pending_approval;
   const agentMax = Math.max(...data.byAgent.map((a) => a.total), 0);
+
+  const salesSection = sales ? (
+    <Section
+      title="Overall Performance"
+      subtitle="Company sales credited to agents"
+      icon="wallet"
+      defaultOpen
+    >
+      <div className="@container">
+        <PerformanceFilters period={sales.period} years={sales.years} paramPrefix="sales_" />
+        {sales.figures ? (
+          <SalesFiguresView
+            figures={sales.figures}
+            period={sales.period}
+            valueLabel="Company overall sales"
+            quartersLabel="Company quarterly sales"
+          />
+        ) : (
+          <p className="mt-5 rounded-xl bg-[var(--bg)] px-4 py-3 text-sm text-[var(--muted)]">{sales.error}</p>
+        )}
+      </div>
+      <div className="mt-4 text-right">
+        <Link
+          href={`/app/finance?${new URLSearchParams({ from: sales.period.from, to: sales.period.to })}`}
+          className="text-sm font-semibold text-[var(--brand)] hover:underline"
+        >
+          Open Finance →
+        </Link>
+      </div>
+    </Section>
+  ) : null;
 
   const stats = (
     <div className="space-y-4 sm:space-y-5">
@@ -847,29 +883,6 @@ export function AdminDashboard({
           />
         </div>
       </Section>
-
-      {finance ? (
-        <Section
-          title="Sale, Rental & Fees"
-          subtitle={`${period} · invoices by revenue type`}
-          icon="wallet"
-          defaultOpen
-        >
-          <RevenueSummary
-            dashboard={finance.dashboard}
-            typeHref={(type) => `/app/finance?${finance.query}&type=${encodeURIComponent(type)}#invoices`}
-            outstandingHref={`/app/finance?${finance.query}&status=outstanding#invoices`}
-          />
-          <div className="mt-4 text-right">
-            <Link
-              href={`/app/finance?${finance.query}`}
-              className="text-sm font-semibold text-[var(--brand)] hover:underline"
-            >
-              Open Finance →
-            </Link>
-          </div>
-        </Section>
-      ) : null}
 
       <Section
         title="Properties Added By Agent"
@@ -1053,6 +1066,8 @@ export function AdminDashboard({
           />
         </Suspense>
       </div>
+
+      {salesSection}
 
       <RefSearch />
 

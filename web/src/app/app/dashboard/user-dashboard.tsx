@@ -4,6 +4,7 @@ import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { BRAND, seriesColor, statusColor } from "@/app/app/dashboard/palette";
 import { PerformanceFilters } from "@/app/app/dashboard/performance-filters";
 import { RefSearch } from "@/app/app/dashboard/ref-search";
+import { SalesFiguresView } from "@/app/app/dashboard/sales-figures";
 import { Icon, StatCard, type IconName } from "@/app/app/user-management/ui";
 import { StatusBadge } from "@/components/status-badge";
 import {
@@ -158,64 +159,13 @@ function OpportunitySplit({ rows, total }: { rows: CountRow[]; total: number }) 
   );
 }
 
-const QUARTER_COLORS = [BRAND.red, BRAND.charcoal, BRAND.redSoft, BRAND.stone];
-
 function MyPerformancePanel({ view }: { view: PerformanceView }) {
   const { data, period } = view;
-  const thisQuarter = period.year === currentYear() ? Math.ceil(currentMonth() / 3) : 0;
   return (
     <Panel title="My Performance" subtitle="Sales credited to you" icon="trend">
       <PerformanceFilters period={period} years={view.years} />
       {data ? (
-        <>
-          <div className="mt-5 flex flex-wrap items-end justify-between gap-3 rounded-2xl bg-[var(--sidebar)] px-5 py-4 text-white">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-white/70">Sales value · {period.label}</p>
-              <p className="font-display text-3xl font-semibold tabular-nums sm:text-4xl">{formatLkr(data.sales_value)}</p>
-            </div>
-            <p className="text-xs text-white/60">
-              {data.invoices.toLocaleString()} {data.invoices === 1 ? "invoice" : "invoices"}
-            </p>
-          </div>
-
-          <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">
-            My quarterly sales · {period.year}
-          </p>
-          <div className="mt-2 grid grid-cols-2 gap-3 @xl:grid-cols-4">
-            {[0, 1, 2, 3].map((i) => {
-              const amount = data.quarterly[i] ?? 0;
-              return (
-                <div
-                  key={i}
-                  className={`relative min-w-0 rounded-xl border bg-[var(--card)] py-3 pl-4 pr-3 ${
-                    thisQuarter === i + 1 ? "border-[var(--brand)]/40 bg-[var(--brand)]/[0.03]" : "border-[var(--line)]"
-                  }`}
-                >
-                  <span
-                    aria-hidden
-                    className="absolute inset-y-3 left-0 w-1 rounded-r-full"
-                    style={{ background: QUARTER_COLORS[i] }}
-                  />
-                  <p className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--muted)]">
-                    Q{i + 1}
-                    {thisQuarter === i + 1 ? (
-                      <span className="rounded-full bg-[var(--brand)]/10 px-1.5 py-px text-[10px] font-semibold text-[var(--brand-deep)]">
-                        Now
-                      </span>
-                    ) : null}
-                  </p>
-                  <p
-                    className={`mt-1 truncate font-display text-lg font-semibold tabular-nums ${
-                      amount ? "text-[var(--ink)]" : "text-[var(--muted)]"
-                    }`}
-                  >
-                    {formatLkr(amount)}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </>
+        <SalesFiguresView figures={data} period={period} valueLabel="Sales value" quartersLabel="My quarterly sales" />
       ) : (
         <p className="mt-5 rounded-xl bg-[var(--bg)] px-4 py-3 text-sm text-[var(--muted)]">
           {view.error ?? "Your sales figures will show here once an admin links your login to a finance agent."}

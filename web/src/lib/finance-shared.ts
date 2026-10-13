@@ -85,15 +85,26 @@ export type FinanceDashboard = {
   quarterly: { agent: string; quarter: number; amount: number }[];
 };
 
-/** A staff member's own figures for their dashboard (from finance_my_performance). */
-export type MyPerformance = {
-  agent: string;
+export type SalesFigures = {
   sales_value: number;
   invoices: number;
   /** Credited sales for Q1–Q4 of the chosen year. */
   quarterly: number[];
+};
+
+/** A staff member's own figures for their dashboard (from finance_my_performance). */
+export type MyPerformance = SalesFigures & {
+  agent: string;
   target: number | null;
 };
+
+/** Year choices for the performance filters: next year back to five years ago, plus the selected one. */
+export function performanceYears(selected: number) {
+  const thisYear = currentYear();
+  return [...new Set([thisYear + 1, ...Array.from({ length: 6 }, (_, i) => thisYear - i), selected])].sort(
+    (a, b) => b - a,
+  );
+}
 
 export type PerformancePeriod = {
   from: string;
