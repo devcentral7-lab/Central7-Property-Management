@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useOptimistic,
-  useState,
-  useTransition,
-  type CSSProperties,
-  type ReactNode,
-} from "react";
+import { useOptimistic, useState, useTransition, type ReactNode } from "react";
 import {
   approveSocialQueueItem,
   declineSocialQueueItem,
@@ -17,13 +11,6 @@ import {
 
 export type PlatformDates = Record<string, { at?: string; by?: string | null }>;
 
-const PLATFORM_COLORS: Record<string, string> = {
-  Ikman: "#15803d",
-  Facebook: "#1877f2",
-  Instagram: "#d62976",
-  LPW: "#c2410c",
-};
-
 function formatWhen(iso?: string) {
   if (!iso) return "";
   return new Date(iso).toLocaleString("en-GB", {
@@ -31,7 +18,32 @@ function formatWhen(iso?: string) {
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Colombo",
   });
+}
+
+function CheckMark({ className = "h-3 w-3" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m3.5 8.5 3 3 6-7" />
+    </svg>
+  );
+}
+
+/** Round tick used by the platform checklist chips. */
+function TickCircle({ checked, size = "h-5 w-5" }: { checked: boolean; size?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`flex ${size} shrink-0 items-center justify-center rounded-full transition ${
+        checked
+          ? "bg-white text-[var(--brand)] shadow-sm"
+          : "border-2 border-[var(--line)] bg-white group-hover/chip:border-[var(--sidebar)]/50"
+      }`}
+    >
+      {checked ? <CheckMark /> : null}
+    </span>
+  );
 }
 
 export function QueueItemCard({
@@ -39,12 +51,15 @@ export function QueueItemCard({
   done,
   platforms,
   dates,
+  meta,
   children,
 }: {
   id: string;
   done: boolean;
   platforms: string[];
   dates: PlatformDates;
+  /** Small print shown opposite the platforms, e.g. who approved it and when. */
+  meta?: ReactNode;
   children: ReactNode;
 }) {
   const [busy, startTransition] = useTransition();
@@ -94,16 +109,43 @@ export function QueueItemCard({
   }
 
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="min-w-0 flex-1">
-        {children}
+    <div className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">{children}</div>
+        {done ? (
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden items-center gap-1 text-xs font-semibold text-[var(--muted)] sm:inline-flex">
+              <CheckMark className="h-3.5 w-3.5 text-[var(--brand)]" />
+              Completed
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => finish("reopen")}
+              className="rounded-full border border-[var(--line)] px-3.5 py-1.5 text-xs font-semibold text-[var(--ink)] transition hover:border-[var(--ink)]/30 disabled:opacity-60"
+            >
+              {busy ? "Saving…" : "Reopen"}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={busy || !canFinish}
+            onClick={() => finish("done")}
+            title={canFinish ? "Mark as done" : `Tick ${missing.join(", ")} first`}
+            className="shrink-0 rounded-full bg-[var(--brand)] px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-[var(--brand-deep)] disabled:cursor-not-allowed disabled:bg-[var(--bg-accent)] disabled:text-[var(--muted)]"
+          >
+            {busy && canFinish ? "Saving…" : "Mark done"}
+          </button>
+        )}
+      </div>
 
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-[var(--line)] pt-3">
         {platforms.length ? (
-          <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Platforms">
+          <div role="group" aria-label="Platforms" className="flex flex-wrap items-center gap-1.5">
             {platforms.map((p) => {
               const tick = optimisticDates[p];
               const checked = Boolean(tick);
-              const color = PLATFORM_COLORS[p] ?? "#57534e";
               const detail = checked
                 ? `Posted${tick?.by ? ` by ${tick.by}` : ""}${tick?.at ? ` · ${formatWhen(tick.at)}` : ""}`
                 : done
@@ -118,68 +160,37 @@ export function QueueItemCard({
                   disabled={done}
                   onClick={() => toggle(p)}
                   title={detail}
-                  style={{ "--c": color } as CSSProperties}
-                  className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:cursor-default ${
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-default ${
                     checked
-                      ? "border-[var(--c)] bg-[var(--c)] text-white shadow-sm"
-                      : "border-[var(--c)]/50 bg-white text-[var(--c)] hover:bg-[var(--c)]/5"
+                      ? done
+                        ? "border-transparent bg-[var(--bg)] text-[var(--ink)]"
+                        : "border-[var(--sidebar)] bg-[var(--sidebar)] text-white"
+                      : "border-[var(--line)] bg-white text-[var(--muted)] hover:border-[var(--sidebar)]/40 hover:text-[var(--ink)]"
                   }`}
                 >
-                  <span
-                    aria-hidden
-                    className={`flex h-4 w-4 items-center justify-center rounded border ${
-                      checked ? "border-white bg-white text-[var(--c)]" : "border-[var(--c)]/60"
-                    }`}
-                  >
-                    {checked ? (
-                      <svg viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m3.5 8.5 3 3 6-7" />
-                      </svg>
-                    ) : null}
-                  </span>
+                  {checked ? (
+                    <CheckMark className="h-3 w-3 text-[var(--brand)]" />
+                  ) : (
+                    <span aria-hidden className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current opacity-70" />
+                  )}
                   {p}
                 </button>
               );
             })}
-          </div>
-        ) : (
-          <p className="mt-3 text-xs text-[var(--muted)]">No platforms requested.</p>
-        )}
-
-        {error ? (
-          <p className="mt-2 text-xs font-medium text-[var(--danger)]">{error}</p>
-        ) : null}
-      </div>
-
-      <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:w-36 sm:items-end">
-        {done ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => finish("reopen")}
-            className="rounded-lg border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)] disabled:opacity-60 sm:w-full"
-          >
-            {busy ? "Saving…" : "Reopen"}
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              disabled={busy || !canFinish}
-              onClick={() => finish("done")}
-              title={canFinish ? "Mark as done" : `Tick ${missing.join(", ")} first`}
-              className="rounded-lg bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--brand-deep)] disabled:cursor-not-allowed disabled:bg-[var(--brand)]/35 disabled:shadow-none sm:w-full"
-            >
-              {busy && canFinish ? "Saving…" : "Done"}
-            </button>
-            {platforms.length ? (
-              <span className="text-center text-xs text-[var(--muted)] sm:text-right">
-                {tickedCount} of {platforms.length} posted
+            {!done ? (
+              <span className="ml-1 text-xs tabular-nums text-[var(--muted)]">
+                {tickedCount}/{platforms.length} posted
               </span>
             ) : null}
-          </>
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--muted)]">No platforms requested.</p>
         )}
+        {meta ? <div className="text-xs text-[var(--muted)]">{meta}</div> : null}
       </div>
+      {error ? (
+        <p className="mt-2 text-xs font-medium text-[var(--danger)]">{error}</p>
+      ) : null}
     </div>
   );
 }
@@ -271,7 +282,6 @@ export function SocialQueueActions({
             <div className="flex flex-wrap gap-1.5">
               {platforms.map((p) => {
                 const checked = selected.includes(p);
-                const color = PLATFORM_COLORS[p] ?? "#57534e";
                 return (
                   <button
                     key={p}
@@ -281,25 +291,13 @@ export function SocialQueueActions({
                     disabled={pending}
                     onClick={() => toggle(p)}
                     title={checked ? `Approve for ${p}` : `Not approved for ${p}`}
-                    style={{ "--c": color } as CSSProperties}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-medium transition disabled:opacity-60 ${
+                    className={`group/chip inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs font-semibold transition disabled:opacity-60 ${
                       checked
-                        ? "border-[var(--c)] bg-[var(--c)] text-white"
-                        : "border-[var(--c)]/50 bg-white text-[var(--c)] hover:bg-[var(--c)]/5"
+                        ? "border-[var(--sidebar)] bg-[var(--sidebar)] text-white"
+                        : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--sidebar)]/40"
                     }`}
                   >
-                    <span
-                      aria-hidden
-                      className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${
-                        checked ? "border-white bg-white text-[var(--c)]" : "border-[var(--c)]/60"
-                      }`}
-                    >
-                      {checked ? (
-                        <svg viewBox="0 0 16 16" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m3.5 8.5 3 3 6-7" />
-                        </svg>
-                      ) : null}
-                    </span>
+                    <TickCircle checked={checked} size="h-4 w-4" />
                     {p}
                   </button>
                 );

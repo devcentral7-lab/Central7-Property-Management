@@ -9,7 +9,9 @@ import {
 } from "@/app/app/properties/property-details-view";
 import { requireProfile } from "@/lib/auth";
 import { loadFormOptions } from "@/lib/form-options";
+import { loadPropertyActivity } from "@/lib/property-activity";
 import { buildPropertyDetails } from "@/lib/property-details";
+import { loadSocialMediaStatus } from "@/lib/social-status";
 import { createClient } from "@/lib/supabase/server";
 
 export async function loadPropertyDetail(refNoRaw: string) {
@@ -32,17 +34,9 @@ export async function loadPropertyDetail(refNoRaw: string) {
   const isAdmin = profile.role === "Admin";
   const canEdit = isAdmin;
 
-  const [{ data: events }, { data: complex }, options] =
+  const [events, { data: complex }, options, social] =
     await Promise.all([
-      supabase
-        .from("property_status_events")
-        .select(
-          "id, occurred_at, actor_name, action, comment, assigned_to, requested_platforms",
-        )
-        .eq("ref_no", refNo)
-        .is("archived_at", null)
-        .order("occurred_at", { ascending: false })
-        .limit(20),
+      loadPropertyActivity(refNo),
       property.apartment_complex_id
         ? supabase
             .from("apartment_complexes")
@@ -51,15 +45,17 @@ export async function loadPropertyDetail(refNoRaw: string) {
             .maybeSingle()
         : Promise.resolve({ data: null }),
       loadFormOptions(),
+      loadSocialMediaStatus(refNo),
     ]);
 
-  const details = buildPropertyDetails(property, {
-    complexName: complex?.name ?? null,
-  });
+  const details = {
+    ...buildPropertyDetails(property, { complexName: complex?.name ?? null }),
+    social,
+  };
 
   return {
     property,
-    events: events ?? [],
+    events,
     details,
     options,
     canEdit,
@@ -92,9 +88,7 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
               options={options.statusChangeOptions}
               platforms={options.platforms}
               defaultPlatforms={
-                events.find(
-                  (e) => Array.isArray(e.requested_platforms) && e.requested_platforms.length,
-                )?.requested_platforms ?? []
+                events.find((e) => e.requested_platforms.length)?.requested_platforms ?? []
               }
             />
           ) : null}

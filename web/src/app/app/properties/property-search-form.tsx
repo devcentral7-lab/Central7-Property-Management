@@ -8,6 +8,7 @@ import { MultiSelectFilter } from "@/components/multi-select-filter";
 import { LiveFilterForm, clearFilterGroup } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
 import type { FormOptions } from "@/lib/form-options";
+import { SOCIAL_FILTERS } from "@/lib/social-filters";
 
 const inputClass =
   "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm";
@@ -21,6 +22,8 @@ export type SearchFilterValues = {
   opportunity_type: string;
   property_type: string;
   complex: string;
+  added_by: string;
+  contact: string;
   contact_type: string;
   city: string;
   furnished: string;
@@ -40,6 +43,7 @@ export type SearchFilterValues = {
   budget_max: string;
   parking_min: string;
   do_not_publish: string;
+  social: string;
   advanced: string;
 };
 
@@ -47,16 +51,20 @@ type Props = {
   options: FormOptions;
   filters: SearchFilterValues;
   complexes: { id: string; name: string }[];
+  creators?: string[];
 };
 
-export function PropertySearchForm({ options, filters, complexes }: Props) {
+export function PropertySearchForm({ options, filters, complexes, creators = [] }: Props) {
   const router = useRouter();
   const cities = useCities();
   const cityOptions = useMemo(() => cities.map((c) => ({ value: c, label: c })), [cities]);
   const complexOptions = useMemo(() => complexes.map((c) => ({ value: c.id, label: c.name })), [complexes]);
+  const creatorOptions = useMemo(() => creators.map((c) => ({ value: c, label: c })), [creators]);
   const hasAdvanced = useMemo(() => {
     const keys: (keyof SearchFilterValues)[] = [
       "complex",
+      "added_by",
+      "contact",
       "contact_type",
       "view",
       "bedrooms_min",
@@ -71,6 +79,7 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
       "budget_max",
       "parking_min",
       "do_not_publish",
+      "social",
     ];
     return keys.some((k) => Boolean(filters[k])) || filters.advanced === "1";
   }, [filters]);
@@ -296,8 +305,25 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
               allLabel="All complexes"
               addLabel="Add complex"
               emptyLabel="No complexes found"
-              className="sm:col-span-2 xl:col-span-3"
             />
+            <MultiSelectFilter
+              name="added_by"
+              label="User"
+              options={creatorOptions}
+              defaultValue={filters.added_by}
+              allLabel="All users"
+              addLabel="Add user"
+              emptyLabel="No users found"
+            />
+            <label className="text-sm font-medium">
+              Name of Contact
+              <input
+                name="contact"
+                defaultValue={filters.contact}
+                placeholder="Owner or contact name"
+                className={`${inputClass} mt-1`}
+              />
+            </label>
             <label className="text-sm font-medium">
               Contact Type
               <select
@@ -346,6 +372,21 @@ export function PropertySearchForm({ options, filters, complexes }: Props) {
                 <option value="">Any</option>
                 <option value="false">Publishable only</option>
                 <option value="true">Do not publish only</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Social Media
+              <select
+                name="social"
+                defaultValue={filters.social}
+                className={`${inputClass} mt-1`}
+              >
+                <option value="">Any</option>
+                {SOCIAL_FILTERS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="text-sm font-medium">

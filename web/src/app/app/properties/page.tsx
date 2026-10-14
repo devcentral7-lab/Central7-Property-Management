@@ -24,6 +24,8 @@ function filtersFromParams(
     opportunity_type: one(sp.opportunity_type),
     property_type: one(sp.property_type),
     complex: one(sp.complex).trim(),
+    added_by: one(sp.added_by).trim(),
+    contact: one(sp.contact).trim(),
     contact_type: one(sp.contact_type),
     city: one(sp.city).trim(),
     furnished: one(sp.furnished),
@@ -43,6 +45,7 @@ function filtersFromParams(
     budget_max: one(sp.budget_max).trim(),
     parking_min: one(sp.parking_min).trim(),
     do_not_publish: one(sp.do_not_publish),
+    social: one(sp.social),
     advanced: one(sp.advanced),
   };
 }

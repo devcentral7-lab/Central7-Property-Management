@@ -105,6 +105,8 @@ type Props = {
   initialDoNotPublish?: boolean;
   complexes: ComplexOption[];
   options: FormOptions;
+  /** Edit mode: called after a successful save. */
+  onSaved?: () => void;
 };
 
 export function PropertyForm(props: Props) {
@@ -138,6 +140,7 @@ function PropertyFormInner({
   initialDoNotPublish = false,
   complexes,
   options,
+  onSaved,
   onReset,
 }: Props & { onReset?: () => void }) {
   const router = useRouter();
@@ -294,6 +297,7 @@ function PropertyFormInner({
     if (mode === "edit" || (!imageFiles.length && !savedProperty.current)) {
       const result = mode === "edit" ? await updateProperty(formData) : await createProperty(formData);
       if (result && !result.ok) setSaveError(result.error);
+      else if (mode === "edit") onSaved?.();
       return;
     }
     setSavingImages(true);

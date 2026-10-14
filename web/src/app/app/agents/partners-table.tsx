@@ -11,7 +11,9 @@ import {
 } from "@/app/app/agents/actions";
 import { PartnerFields } from "@/app/app/agents/register-form";
 import { ClickableRow } from "@/components/clickable-row";
+import { Pager } from "@/components/pager";
 import { PopupDialog } from "@/components/popup-dialog";
+import { usePaged } from "@/components/use-paged";
 import { StatusBadge } from "@/components/status-badge";
 import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import {
@@ -80,6 +82,7 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
         .some((v) => String(v).toLowerCase().includes(q));
     });
   }, [rows, query, filter]);
+  const paged = usePaged(visible, `${query}|${filter}`);
 
   function run(fn: () => Promise<void>) {
     setError(null);
@@ -269,7 +272,7 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
             </tr>
           </thead>
           <tbody>
-            {visible.map((u) => (
+            {paged.items.map((u) => (
               <ClickableRow key={u.id} className="border-t border-[var(--line)]" onActivate={() => openEdit(u)}>
                 <td className="max-w-[16rem] px-5 py-3">{identity(u)}</td>
                 <td className="max-w-[18rem] px-4 py-3">{contact(u)}</td>
@@ -287,7 +290,7 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
         </table>
 
         <ul className="divide-y divide-[var(--line)] md:hidden">
-          {visible.map((u) => (
+          {paged.items.map((u) => (
             <ClickableRow key={u.id} as="li" className="px-4 py-3" onActivate={() => openEdit(u)}>
               <div className="flex items-start justify-between gap-3">
                 {identity(u)}
@@ -316,6 +319,12 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
             </p>
           </div>
         ) : null}
+        <Pager
+          page={paged.page}
+          totalPages={paged.totalPages}
+          onPage={paged.setPage}
+          className="border-t border-[var(--line)] px-4 py-2"
+        />
       </section>
 
       <PopupDialog

@@ -3,7 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { requireProfile } from "@/lib/auth";
-import { formatDate, formatLkr, loadInvoice, monthLabel } from "@/lib/finance";
+import {
+  financeListHref,
+  financeListQuery,
+  formatDate,
+  formatLkr,
+  invoiceHref,
+  loadInvoice,
+  monthLabel,
+} from "@/lib/finance";
 import { FinanceHeader, PaymentBadge, secondaryButton } from "@/app/app/finance/finance-ui";
 import { AddPaymentForm, DeletePaymentButton, VoidInvoiceButton } from "@/app/app/finance/invoice-actions";
 
@@ -28,10 +36,18 @@ function Card({ title, aside, children }: { title: string; aside?: ReactNode; ch
   );
 }
 
-export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function InvoicePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const profile = await requireProfile();
   if (profile.role !== "Admin") redirect("/app");
   const { id } = await params;
+  const { from } = await searchParams;
+  const listQuery = financeListQuery(new URLSearchParams(typeof from === "string" ? from : ""));
   const inv = await loadInvoice(id);
   if (!inv) notFound();
 
@@ -51,7 +67,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </span>
         }
         eyebrow="Invoice"
-        back={{ href: "/app/finance#invoices", label: "Finance" }}
+        back={{ href: financeListHref(listQuery), label: "Finance" }}
         subtitle={
           <>
             {formatDate(inv.invoice_date)} · {inv.category} · {inv.revenue_type}
@@ -66,7 +82,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
               Download Excel
             </a>
             {!voided ? (
-              <Link href={`/app/finance/invoices/${inv.id}/edit`} className={secondaryButton}>
+              <Link href={invoiceHref(`${inv.id}/edit`, listQuery)} className={secondaryButton}>
                 Edit invoice
               </Link>
             ) : null}

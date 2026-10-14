@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Pager } from "@/components/pager";
 import { splitListParam } from "@/lib/list-param";
 import { cityLikePattern } from "@/lib/cities";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -40,11 +40,13 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   const to = from + PAGE_SIZE - 1;
 
   const supabase = await createClient();
-  const [options, { data: complexData }] = await Promise.all([
+  const [options, { data: complexData }, { data: creatorData }] = await Promise.all([
     loadFormOptions(),
     supabase.from("apartment_complexes").select("id, name").order("name"),
+    supabase.rpc("property_creator_names"),
   ]);
   const complexes = (complexData ?? []) as { id: string; name: string }[];
+  const creators = (creatorData ?? []) as string[];
 
   let query = supabase
     .from("properties")
@@ -65,6 +67,11 @@ export async function PropertySearchPanel({ filters, page }: Props) {
     query = valid.length
       ? query.in("apartment_complex_id", valid)
       : query.is("id", null);
+  }
+  const creatorNames = splitListParam(filters.added_by);
+  if (creatorNames.length) query = query.in("created_by_name", creatorNames);
+  if (filters.contact) {
+    query = query.ilike("contact_name", `%${filters.contact.replace(/[%_]/g, " ")}%`);
   }
   if (filters.opportunity_type) {
     query = query.eq("opportunity_type", filters.opportunity_type);
@@ -88,6 +95,13 @@ export async function PropertySearchPanel({ filters, page }: Props) {
     query = query.eq("do_not_publish", true);
   } else if (filters.do_not_publish === "false") {
     query = query.eq("do_not_publish", false);
+  }
+  if (filters.social === "pending") {
+    query = query.not("social_pending", "is", null);
+  } else if (filters.social === "awaiting_approval" || filters.social === "approved") {
+    query = query.eq("social_pending", filters.social);
+  } else if (["published", "taken_down", "never"].includes(filters.social)) {
+    query = query.eq("social_state", filters.social);
   }
 
   const bedroomsMin = numOrNull(filters.bedrooms_min);
@@ -150,7 +164,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
 
   return (
     <div className="space-y-4">
-      <PropertySearchForm options={options} filters={filters} complexes={complexes} />
+      <PropertySearchForm options={options} filters={filters} complexes={complexes} creators={creators} />
 
       <p className="text-sm text-[var(--muted)]">
         {total.toLocaleString()} filtered matches · page {page} of {totalPages}{" "}
@@ -252,20 +266,7 @@ export async function PropertySearchPanel({ filters, page }: Props) {
         </table>
       </div>
 
-      <div className="flex items-center justify-between">
-        <Link
-          href={hrefFor(Math.max(1, page - 1))}
-          className={`-ml-2 rounded-lg px-2 py-2 text-sm font-medium ${page <= 1 ? "pointer-events-none opacity-40" : ""}`}
-        >
-          ← Previous
-        </Link>
-        <Link
-          href={hrefFor(Math.min(totalPages, page + 1))}
-          className={`-mr-2 rounded-lg px-2 py-2 text-sm font-medium ${page >= totalPages ? "pointer-events-none opacity-40" : ""}`}
-        >
-          Next →
-        </Link>
-      </div>
+      <Pager page={page} totalPages={totalPages} hrefFor={hrefFor} />
     </div>
   );
 }

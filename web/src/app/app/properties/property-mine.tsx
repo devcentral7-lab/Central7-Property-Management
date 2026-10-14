@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Pager } from "@/components/pager";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
 import {
@@ -345,20 +345,7 @@ export async function PropertyMinePanel({
         </table>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
-        <Link
-          href={hrefFor(Math.max(1, page - 1))}
-          className={`-ml-2 rounded-lg px-2 py-2 text-sm font-medium ${page <= 1 ? "pointer-events-none opacity-40" : ""}`}
-        >
-          ← Previous
-        </Link>
-        <Link
-          href={hrefFor(Math.min(totalPages, page + 1))}
-          className={`-mr-2 rounded-lg px-2 py-2 text-sm font-medium ${page >= totalPages ? "pointer-events-none opacity-40" : ""}`}
-        >
-          Next →
-        </Link>
-      </div>
+      <Pager page={page} totalPages={totalPages} hrefFor={hrefFor} className="mt-4" />
     </div>
   );
 }

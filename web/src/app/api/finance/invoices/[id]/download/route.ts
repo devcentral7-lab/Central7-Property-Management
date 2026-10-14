@@ -46,7 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const origin = req.nextUrl.origin;
     const [logo, signature] = await Promise.all([
       loadAsset("invoice-logo.png", origin),
-      loadAsset("invoice-signature.png", origin),
+      loadAsset("signature.png", origin),
     ]);
     const file =
       format === "pdf"

@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { addCity, removeCity, type CityStatsRow } from "@/app/app/cities/actions";
 import { ClickableRow } from "@/components/clickable-row";
+import { Pager } from "@/components/pager";
 import { PopupDialog } from "@/components/popup-dialog";
+import { usePaged } from "@/components/use-paged";
 import {
   FilterChip,
   Icon,
@@ -124,6 +126,7 @@ export function CitiesTable({ rows }: { rows: CityStatsRow[] }) {
           : b.total - a.total || a.name.localeCompare(b.name),
     );
   }, [rows, query, filter, sort]);
+  const paged = usePaged(visible, `${query}|${filter}|${sort}`);
 
   function openCity(r: CityStatsRow, newTab: boolean) {
     if (!r.total) return;
@@ -252,7 +255,7 @@ export function CitiesTable({ rows }: { rows: CityStatsRow[] }) {
             </tr>
           </thead>
           <tbody>
-            {visible.map((r) => (
+            {paged.items.map((r) => (
               <ClickableRow key={r.name} className="border-t border-[var(--line)]" disabled={!r.total} onActivate={(newTab) => openCity(r, newTab)}>
                 <td className="max-w-[16rem] px-5 py-3">{name(r)}</td>
                 <td className="px-4 py-3">{bar(r)}</td>
@@ -267,7 +270,7 @@ export function CitiesTable({ rows }: { rows: CityStatsRow[] }) {
         </table>
 
         <ul className="divide-y divide-[var(--line)] md:hidden">
-          {visible.map((r) => (
+          {paged.items.map((r) => (
             <ClickableRow key={r.name} as="li" className="px-4 py-3" disabled={!r.total} onActivate={(newTab) => openCity(r, newTab)}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -294,6 +297,12 @@ export function CitiesTable({ rows }: { rows: CityStatsRow[] }) {
             <p className="text-xs text-[var(--muted)]">{rows.length ? "Try a different search or filter." : "Add a city to get started."}</p>
           </div>
         ) : null}
+        <Pager
+          page={paged.page}
+          totalPages={paged.totalPages}
+          onPage={paged.setPage}
+          className="border-t border-[var(--line)] px-4 py-2"
+        />
       </section>
 
       <PopupDialog open={!!removing} onClose={() => setRemoving(null)} title={removing ? `Remove ${removing.name}?` : ""} busy={pending}>

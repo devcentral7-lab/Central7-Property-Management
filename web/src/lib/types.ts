@@ -7,8 +7,6 @@ export type Profile = {
   role: StaffRole;
   photo_drive_id: string | null;
   active: boolean;
-  /** An Admin previewing the app as a User; `role` is "User" while this is set. */
-  viewingAsUser?: boolean;
 };
 
 export type PropertyCard = {

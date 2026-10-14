@@ -147,13 +147,6 @@ body {
   }
 }
 
-@keyframes view-fade {
-  from {
-    opacity: 0;
-    transform: translateY(-3px);
-  }
-}
-
 @keyframes skeleton-shimmer {
   to {
     transform: translateX(100%);

@@ -6,7 +6,9 @@ import { useRef, useState, useTransition } from "react";
 import { getNextInvoiceNo, saveInvoice, type InvoiceInput } from "@/app/app/finance/actions";
 import {
   CATEGORIES,
+  financeListHref,
   formatLkr,
+  invoiceHref,
   REVENUE_TYPES,
   revenueTypeFor,
   todayIso,
@@ -29,11 +31,14 @@ export function InvoiceForm({
   invoice,
   nextInvoiceNo,
   defaultPropertyRef = "",
+  listQuery = "",
 }: {
   agents: FinanceAgent[];
   invoice?: FinanceInvoiceDetail | null;
   nextInvoiceNo?: string;
   defaultPropertyRef?: string;
+  /** Finance list filters to return to, from `financeListQuery`. */
+  listQuery?: string;
 }) {
   const router = useRouter();
   const isNew = !invoice;
@@ -154,7 +159,7 @@ export function InvoiceForm({
         setError(result.error);
         return;
       }
-      router.push(`/app/finance/invoices/${result.data.id}`);
+      router.push(invoiceHref(result.data.id, listQuery));
     });
   }
 
@@ -431,7 +436,7 @@ export function InvoiceForm({
 
       <div className="flex flex-wrap justify-end gap-2">
         <Link
-          href={invoice ? `/app/finance/invoices/${invoice.id}` : "/app/finance"}
+          href={invoice ? invoiceHref(invoice.id, listQuery) : financeListHref(listQuery)}
           className="rounded-xl border border-[var(--line)] px-5 py-2.5 text-sm font-semibold text-[var(--muted)] hover:bg-[var(--bg-accent)] hover:text-[var(--ink)]"
         >
           Cancel

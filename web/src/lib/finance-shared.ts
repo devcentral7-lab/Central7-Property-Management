@@ -199,6 +199,40 @@ export type FinanceFilters = {
   q: string;
 };
 
+const FILTER_KEYS: (keyof FinanceFilters | "page")[] = [
+  "agent",
+  "year",
+  "quarter",
+  "month",
+  "from",
+  "to",
+  "type",
+  "status",
+  "q",
+  "page",
+];
+
+/** The Finance page filters as a query string (no leading "?"); anything else is dropped. */
+export function financeListQuery(params: Partial<Record<string, string>> | URLSearchParams) {
+  const get = (k: string) => (params instanceof URLSearchParams ? params.get(k) : params[k]);
+  const out = new URLSearchParams();
+  for (const key of FILTER_KEYS) {
+    const value = get(key)?.trim();
+    if (value) out.set(key, value);
+  }
+  return out.toString();
+}
+
+/** Back to the Finance invoice list with the filters it was opened from. */
+export function financeListHref(listQuery = "") {
+  return `/app/finance${listQuery ? `?${listQuery}` : ""}#invoices`;
+}
+
+/** Invoice pages carry the list filters along in `?from=` so "back" and "save" can return to them. */
+export function invoiceHref(path: string, listQuery = "") {
+  return `/app/finance/invoices/${path}${listQuery ? `?from=${encodeURIComponent(listQuery)}` : ""}`;
+}
+
 export type FinanceRange = {
   from: string;
   to: string;

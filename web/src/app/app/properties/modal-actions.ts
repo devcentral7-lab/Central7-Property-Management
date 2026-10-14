@@ -2,7 +2,9 @@
 
 import { requireProfile } from "@/lib/auth";
 import { loadFormOptions, type FormOptions } from "@/lib/form-options";
+import { loadPropertyActivity, type PropertyActivityEvent } from "@/lib/property-activity";
 import { buildPropertyDetails, type PropertyDetailsModel } from "@/lib/property-details";
+import { loadSocialMediaStatus } from "@/lib/social-status";
 import { createClient } from "@/lib/supabase/server";
 import type { ComplexOption } from "@/app/app/properties/new/property-form";
 
@@ -11,24 +13,7 @@ function s(v: unknown): string {
   return String(v);
 }
 
-/** Platforms on the newest event that requested any (events newest first). */
-function lastRequestedPlatforms(events: { requested_platforms?: unknown }[]): string[] {
-  for (const e of events) {
-    if (Array.isArray(e.requested_platforms) && e.requested_platforms.length) {
-      return e.requested_platforms.map(String);
-    }
-  }
-  return [];
-}
-
-export type PropertyModalEvent = {
-  id: string;
-  action: string;
-  actor_name: string | null;
-  assigned_to: string | null;
-  comment: string | null;
-  occurred_at: string | null;
-};
+export type PropertyModalEvent = PropertyActivityEvent;
 
 export type PropertyModalData = {
   refNo: string;
@@ -77,17 +62,9 @@ export async function getPropertyModalData(
     const isAdmin = profile.role === "Admin";
     const canEdit = isAdmin;
 
-    const [{ data: events }, { data: complex }, options] =
+    const [events, { data: complex }, options, social] =
       await Promise.all([
-        supabase
-          .from("property_status_events")
-          .select(
-            "id, occurred_at, actor_name, action, comment, assigned_to, requested_platforms",
-          )
-          .eq("ref_no", refNo)
-          .is("archived_at", null)
-          .order("occurred_at", { ascending: false })
-          .limit(20),
+        loadPropertyActivity(refNo),
         property.apartment_complex_id
           ? supabase
               .from("apartment_complexes")
@@ -96,6 +73,7 @@ export async function getPropertyModalData(
               .maybeSingle()
           : Promise.resolve({ data: null }),
         loadFormOptions(),
+        loadSocialMediaStatus(refNo),
       ]);
 
     const { data: complexes } = await supabase
@@ -105,9 +83,10 @@ export async function getPropertyModalData(
 
     const attrs = (property.type_attributes || {}) as Record<string, unknown>;
     const amenities = (property.amenities || []) as string[];
-    const details = buildPropertyDetails(property, {
-      complexName: complex?.name ?? null,
-    });
+    const details = {
+      ...buildPropertyDetails(property, { complexName: complex?.name ?? null }),
+      social,
+    };
 
     const known = new Set(options.amenities);
     const knownAmenities = amenities.filter((a) => known.has(a));
@@ -121,19 +100,12 @@ export async function getPropertyModalData(
         comments: property.comments,
         internalComments: property.internal_comments,
         details,
-        events: (events ?? []).map((e) => ({
-          id: e.id,
-          action: String(e.action),
-          actor_name: e.actor_name,
-          assigned_to: e.assigned_to,
-          comment: e.comment,
-          occurred_at: e.occurred_at,
-        })),
+        events,
         canEdit,
         canChangeStatus: isAdmin || isOwner,
         canManagePhotos: isAdmin || isOwner,
         statusChangeOptions: options.statusChangeOptions,
-        lastPlatforms: lastRequestedPlatforms(events ?? []),
+        lastPlatforms: events.find((e) => e.requested_platforms.length)?.requested_platforms ?? [],
         complexes: (complexes ?? []) as ComplexOption[],
         options,
         initialDoNotPublish: Boolean(property.do_not_publish),

@@ -182,12 +182,12 @@ function makeStyles(C: Palette) {
       paddingHorizontal: 9,
       minHeight: 26,
     },
-    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.accent, marginRight: 8 },
+    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#000000", marginRight: 8 },
     amenityName: { fontFamily: "Helvetica-Bold", fontSize: 9.5, color: C.ink },
     paragraph: { fontSize: 10, color: C.ink, paddingVertical: 7, lineHeight: 1.45 },
     points: { paddingVertical: 7 },
     point: { flexDirection: "row", alignItems: "flex-start" },
-    pointDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.accent, marginTop: 5.5, marginRight: 8 },
+    pointDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#000000", marginTop: 5.5, marginRight: 8 },
     pointText: { flex: 1, fontSize: 10, color: C.ink, lineHeight: 1.45 },
 
     footer: {

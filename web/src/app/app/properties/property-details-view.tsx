@@ -8,8 +8,9 @@ import type {
   FactIcon,
   PropertyDetailsModel,
 } from "@/lib/property-details";
+import type { SocialMediaStatus } from "@/lib/social-status";
 
-type IconName = FactIcon | DetailSectionId | "amenities" | "pin";
+type IconName = FactIcon | DetailSectionId | "amenities" | "pin" | "social";
 
 const PATHS: Record<IconName, string> = {
   area: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
@@ -25,6 +26,8 @@ const PATHS: Record<IconName, string> = {
   contact: "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2",
   record: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   amenities: "m5 12 4.5 4.5L19 7",
+  social:
+    "M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8.6 13.5l6.8 4M15.4 6.5l-6.8 4",
 };
 
 function Icon({ name, className = "h-4 w-4" }: { name: IconName; className?: string }) {
@@ -110,6 +113,102 @@ function FieldRows({ section }: { section: DetailSection }) {
   );
 }
 
+const SOCIAL_STATE = {
+  published: { label: "Published", tone: "border-emerald-200 bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
+  taken_down: { label: "Taken down", tone: "border-rose-200 bg-rose-50 text-rose-800", dot: "bg-rose-500" },
+  never: { label: "Never published", tone: "border-[var(--line)] bg-[var(--bg)] text-[var(--muted)]", dot: "bg-[var(--muted)]" },
+} as const;
+
+function shortDate(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("en-GB", {
+    timeZone: "Asia/Colombo",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function SocialStateBadge({ social }: { social: SocialMediaStatus }) {
+  const s = SOCIAL_STATE[social.state];
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${s.tone}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} aria-hidden />
+      {s.label}
+    </span>
+  );
+}
+
+function SocialMediaCard({ social, doNotPublish }: { social: SocialMediaStatus; doNotPublish: boolean }) {
+  const pending = social.pending;
+  return (
+    <SectionCard icon="social" title="Social Media">
+      <div className="space-y-3 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <SocialStateBadge social={social} />
+          {doNotPublish ? (
+            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+              Do not publish
+            </span>
+          ) : null}
+        </div>
+
+        {social.state === "published" ? (
+          <ul className="flex flex-wrap gap-2">
+            {social.live.map((p) => (
+              <li
+                key={p.platform}
+                className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-1.5"
+              >
+                <span className="text-sm font-semibold">{p.platform}</span>
+                {p.at ? <span className="text-xs text-[var(--muted)]">since {shortDate(p.at)}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : social.state === "taken_down" && social.removed ? (
+          <p className="text-sm text-[var(--muted)]">
+            Removed from <span className="font-medium text-[var(--ink)]">{social.removed.platforms.join(", ")}</span>
+            {" "}({social.removed.action}){social.removed.at ? ` on ${shortDate(social.removed.at)}` : ""}.
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--muted)]">
+            {doNotPublish
+              ? "Marked Do not publish, so it isn't sent to social media."
+              : "No social media posting has been recorded for this listing."}
+          </p>
+        )}
+
+        {pending ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-sm">
+            <p className="font-semibold text-amber-900">
+              {pending.action}{" "}
+              {pending.stage === "awaiting_approval" ? "waiting for Admin approval" : "approved, being posted"}
+            </p>
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
+              {pending.platforms.map((p) => {
+                const done = pending.done.includes(p);
+                return (
+                  <li
+                    key={p}
+                    className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
+                      done
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                        : "border-amber-200 bg-white text-amber-900"
+                    }`}
+                  >
+                    {done ? "✓ " : ""}
+                    {p}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </SectionCard>
+  );
+}
+
 export function PropertyDetailsView({
   model,
   actions,
@@ -147,6 +246,7 @@ export function PropertyDetailsView({
                 {model.city}
               </Tag>
             ) : null}
+            {model.social ? <SocialStateBadge social={model.social} /> : null}
             {model.doNotPublish ? (
               <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
                 Do not publish
@@ -209,6 +309,8 @@ export function PropertyDetailsView({
         </div>
       ) : null}
 
+      {model.social ? <SocialMediaCard social={model.social} doNotPublish={model.doNotPublish} /> : null}
+
       {model.amenities.length ? (
         <SectionCard icon="amenities" title="Amenities">
           <ul className="flex flex-wrap gap-2 p-4">
@@ -217,7 +319,7 @@ export function PropertyDetailsView({
                 key={a}
                 className="inline-flex items-center gap-1.5 rounded-full bg-[var(--bg)] px-3 py-1 text-sm"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--brand)]" aria-hidden />
+                <span className="h-1.5 w-1.5 rounded-full bg-black" aria-hidden />
                 {a}
               </li>
             ))}
