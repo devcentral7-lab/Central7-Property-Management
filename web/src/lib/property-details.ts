@@ -1,4 +1,5 @@
 import { typeSpecificKeys } from "@/lib/property-fields";
+import type { SocialMediaStatus } from "@/lib/social-status";
 
 type Count = number | null | undefined;
 
@@ -40,6 +41,8 @@ export type PropertyDetailsModel = {
   sections: DetailSection[];
   amenities: string[];
   doNotPublish: boolean;
+  /** Filled in by the loaders, which may read the social media queue. */
+  social: SocialMediaStatus | null;
 };
 
 type Row = Record<string, unknown>;
@@ -169,7 +172,6 @@ export function buildPropertyDetails(
           })
         : null,
     ],
-    ["Publishing", p.do_not_publish ? "Do not publish" : "Can be published"],
   ]);
 
   const sections: DetailSection[] = (
@@ -202,5 +204,6 @@ export function buildPropertyDetails(
     sections,
     amenities: ((p.amenities || []) as string[]).filter(has),
     doNotPublish: Boolean(p.do_not_publish),
+    social: null,
   };
 }

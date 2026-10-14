@@ -3,13 +3,17 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { LinkRow } from "@/components/clickable-row";
 import { LiveFilterForm } from "@/components/live-filter-form";
+import { Pager, pageFromParam } from "@/components/pager";
+import { PAGE_SIZE } from "@/lib/constants";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { BRAND, seriesColor } from "@/app/app/dashboard/palette";
 import { requireProfile } from "@/lib/auth";
 import {
   currentYear,
+  financeListQuery,
   formatDate,
   formatLkr,
+  invoiceHref,
   loadFinance,
   monthLabel,
   REVENUE_TYPES,
@@ -126,14 +130,18 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
     status: one(sp.status),
     q: one(sp.q),
   };
+  const page = pageFromParam(sp.page);
+  const listQuery = financeListQuery({ ...filters, page: page > 1 ? String(page) : "" });
 
   let data: Awaited<ReturnType<typeof loadFinance>>;
   try {
-    data = await loadFinance(filters);
+    data = await loadFinance(filters, page);
   } catch (e) {
     return <p className="text-[var(--danger)]">{e instanceof Error ? e.message : "Could not load finance data"}</p>;
   }
-  const { range, dashboard, invoices, agents, years } = data;
+  const { range, dashboard, invoices, hasMoreInvoices, agents, years } = data;
+  const invoicePageHref = (p: number) =>
+    `/app/finance${qs({ ...filters, page: p > 1 ? String(p) : "" })}#invoices`;
   const agentName = agents.find((a) => a.id === filters.agent)?.name;
 
   const salesAgents = [...new Set(dashboard.quarterly.map((r) => r.agent))].sort();
@@ -170,7 +178,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
             <Link href="/app/finance/settings" className={secondaryButton}>
               Targets &amp; agents
             </Link>
-            <Link href="/app/finance/invoices/new" className={primaryButton}>
+            <Link href={invoiceHref("new", listQuery)} className={primaryButton}>
               + New invoice
             </Link>
           </>
@@ -441,14 +449,13 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
         icon="receipt"
         aside={
           <span className="hidden rounded-full bg-[var(--bg-accent)] px-2.5 py-1 text-xs font-semibold tabular-nums text-[var(--ink)] sm:inline">
-            {invoices.length}
-            {invoices.length === 300 ? "+" : ""} invoices
+            Page {page} · {PAGE_SIZE} per page
           </span>
         }
       >
         <ul className="-my-3 divide-y divide-[var(--line)] md:hidden">
           {invoices.map((inv) => (
-            <LinkRow key={inv.id} href={`/app/finance/invoices/${inv.id}`} as="li" className="-mx-2 rounded-lg px-2 py-3">
+            <LinkRow key={inv.id} href={invoiceHref(inv.id, listQuery)} as="li" className="-mx-2 rounded-lg px-2 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-semibold">{inv.invoice_no}</p>
@@ -496,7 +503,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
             </thead>
             <tbody>
               {invoices.map((inv) => (
-                <LinkRow key={inv.id} href={`/app/finance/invoices/${inv.id}`} className="border-t border-[var(--line)] align-top">
+                <LinkRow key={inv.id} href={invoiceHref(inv.id, listQuery)} className="border-t border-[var(--line)] align-top">
                   <td className={`${td} whitespace-nowrap text-xs text-[var(--muted)]`}>{formatDate(inv.invoice_date)}</td>
                   <td className={`${td} whitespace-nowrap font-semibold`}>{inv.invoice_no}</td>
                   <td className={`${td} max-w-md`}>
@@ -551,6 +558,8 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
             </tbody>
           </table>
         </div>
+
+        <Pager page={page} hasNext={hasMoreInvoices} hrefFor={invoicePageHref} className="mt-3" />
       </Section>
     </div>
   );

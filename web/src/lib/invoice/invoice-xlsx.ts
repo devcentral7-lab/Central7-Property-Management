@@ -168,7 +168,7 @@ export async function buildInvoiceWorkbook(
   const dots = bank + INVOICE_COMPANY.bank.length + 4;
   if (signature) {
     const id = wb.addImage({ buffer: signature as unknown as ExcelJS.Buffer, extension: "png" });
-    ws.addImage(id, { tl: at(0, 92, dots - 4, 4), ext: { width: 64, height: 32 } });
+    ws.addImage(id, { tl: at(0, 60, dots - 3, 0), ext: { width: 110, height: 35 } });
   }
   ws.mergeCells(`A${dots}:C${dots}`);
   put(`A${dots}`, ".".repeat(50), {}, { horizontal: "center", shrinkToFit: true });

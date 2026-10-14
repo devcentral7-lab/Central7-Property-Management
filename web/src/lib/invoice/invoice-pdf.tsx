@@ -55,20 +55,16 @@ const s = StyleSheet.create({
   extra: { marginTop: 40 },
   italic: { fontFamily: "Helvetica-Oblique", ...lh(1.35) },
   amount: { textAlign: "right" },
-  payableRow: { flexDirection: "row", marginLeft: 158 },
-  payableCell: {
-    borderWidth: 1,
-    borderColor: "#000",
-    paddingHorizontal: 2,
-    paddingVertical: 1.5,
-    fontFamily: "Helvetica-Bold",
-  },
+  /** Starts where column D does in the Excel template; shares the Total Amount row's bottom line. */
+  payableRow: { flexDirection: "row", marginLeft: 150 },
+  payable: { fontFamily: "Helvetica-Bold", borderBottomWidth: 1.5 },
   cheque: { marginTop: 18, ...lh(1.45) },
   bank: { marginTop: 11 },
   bankRow: { flexDirection: "row", ...lh(1.35) },
   bankLabel: { width: 111, paddingLeft: 2 },
   sigBlock: { marginTop: 22, width: 130 },
-  signature: { width: 46, marginLeft: 58 },
+  /** Centred over the dotted line; keeps signature.png's 350×112 aspect ratio. */
+  signature: { width: 80, height: 25.6, marginLeft: 38.5 },
   dots: {
     marginTop: 9,
     marginLeft: 27,
@@ -181,8 +177,8 @@ function InvoiceDocument({
           </View>
         </View>
         <View style={s.payableRow}>
-          <Text style={[s.payableCell, { flex: 1, borderRightWidth: 0 }]}>Total  Payable (LKR)</Text>
-          <Text style={[s.payableCell, s.amount, { width: AMOUNT_W }]}>{printAmount(inv.amount)}</Text>
+          <Text style={[s.cell, s.payable, { flex: 1, borderLeftWidth: LINE }]}>Total  Payable (LKR)</Text>
+          <Text style={[s.cell, s.payable, s.amount, { width: AMOUNT_W }]}>{printAmount(inv.amount)}</Text>
         </View>
 
         <Text style={s.cheque}>{INVOICE_COMPANY.chequeNote}</Text>
@@ -201,7 +197,7 @@ function InvoiceDocument({
             // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt prop
             <Image src={{ data: signature, format: "png" }} style={s.signature} />
           ) : (
-            <View style={{ height: 23 }} />
+            <View style={{ height: 25.6 }} />
           )}
           <View style={s.dots} />
           <Text style={s.signatory}>Authorized Signatory</Text>

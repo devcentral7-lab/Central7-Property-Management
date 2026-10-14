@@ -267,15 +267,6 @@ async function saveProperty(formData: FormData) {
   }
 
   if (!row.do_not_publish) {
-    const { data: settings } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "assignments")
-      .maybeSingle();
-    const assignedTo =
-      (settings?.value as { new_listing_admin?: string } | null)?.new_listing_admin ||
-      "Keerthie";
-
     const { error: eventErr } = await supabase.from("property_status_events").insert({
       property_id: property.id,
       ref_no: property.ref_no,
@@ -284,7 +275,6 @@ async function saveProperty(formData: FormData) {
       action: "Publish",
       comment: "",
       requested_platforms: platforms,
-      assigned_to: assignedTo,
     });
     if (eventErr) console.error("saveProperty status event", eventErr.message);
 
@@ -335,9 +325,7 @@ async function saveProperty(formData: FormData) {
 }
 
 export async function updateProperty(formData: FormData): Promise<ActionResult> {
-  const result = await toResult(() => editProperty(formData));
-  if (!result.ok) return result;
-  redirect("/app/properties");
+  return toResult(() => editProperty(formData));
 }
 
 async function editProperty(formData: FormData) {
@@ -445,18 +433,6 @@ async function changePropertyStatus(formData: FormData) {
     if (upErr) throw upErr;
   }
 
-  let assignedTo: string | null = null;
-  if (["Publish", "Republish", "Data Change"].includes(action)) {
-    const { data: settings } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "assignments")
-      .maybeSingle();
-    assignedTo =
-      (settings?.value as { new_listing_admin?: string } | null)?.new_listing_admin ||
-      "Keerthie";
-  }
-
   const { error: eventErr } = await supabase.from("property_status_events").insert({
     property_id: property.id,
     ref_no: property.ref_no,
@@ -464,7 +440,6 @@ async function changePropertyStatus(formData: FormData) {
     actor_name: profile.display_name,
     action,
     comment,
-    assigned_to: assignedTo,
     requested_platforms: action === "Republish" ? republishPlatforms : [],
   });
   if (eventErr) throw eventErr;
@@ -477,12 +452,11 @@ async function changePropertyStatus(formData: FormData) {
     subjectType: "property",
     subjectId: property.id,
     subjectLabel: property.ref_no,
-    summary: `${action} on ${property.ref_no}${assignedTo ? ` → ${assignedTo}` : ""}`,
+    summary: `${action} on ${property.ref_no}`,
     details: {
       previous_status: property.status,
       next_status: nextStatus,
       comment: comment || null,
-      assigned_to: assignedTo,
       platforms: action === "Republish" ? republishPlatforms : undefined,
     },
   });

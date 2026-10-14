@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { ClickableRow } from "@/components/clickable-row";
 import { ActivityButton } from "@/app/app/properties/activity-button";
 import { ExportPdfButton } from "@/app/app/properties/export-pdf-button";
@@ -167,6 +168,7 @@ function ViewBody({
 }
 
 export function PropertyModalProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [state, setState] = useState<ModalState>({
     open: false,
     mode: "view",
@@ -291,6 +293,10 @@ export function PropertyModalProvider({ children }: { children: ReactNode }) {
               initialDoNotPublish={state.data.initialDoNotPublish}
               initialAmenities={state.data.initialAmenities}
               initialValues={state.data.initialValues}
+              onSaved={() => {
+                close();
+                router.refresh();
+              }}
             />
           </div>
         ) : null}

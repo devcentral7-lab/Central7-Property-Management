@@ -6,6 +6,8 @@ import { PropertyLink } from "@/app/app/properties/property-modal";
 import { StatusBadge } from "@/components/status-badge";
 import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import { LiveFilterForm } from "@/components/live-filter-form";
+import { Pager, pageFromParam } from "@/components/pager";
+import { PAGE_SIZE } from "@/lib/constants";
 import {
   QueueItemCard,
   type PlatformDates,
@@ -35,6 +37,9 @@ const STATUS_OPTIONS = [
   "Hold",
   "Closed",
 ];
+
+/** Requests that take the listing off social media; styled apart from posting requests. */
+const TAKE_DOWN = new Set(["Drop", "Lost", "Hold", "Closed"]);
 
 function one(v: string | string[] | undefined) {
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
@@ -70,29 +75,43 @@ export default async function SocialQueuePage({
   const supabase = await createClient();
 
   const statusMatch = status ? { approved_action: status } : {};
+  const page = pageFromParam(sp.page);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
 
   // Only approved (or done) items appear here — pending approval stays on Activity.
   // Separate query chains avoid Supabase TS "excessively deep" errors.
-  const { data, error } =
+  const { data, count, error } =
     tab === "published"
       ? await supabase
           .from("social_media_queue")
-          .select(SELECT)
+          .select(SELECT, { count: "exact" })
           .not("approved_at", "is", null)
           .not("completed_at", "is", null)
           .match(statusMatch)
           .order("completed_at", { ascending: false })
-          .limit(100)
+          .range(from, to)
       : await supabase
           .from("social_media_queue")
-          .select(SELECT)
+          .select(SELECT, { count: "exact" })
           .not("approved_at", "is", null)
           .is("completed_at", null)
           .match(statusMatch)
           .order("approved_at", { ascending: false })
-          .limit(100);
+          .range(from, to);
 
   if (error) return <p className="text-[var(--danger)]">{error.message}</p>;
+
+  const total = count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  function hrefFor(p: number) {
+    const params = new URLSearchParams();
+    if (tab === "published") params.set("tab", "published");
+    if (status) params.set("status", status);
+    if (p > 1) params.set("page", String(p));
+    const s = params.toString();
+    return s ? `/app/social-queue?${s}` : "/app/social-queue";
+  }
 
   const statusQs = status ? `status=${encodeURIComponent(status)}` : "";
   const tabs = [
@@ -159,8 +178,8 @@ export default async function SocialQueuePage({
       </div>
 
       <p className="mt-4 text-sm text-[var(--muted)]">
-        {rows.length} {rows.length === 1 ? "item" : "items"}
-        {rows.length === 100 ? " (showing latest 100)" : ""}
+        {total.toLocaleString()} {total === 1 ? "item" : "items"}
+        {totalPages > 1 ? ` · page ${page} of ${totalPages} · ${PAGE_SIZE} per page` : ""}
       </p>
 
       <ul className="mt-3 space-y-3">
@@ -179,75 +198,85 @@ export default async function SocialQueuePage({
           return (
             <li
               key={row.id}
-              className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 shadow-sm sm:p-5"
+              className="rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-sm transition hover:shadow-md"
             >
               <QueueItemCard
                 id={row.id}
                 done={Boolean(row.completed_at)}
                 platforms={platforms}
                 dates={dates}
+                meta={
+                  <>
+                    {row.approved_by ? (
+                      <>
+                        Approved by <span className="font-semibold text-[var(--ink)]">{row.approved_by}</span>
+                        {row.approved_at ? ` · ${formatDateTime(row.approved_at)}` : ""}
+                      </>
+                    ) : null}
+                    {row.completed_at ? (
+                      <>
+                        {row.approved_by ? " · " : ""}Done {formatDateTime(row.completed_at)}
+                      </>
+                    ) : null}
+                  </>
+                }
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-base font-semibold">
                     <PropertyLink refNo={row.ref_no}>{row.ref_no}</PropertyLink>
                   </span>
                   {row.approved_action ? (
-                    <span className="inline-flex rounded-full border border-[var(--brand)]/50 px-2.5 py-0.5 text-xs font-semibold text-[var(--brand)]">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        TAKE_DOWN.has(row.approved_action)
+                          ? "bg-[var(--sidebar)] text-white"
+                          : "bg-[var(--brand)]/10 text-[var(--brand-deep)]"
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          TAKE_DOWN.has(row.approved_action) ? "bg-white/70" : "bg-[var(--brand)]"
+                        }`}
+                      />
                       {row.approved_action}
                     </span>
                   ) : null}
+                  {property?.status ? <StatusBadge status={property.status} className="text-xs" /> : null}
                 </div>
-
-                {row.approved_action === "Data Change" && row.comment ? (
-                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    <span className="font-semibold">What changed:</span> {row.comment}
-                  </p>
-                ) : null}
-
-                <div className="mt-2 space-y-0.5 text-sm text-[var(--muted)]">
-                  {summary.length || property?.status ? (
-                    <p>
-                      {summary.join(" · ")}
-                      {property?.status ? (
-                        <>
-                          {summary.length ? " · " : ""}Current status:{" "}
-                          <StatusBadge status={property.status} />
-                        </>
-                      ) : null}
-                    </p>
-                  ) : null}
-                  {row.approved_by ? (
-                    <p>
-                      Approved by{" "}
-                      <span className="font-semibold text-[var(--ink)]">{row.approved_by}</span>
-                      {row.approved_at ? ` on ${formatDateTime(row.approved_at)}` : ""}
-                    </p>
-                  ) : null}
-                  {row.completed_at ? (
-                    <p>Done on {formatDateTime(row.completed_at)}</p>
-                  ) : null}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-[var(--muted)]">
+                  {summary.length ? <span>{summary.join(" · ")}</span> : null}
                   {property?.contact_name || property?.contact_phone_1 ? (
-                    <p>
+                    <>
+                      {summary.length ? <span aria-hidden>·</span> : null}
                       {property?.contact_name ? (
-                        <span className="font-semibold text-[var(--ink)]">
-                          {property.contact_name}
-                        </span>
+                        <span className="text-[var(--ink)]">{property.contact_name}</span>
                       ) : null}
-                      {property?.contact_name && property?.contact_phone_1 ? " · " : ""}
                       {property?.contact_phone_1 ? (
                         <PhoneWithWhatsApp phone={property.contact_phone_1}>
                           <a
                             href={`tel:${property.contact_phone_1}`}
                             data-nav-skip
-                            className="font-semibold text-[var(--brand)] hover:underline"
+                            className="font-medium text-[var(--brand)] hover:underline"
                           >
                             {property.contact_phone_1}
                           </a>
                         </PhoneWithWhatsApp>
                       ) : null}
-                    </p>
+                    </>
                   ) : null}
                 </div>
+
+                {row.comment ? (
+                  <div className="mt-3 rounded-lg border-l-[3px] border-[var(--brand)] bg-[var(--brand)]/[0.06] px-3.5 py-2.5">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-[var(--brand)]">
+                      {row.approved_action === "Data Change" ? "What changed" : "Note"}
+                    </p>
+                    <p className="mt-0.5 whitespace-pre-line text-sm font-medium text-[var(--ink)]">
+                      {row.comment}
+                    </p>
+                  </div>
+                ) : null}
               </QueueItemCard>
             </li>
           );
@@ -262,6 +291,8 @@ export default async function SocialQueuePage({
           </li>
         ) : null}
       </ul>
+
+      <Pager page={page} totalPages={totalPages} hrefFor={hrefFor} className="mt-4" />
     </div>
   );
 }

@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 import { PopupDialog } from "@/components/popup-dialog";
+import type { PropertyActivityEvent } from "@/lib/property-activity";
 
-export type ActivityEvent = {
-  id: string;
-  action: string;
-  actor_name: string | null;
-  assigned_to: string | null;
-  comment: string | null;
-  occurred_at: string | null;
-};
+export type ActivityEvent = Pick<
+  PropertyActivityEvent,
+  "id" | "action" | "actor_name" | "handled_by" | "handled_label" | "awaiting_admin" | "comment" | "occurred_at"
+>;
 
 const WHEN = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -67,8 +64,17 @@ export function ActivityButton({ refNo, events }: { refNo: string; events: Activ
                     {when ? <p className="text-xs text-[var(--muted)]">{when}</p> : null}
                   </div>
                   <p className="text-xs text-[var(--muted)]">
+                    {e.handled_by || e.awaiting_admin ? "Requested by " : ""}
                     {e.actor_name || "—"}
-                    {e.assigned_to ? ` → ${e.assigned_to}` : ""}
+                    {e.handled_by ? (
+                      <>
+                        {" · "}
+                        {e.handled_label}{" "}
+                        <span className="font-semibold text-[var(--ink)]">{e.handled_by}</span>
+                      </>
+                    ) : e.awaiting_admin ? (
+                      " · Waiting for an admin"
+                    ) : null}
                   </p>
                   {e.comment ? (
                     <p className="mt-1.5 rounded-lg bg-[var(--bg)] px-3 py-2 text-sm text-[var(--ink)]">

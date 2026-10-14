@@ -10,7 +10,9 @@ import { DataChangeActions } from "@/app/app/activity/data-change-actions";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { LinkRow } from "@/components/clickable-row";
 import { LiveFilterForm } from "@/components/live-filter-form";
+import { Pager, pageFromParam } from "@/components/pager";
 import { requireProfile } from "@/lib/auth";
+import { PAGE_SIZE } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -42,6 +44,63 @@ type FeedRow = {
     resolution_note: string | null;
     queue_status: SocialQueueStatus | null;
   };
+};
+
+type PropertyBits = {
+  property_type: string | null;
+  opportunity_type: string | null;
+  city: string | null;
+  created_by_name?: string | null;
+};
+type Embedded<T> = T | T[] | null;
+
+type AuditRow = {
+  id: string | number;
+  occurred_at: string;
+  category: string;
+  action: string;
+  actor_name: string | null;
+  actor_kind: string | null;
+  subject_type: string | null;
+  subject_id: string | null;
+  subject_label: string | null;
+  summary: string | null;
+  details: unknown;
+  ip: string | null;
+};
+
+type WorkflowRow = {
+  id: string | number;
+  occurred_at: string;
+  ref_no: string;
+  actor_name: string | null;
+  action: string;
+  comment: string | null;
+  requested_platforms: string[] | null;
+};
+
+type SocialRow = {
+  id: string;
+  ref_no: string;
+  approved_action: string | null;
+  approved_at: string | null;
+  completed_at: string | null;
+  requested_platforms: string[] | null;
+  created_at: string;
+  updated_at: string | null;
+  property: Embedded<PropertyBits>;
+};
+
+type DataChangeRow = {
+  id: string;
+  occurred_at: string;
+  ref_no: string;
+  actor_name: string | null;
+  comment: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  property: Embedded<PropertyBits>;
 };
 
 function EventRow({
@@ -95,6 +154,7 @@ function IntentPill({ intent }: { intent: string }) {
 }
 
 const CATEGORIES = [
+  { id: "all", label: "All" },
   { id: "social", label: "Social media approvals" },
   { id: "data_change", label: "Data changes" },
   { id: "queue", label: "Social media queue" },
@@ -150,62 +210,124 @@ export default async function ActivityPage({
   const category = CATEGORIES.some((c) => c.id === requested)
     ? requested
     : DEFAULT_CATEGORY;
-  const q = one(sp.q).trim().toLowerCase();
+  const q = one(sp.q).trim();
+  const pendingOnly = one(sp.pending) === "1";
+  const showPendingToggle = category === "all" || category === "data_change";
+  const page = pageFromParam(sp.page);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+  const term = q.replace(/[%_,()"\\]/g, " ").trim();
+  const like = (cols: string[]) => cols.map((c) => `${c}.ilike.%${term}%`).join(",");
   const supabase = await createClient();
 
-  const [
-    { data: auditRows, error: auditErr },
-    { data: workflowRows, error: wfErr },
-    { data: socialRows, error: socialErr },
-    { data: dataChangeRows, error: dataChangeErr },
-  ] = await Promise.all([
-    supabase
-      .from("audit_log")
-      .select(
-        "id, occurred_at, category, action, actor_name, actor_kind, subject_type, subject_id, subject_label, summary, details, ip, user_agent",
-      )
-      .order("occurred_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("property_status_events")
-      .select(
-        "id, occurred_at, ref_no, actor_name, action, comment, assigned_to, requested_platforms",
-      )
-      .is("archived_at", null)
-      .order("occurred_at", { ascending: false })
-      .limit(200),
-    supabase
+  const pendingSocial = () => {
+    let query = supabase
       .from("social_media_queue")
       .select(
         "id, ref_no, approved_action, approved_by, approved_at, requested_platforms, completed_at, created_at, updated_at, property:properties(property_type, opportunity_type, city, created_by_name)",
+        { count: "exact" },
       )
       .is("approved_at", null)
       .is("completed_at", null)
-      .neq("requested_platforms", "{}")
-      .order("created_at", { ascending: false })
-      .limit(100),
-    supabase
+      .neq("requested_platforms", "{}");
+    if (term) query = query.or(like(["ref_no", "approved_action"]));
+    return query.order("updated_at", { ascending: false, nullsFirst: false });
+  };
+  const dataChanges = () => {
+    let query = supabase
       .from("property_status_events")
       .select(
-        "id, occurred_at, ref_no, actor_name, comment, assigned_to, resolved_at, resolved_by, resolution_note, property:properties(property_type, opportunity_type, city)",
+        "id, occurred_at, ref_no, actor_name, comment, resolved_at, resolved_by, resolution_note, property:properties(property_type, opportunity_type, city)",
+        { count: "exact" },
       )
       .eq("action", "Data Change")
+      .is("archived_at", null);
+    if (pendingOnly) query = query.is("resolved_at", null);
+    if (term) query = query.or(like(["ref_no", "actor_name", "comment"]));
+    return query.order("occurred_at", { ascending: false });
+  };
+
+  async function loadCategory(): Promise<{
+    error: string | null;
+    total: number;
+    audit?: AuditRow[];
+    workflow?: WorkflowRow[];
+    social?: SocialRow[];
+    dataChange?: DataChangeRow[];
+  }> {
+    if (category === "all") {
+      // Two tables share one timeline: take the newest rows of each up to this page, then merge.
+      const [s, d] = await Promise.all([pendingSocial().range(0, to), dataChanges().range(0, to)]);
+      return {
+        error: s.error?.message || d.error?.message || null,
+        total: (s.count ?? 0) + (d.count ?? 0),
+        social: s.data ?? [],
+        dataChange: d.data ?? [],
+      };
+    }
+    if (category === "social") {
+      const s = await pendingSocial().range(from, to);
+      return { error: s.error?.message ?? null, total: s.count ?? 0, social: s.data ?? [] };
+    }
+    if (category === "data_change") {
+      const d = await dataChanges().range(from, to);
+      return { error: d.error?.message ?? null, total: d.count ?? 0, dataChange: d.data ?? [] };
+    }
+    if (category === "workflow") {
+      let query = supabase
+        .from("property_status_events")
+        .select("id, occurred_at, ref_no, actor_name, action, comment, requested_platforms", {
+          count: "exact",
+        })
+        .is("archived_at", null);
+      if (term) query = query.or(like(["ref_no", "actor_name", "action", "comment"]));
+      const w = await query.order("occurred_at", { ascending: false }).range(from, to);
+      return { error: w.error?.message ?? null, total: w.count ?? 0, workflow: w.data ?? [] };
+    }
+    let query = supabase
+      .from("audit_log")
+      .select(
+        "id, occurred_at, category, action, actor_name, actor_kind, subject_type, subject_id, subject_label, summary, details, ip",
+        { count: "exact" },
+      )
+      .eq("category", category);
+    if (term) query = query.or(like(["actor_name", "subject_label", "summary", "action"]));
+    const a = await query.order("occurred_at", { ascending: false }).range(from, to);
+    return { error: a.error?.message ?? null, total: a.count ?? 0, audit: a.data ?? [] };
+  }
+
+  const [loaded, pendingHead, openHead] = await Promise.all([
+    loadCategory(),
+    supabase
+      .from("social_media_queue")
+      .select("id", { count: "exact", head: true })
+      .is("approved_at", null)
+      .is("completed_at", null)
+      .neq("requested_platforms", "{}"),
+    supabase
+      .from("property_status_events")
+      .select("id", { count: "exact", head: true })
+      .eq("action", "Data Change")
       .is("archived_at", null)
-      .order("occurred_at", { ascending: false })
-      .limit(200),
+      .is("resolved_at", null),
   ]);
 
-  if (auditErr || wfErr || socialErr || dataChangeErr) {
-    return (
-      <p className="text-[var(--danger)]">
-        {auditErr?.message || wfErr?.message || socialErr?.message || dataChangeErr?.message}
-      </p>
-    );
+  if (loaded.error) {
+    return <p className="text-[var(--danger)]">{loaded.error}</p>;
   }
+
+  const auditRows = loaded.audit ?? [];
+  const workflowRows = loaded.workflow ?? [];
+  const socialRows = loaded.social ?? [];
+  const dataChangeRows = loaded.dataChange ?? [];
+  const pendingApprovals = pendingHead.count ?? 0;
+  const openDataChanges = openHead.count ?? 0;
+  const total = loaded.total;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const feed: FeedRow[] = [];
 
-  for (const row of auditRows ?? []) {
+  for (const row of auditRows) {
     const details = formatDetails(row.details);
     if (row.ip) details.unshift(`ip: ${row.ip}`);
     feed.push({
@@ -227,13 +349,12 @@ export default async function ActivityPage({
     });
   }
 
-  for (const row of workflowRows ?? []) {
+  for (const row of workflowRows) {
     const platforms = Array.isArray(row.requested_platforms)
       ? row.requested_platforms.join(", ")
       : "";
     const details = [
       row.comment ? `comment: ${row.comment}` : null,
-      row.assigned_to ? `assigned: ${row.assigned_to}` : null,
       platforms ? `platforms: ${platforms}` : null,
     ].filter(Boolean) as string[];
 
@@ -246,14 +367,12 @@ export default async function ActivityPage({
       actor_kind: "staff",
       subject_label: row.ref_no,
       subject_href: `/app/properties/${row.ref_no}`,
-      summary: `${row.action} on ${row.ref_no}${
-        row.assigned_to ? ` → ${row.assigned_to}` : ""
-      }`,
+      summary: `${row.action} on ${row.ref_no}`,
       detail_lines: details,
     });
   }
 
-  const socialRefs = [...new Set((socialRows ?? []).map((r) => r.ref_no))];
+  const socialRefs = [...new Set(socialRows.map((r) => r.ref_no))];
   const requesterByRef = new Map<string, string>();
   if (socialRefs.length) {
     const { data: requestEvents } = await supabase
@@ -270,7 +389,7 @@ export default async function ActivityPage({
     }
   }
 
-  for (const row of socialRows ?? []) {
+  for (const row of socialRows) {
     const property = (Array.isArray(row.property) ? row.property[0] : row.property) as {
       property_type: string | null;
       opportunity_type: string | null;
@@ -310,7 +429,7 @@ export default async function ActivityPage({
   }
 
   const resolvedRefs = [
-    ...new Set((dataChangeRows ?? []).filter((r) => r.resolved_at).map((r) => r.ref_no)),
+    ...new Set(dataChangeRows.filter((r) => r.resolved_at).map((r) => r.ref_no)),
   ];
   const dataChangeQueue = new Map<string, { approved_at: string | null; completed_at: string | null }>();
   if (resolvedRefs.length) {
@@ -321,9 +440,7 @@ export default async function ActivityPage({
     for (const row of queueRows ?? []) dataChangeQueue.set(row.ref_no, row);
   }
 
-  let openDataChanges = 0;
-  for (const row of dataChangeRows ?? []) {
-    if (!row.resolved_at) openDataChanges += 1;
+  for (const row of dataChangeRows) {
     const property = (Array.isArray(row.property) ? row.property[0] : row.property) as {
       property_type: string | null;
       opportunity_type: string | null;
@@ -349,7 +466,6 @@ export default async function ActivityPage({
         [property?.property_type, property?.opportunity_type, property?.city]
           .filter(Boolean)
           .join(" · "),
-        row.assigned_to ? `assigned: ${row.assigned_to}` : "",
       ].filter(Boolean),
       data_change: {
         id: row.id,
@@ -366,29 +482,15 @@ export default async function ActivityPage({
       new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
   );
 
-  const filtered = feed.filter((row) => {
-    if (category === "social") {
-      if (!row.queue_id) return false;
-    } else if (row.category !== category) {
-      return false;
-    }
-    if (!q) return true;
-    const hay = [
-      row.action,
-      row.actor_name,
-      row.subject_label,
-      row.summary,
-      row.intent,
-      ...(row.queue_platforms ?? []),
-      ...row.detail_lines,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  });
+  const visible = category === "all" ? feed.slice(from, to + 1) : feed;
 
-  const visible = filtered.slice(0, 150);
+  function hrefFor(p: number) {
+    const params = new URLSearchParams({ category });
+    if (q) params.set("q", q);
+    if (pendingOnly) params.set("pending", "1");
+    if (p > 1) params.set("page", String(p));
+    return `/app/activity?${params}`;
+  }
 
   return (
     <div>
@@ -422,14 +524,38 @@ export default async function ActivityPage({
             className="mt-1 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
           />
         </label>
+        {showPendingToggle ? (
+          <label className="flex cursor-pointer select-none items-center gap-2.5 self-start rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-medium sm:self-auto">
+            <input
+              type="checkbox"
+              name="pending"
+              value="1"
+              defaultChecked={pendingOnly}
+              className="peer sr-only"
+            />
+            <span
+              aria-hidden
+              className="relative h-5 w-9 shrink-0 rounded-full bg-[var(--line)] transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-[var(--sidebar)] peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--brand)]/40"
+            />
+            Pending approvals only
+          </label>
+        ) : pendingOnly ? (
+          <input type="hidden" name="pending" value="1" />
+        ) : null}
       </LiveFilterForm>
 
       <div className="tab-scroll -mx-4 mt-4 px-4 sm:mx-0 sm:px-0">
         {CATEGORIES.map((c) => {
           const href = `/app/activity?category=${c.id}${
             q ? `&q=${encodeURIComponent(q)}` : ""
-          }`;
+          }${pendingOnly ? "&pending=1" : ""}`;
           const active = category === c.id;
+          const badge =
+            c.id === "all"
+              ? pendingApprovals + openDataChanges
+              : c.id === "data_change"
+                ? openDataChanges
+                : 0;
           return (
             <Link
               key={c.id}
@@ -441,14 +567,14 @@ export default async function ActivityPage({
               }`}
             >
               {c.label}
-              {c.id === "data_change" && openDataChanges ? (
+              {badge ? (
                 <span
                   className={`ml-1.5 inline-flex min-w-5 justify-center rounded-full px-1.5 text-[10px] leading-4 ${
                     active ? "bg-white text-[var(--brand)]" : "bg-[var(--brand)] text-white"
                   }`}
-                  title={`${openDataChanges} to do`}
+                  title={`${badge} to do`}
                 >
-                  {openDataChanges}
+                  {badge}
                 </span>
               ) : null}
             </Link>
@@ -457,8 +583,8 @@ export default async function ActivityPage({
       </div>
 
       <p className="mt-4 text-xs text-[var(--muted)]">
-        Showing {visible.length} of {filtered.length} matched events (latest
-        first).
+        {total.toLocaleString()} {total === 1 ? "event" : "events"} (latest first) · page {page} of{" "}
+        {totalPages} · {PAGE_SIZE} per page
       </p>
 
       <ul className="mt-4 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] md:hidden">
@@ -658,6 +784,8 @@ export default async function ActivityPage({
           </tbody>
         </table>
       </div>
+
+      <Pager page={page} totalPages={totalPages} hrefFor={hrefFor} className="mt-4" />
     </div>
   );
 }

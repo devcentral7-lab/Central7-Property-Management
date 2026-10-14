@@ -12,7 +12,9 @@ import {
 } from "@/app/app/complexes/actions";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { ClickableRow } from "@/components/clickable-row";
+import { Pager } from "@/components/pager";
 import { PopupDialog } from "@/components/popup-dialog";
+import { usePaged } from "@/components/use-paged";
 import { StatusBadge } from "@/components/status-badge";
 import {
   FilterChip,
@@ -178,6 +180,7 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
         .some((v) => String(v).toLowerCase().includes(q));
     });
   }, [rows, query, filter]);
+  const paged = usePaged(visible, `${query}|${filter}`);
 
   function openView(c: ComplexListItem) {
     setViewing(c);
@@ -292,7 +295,7 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
             </tr>
           </thead>
           <tbody>
-            {visible.map((c) => (
+            {paged.items.map((c) => (
               <ClickableRow key={c.id} className="border-t border-[var(--line)]" onActivate={() => openView(c)}>
                 <td className="max-w-[20rem] px-5 py-3">
                   <p className="truncate font-semibold">{c.name}</p>
@@ -309,7 +312,7 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
         </table>
 
         <ul className="divide-y divide-[var(--line)] md:hidden">
-          {visible.map((c) => (
+          {paged.items.map((c) => (
             <ClickableRow key={c.id} as="li" className="px-4 py-3" onActivate={() => openView(c)}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -336,6 +339,12 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
             </p>
           </div>
         ) : null}
+        <Pager
+          page={paged.page}
+          totalPages={paged.totalPages}
+          onPage={paged.setPage}
+          className="border-t border-[var(--line)] px-4 py-2"
+        />
       </section>
 
       <PopupDialog

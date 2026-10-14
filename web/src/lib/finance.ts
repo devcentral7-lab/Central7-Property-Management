@@ -1,3 +1,4 @@
+import { PAGE_SIZE } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
 import {
   REVENUE_TYPES,
@@ -16,8 +17,10 @@ import {
 
 export * from "@/lib/finance-shared";
 
-export async function loadFinance(f: FinanceFilters) {
+/** `page` is 1-based; the list RPC has no offset, so it fetches up to this page plus one row to tell if more exist. */
+export async function loadFinance(f: FinanceFilters, page = 1) {
   const supabase = await createClient();
+  const skip = (page - 1) * PAGE_SIZE;
   const range = resolveFinanceRange(f);
   const agent = UUID_RE.test(f.agent) ? f.agent : null;
   const type = (REVENUE_TYPES as readonly string[]).includes(f.type) ? f.type : null;
@@ -38,7 +41,7 @@ export async function loadFinance(f: FinanceFilters) {
       p_type: type,
       p_status: status,
       p_q: q,
-      p_limit: 300,
+      p_limit: skip + PAGE_SIZE + 1,
     }),
     supabase.rpc("finance_agents"),
     supabase.rpc("finance_years"),
@@ -47,10 +50,12 @@ export async function loadFinance(f: FinanceFilters) {
   const error = dashboard.error || invoices.error || agents.error || years.error;
   if (error) throw new Error(error.message);
 
+  const fetched = ((invoices.data ?? []) as FinanceInvoice[]).slice(skip);
   return {
     range,
     dashboard: dashboard.data as FinanceDashboard,
-    invoices: (invoices.data ?? []) as FinanceInvoice[],
+    invoices: fetched.slice(0, PAGE_SIZE),
+    hasMoreInvoices: fetched.length > PAGE_SIZE,
     agents: (agents.data ?? []) as FinanceAgent[],
     years: (years.data ?? []) as number[],
   };
