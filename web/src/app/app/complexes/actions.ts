@@ -38,12 +38,6 @@ function str(v: FormDataEntryValue | null): string {
   return String(v ?? "").trim().replace(/\s+/g, " ");
 }
 
-async function requireAdmin() {
-  const profile = await requireProfile();
-  if (profile.role !== "Admin") throw new Error("Admin only");
-  return profile;
-}
-
 function intOrNull(raw: string, label: string, min: number, max: number): number | null {
   if (!raw) return null;
   const n = Number(raw);
@@ -136,7 +130,7 @@ export async function listComplexListings(
 
 export async function createComplex(formData: FormData): Promise<Result> {
   try {
-    const profile = await requireAdmin();
+    const profile = await requireProfile();
     const fields = parseFields(formData);
     const { data, error } = await createAdminClient()
       .from("apartment_complexes")
@@ -163,7 +157,7 @@ export async function createComplex(formData: FormData): Promise<Result> {
 
 export async function updateComplex(formData: FormData): Promise<Result> {
   try {
-    await requireAdmin();
+    await requireProfile();
     const id = str(formData.get("complex_id"));
     if (!id) return { ok: false, error: "Missing complex id." };
     const fields = parseFields(formData);
@@ -194,7 +188,7 @@ export async function updateComplex(formData: FormData): Promise<Result> {
 /** Deletes a complex; its listings move to `moveToId` or are left without a complex. */
 export async function deleteComplex(complexId: string, moveToId: string | null): Promise<Result> {
   try {
-    await requireAdmin();
+    await requireProfile();
     if (moveToId === complexId) return { ok: false, error: "Pick a different complex to move listings to." };
     const admin = createAdminClient();
     const { data: complex, error: getErr } = await admin
