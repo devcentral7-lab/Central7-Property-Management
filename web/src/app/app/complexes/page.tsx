@@ -4,8 +4,7 @@ import { AddComplexButton, ComplexesTable } from "@/app/app/complexes/complexes-
 import { StatCard, type IconName } from "@/app/app/user-management/ui";
 
 export default async function ComplexesPage() {
-  const profile = await requireProfile();
-  const canManage = profile.role === "Admin";
+  await requireProfile();
 
   let rows: Awaited<ReturnType<typeof listComplexes>> = [];
   let loadError: string | null = null;
@@ -44,14 +43,12 @@ export default async function ComplexesPage() {
         <div>
           <h1 className="font-display text-2xl font-semibold sm:text-3xl">Apartment Complexes</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            {canManage
-              ? "View, add, edit and remove the apartment buildings used on listings."
-              : "View apartment buildings, their details and linked listings."}
+            View, add, edit and remove the apartment buildings used on listings.
           </p>
         </div>
-        {canManage ? <div className="shrink-0">
+        <div className="shrink-0">
           <AddComplexButton locations={locations} />
-        </div> : null}
+        </div>
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -63,7 +60,7 @@ export default async function ComplexesPage() {
       {loadError ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-[var(--danger)]">{loadError}</p>
       ) : (
-        <ComplexesTable rows={rows} locations={locations} canManage={canManage} />
+        <ComplexesTable rows={rows} locations={locations} canManage />
       )}
     </div>
   );
