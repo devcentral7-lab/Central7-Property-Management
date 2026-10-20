@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { addPayment, deletePayment, setInvoiceVoid } from "@/app/app/finance/actions";
+import { MoneyInput } from "@/components/money-input";
 import { formatLkr, todayIso } from "@/lib/finance-shared";
 
 const inputClass = "mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-normal";
@@ -65,10 +66,9 @@ export function AddPaymentForm({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="text-sm font-medium">
           Amount received
-          <input
-            inputMode="decimal"
+          <MoneyInput
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onValueChange={setAmount}
             autoFocus
             className={`${inputClass} tabular-nums`}
           />

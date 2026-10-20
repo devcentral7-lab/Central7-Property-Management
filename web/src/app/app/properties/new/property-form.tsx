@@ -310,7 +310,7 @@ function PropertyFormInner({
       }
       const finalRef = savedProperty.current;
       for (let index = 0; index < imageFiles.length; index++) {
-        setImageProgress(`Uploading image ${index + 1} of ${imageFiles.length}…`);
+        setImageProgress(`Uploading file ${index + 1} of ${imageFiles.length}…`);
         const uploadData = new FormData();
         uploadData.append("files", imageFiles[index]);
         try {
@@ -328,7 +328,7 @@ function PropertyFormInner({
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed. Please try again.";
       setSaveError(savedProperty.current
-        ? `Property ${savedProperty.current} is saved. Some images could not upload: ${message} Retry to upload the remaining images.`
+        ? `Property ${savedProperty.current} is saved. Some files could not upload: ${message} Retry to upload the remaining files.`
         : message);
     } finally {
       setSavingImages(false);
@@ -616,9 +616,7 @@ function PropertyFormInner({
             <div className={grid4}>
               <input type="hidden" name="purpose" value={values.purpose} />
               <Field label="Land Size">
-                <Affix suffix="perch">
-                  <input {...bindNumber("land_size_perch")} className={`${inputBase} pr-16`} />
-                </Affix>
+                <LandSizeInput value={values.land_size_perch} onChange={(v) => setField("land_size_perch", v)} />
               </Field>
               <Field label="Floor Area">
                 <FloorAreaInput value={values.floor_area_sqft} onChange={(v) => setField("floor_area_sqft", v)} />
@@ -646,9 +644,7 @@ function PropertyFormInner({
           {isLand ? (
             <div className={grid4}>
               <Field label="Land Size">
-                <Affix suffix="perch">
-                  <input {...bindNumber("land_size_perch")} className={`${inputBase} pr-16`} />
-                </Affix>
+                <LandSizeInput value={values.land_size_perch} onChange={(v) => setField("land_size_perch", v)} />
               </Field>
               <Field label="Suitable for" className="sm:col-span-1 lg:col-span-3">
                 <input
@@ -708,9 +704,7 @@ function PropertyFormInner({
                 />
               </Field>
               <Field label="Land Size">
-                <Affix suffix="perch">
-                  <input {...bindNumber("land_size_perch")} className={`${inputBase} pr-16`} />
-                </Affix>
+                <LandSizeInput value={values.land_size_perch} onChange={(v) => setField("land_size_perch", v)} />
               </Field>
               <Field label="Built-up Area">
                 <input {...bindNumber("built_up_area")} className={inputBase} />
@@ -963,7 +957,7 @@ function PropertyFormInner({
               }
             />
           ) : null}
-          <SubmitButton disabled={preparingImages || savingImages} label={savedRef ? "Retry Image Upload" : mode === "edit" ? "Save changes" : "Save listing"} />
+          <SubmitButton disabled={preparingImages || savingImages} label={savedRef ? "Retry file upload" : mode === "edit" ? "Save changes" : "Save listing"} />
         </div>
       </form>
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
@@ -1030,7 +1024,7 @@ function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <span className="block text-[13px] font-medium text-[var(--ink)]">
+    <span className="block text-[13px] font-semibold tracking-wide text-[var(--ink)]">
       {children}
       {required ? (
         <span className="ml-0.5 text-[var(--brand)]" aria-hidden>
@@ -1142,6 +1136,20 @@ function FloorAreaInput({ value, onChange }: { value: string | undefined; onChan
         name="floor_area_sqft"
         value={value ?? ""}
         className={`${inputBase} pr-14 tabular-nums`}
+        autoComplete="off"
+        onValueChange={onChange}
+      />
+    </Affix>
+  );
+}
+
+function LandSizeInput({ value, onChange }: { value: string | undefined; onChange: (raw: string) => void }) {
+  return (
+    <Affix suffix="perch">
+      <MoneyInput
+        name="land_size_perch"
+        value={value ?? ""}
+        className={`${inputBase} pr-16 tabular-nums`}
         autoComplete="off"
         onValueChange={onChange}
       />

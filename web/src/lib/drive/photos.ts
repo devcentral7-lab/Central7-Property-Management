@@ -1,11 +1,17 @@
 import { readFileSync } from "fs";
 import { Readable } from "stream";
 import { google, type drive_v3 } from "googleapis";
-import { ALLOWED_PHOTO_MIME, MAX_PHOTO_BYTES } from "@/lib/drive/constants";
+import { isImageMime, maxBytesForMime } from "@/lib/drive/constants";
 import type { DrivePhoto } from "@/lib/drive/types";
 
 export type { DrivePhoto } from "@/lib/drive/types";
-export { MAX_PHOTO_BYTES, ALLOWED_PHOTO_MIME } from "@/lib/drive/constants";
+export {
+  ALLOWED_PHOTO_MIME,
+  isImageMime,
+  maxBytesForMime,
+  MAX_ATTACHMENT_BYTES,
+  MAX_PHOTO_BYTES,
+} from "@/lib/drive/constants";
 
 export class DrivePhotosError extends Error {
   constructor(message: string) {
@@ -96,21 +102,27 @@ export async function getOrCreatePropertyFolder(refNo: string): Promise<string> 
   return id;
 }
 
-export async function listPropertyPhotos(refNo: string): Promise<DrivePhoto[]> {
+async function listPropertyFiles(
+  refNo: string,
+  imagesOnly: boolean,
+): Promise<DrivePhoto[]> {
   if (!isDriveConfigured()) return [];
   const folderId = await findPropertyFolderId(refNo);
   if (!folderId) return [];
 
   const drive = getDriveClient();
-  const photos: DrivePhoto[] = [];
+  const files: DrivePhoto[] = [];
   let pageToken: string | undefined;
+  const mimeFilter = imagesOnly
+    ? "(mimeType contains 'image/')"
+    : "mimeType != 'application/vnd.google-apps.folder'";
 
   do {
     const res = await drive.files.list({
       q: [
         `'${escapeDriveQuery(folderId)}' in parents`,
         "trashed = false",
-        "(mimeType contains 'image/')",
+        mimeFilter,
       ].join(" and "),
       fields: "nextPageToken, files(id, name, mimeType)",
       pageSize: 100,
@@ -120,17 +132,28 @@ export async function listPropertyPhotos(refNo: string): Promise<DrivePhoto[]> {
       includeItemsFromAllDrives: true,
     });
     for (const f of res.data.files ?? []) {
-      if (!f.id || !f.mimeType || !ALLOWED_PHOTO_MIME.has(f.mimeType)) continue;
-      photos.push({
+      if (!f.id || !f.mimeType) continue;
+      if (imagesOnly && !isImageMime(f.mimeType)) continue;
+      files.push({
         id: f.id,
-        name: f.name || "photo",
+        name: f.name || (imagesOnly ? "photo" : "file"),
         mimeType: f.mimeType,
       });
     }
     pageToken = res.data.nextPageToken || undefined;
   } while (pageToken);
 
-  return photos;
+  return files;
+}
+
+/** Images only — used by PDF reports and the public gallery. */
+export async function listPropertyPhotos(refNo: string): Promise<DrivePhoto[]> {
+  return listPropertyFiles(refNo, true);
+}
+
+/** Every file in the property Drive folder (images, PDFs, docs, …). */
+export async function listPropertyAttachments(refNo: string): Promise<DrivePhoto[]> {
+  return listPropertyFiles(refNo, false);
 }
 
 export async function uploadPropertyPhotos(
@@ -143,21 +166,20 @@ export async function uploadPropertyPhotos(
   const uploaded: DrivePhoto[] = [];
 
   for (const file of files) {
-    if (!ALLOWED_PHOTO_MIME.has(file.mimeType)) {
-      throw new DrivePhotosError(`Unsupported file type: ${file.mimeType}`);
-    }
-    if (file.buffer.byteLength > MAX_PHOTO_BYTES) {
+    const mime = file.mimeType || "application/octet-stream";
+    const limit = maxBytesForMime(mime);
+    if (file.buffer.byteLength > limit) {
       throw new DrivePhotosError(
-        `File too large (max ${MAX_PHOTO_BYTES / (1024 * 1024)} MB): ${file.name}`,
+        `File too large (max ${limit / (1024 * 1024)} MB): ${file.name}`,
       );
     }
     const created = await drive.files.create({
       requestBody: {
-        name: file.name || "photo.jpg",
+        name: file.name || (isImageMime(mime) ? "photo.jpg" : "attachment"),
         parents: [folderId],
       },
       media: {
-        mimeType: file.mimeType,
+        mimeType: mime,
         body: BufferReadable(file.buffer),
       },
       fields: "id, name, mimeType",
@@ -169,7 +191,7 @@ export async function uploadPropertyPhotos(
     uploaded.push({
       id: created.data.id,
       name: created.data.name || file.name,
-      mimeType: created.data.mimeType || file.mimeType,
+      mimeType: created.data.mimeType || mime,
     });
   }
 
@@ -184,6 +206,7 @@ function BufferReadable(buffer: Buffer) {
 export async function assertFileInPropertyFolder(
   fileId: string,
   refNo: string,
+  imagesOnly = false,
 ): Promise<{ id: string; name: string; mimeType: string }> {
   const drive = getDriveClient();
   const folderId = await findPropertyFolderId(refNo);
@@ -199,18 +222,25 @@ export async function assertFileInPropertyFolder(
   if (!parents.includes(folderId)) {
     throw new DrivePhotosError("File is not in this property folder");
   }
-  if (!meta.data.mimeType || !ALLOWED_PHOTO_MIME.has(meta.data.mimeType)) {
+  if (!meta.data.mimeType) throw new DrivePhotosError("File not found");
+  if (imagesOnly && !isImageMime(meta.data.mimeType)) {
     throw new DrivePhotosError("Not an image file");
   }
   return {
     id: meta.data.id!,
-    name: meta.data.name || "photo",
+    name: meta.data.name || (imagesOnly ? "photo" : "file"),
     mimeType: meta.data.mimeType,
   };
 }
 
-/** Resolve which property ref owns a file (parent folder name under photos root). */
-export async function resolvePhotoRef(fileId: string): Promise<string | null> {
+/**
+ * Resolve which property ref owns a file (parent folder name under photos root).
+ * Pass `imagesOnly: true` for the public photo proxy / PDF path.
+ */
+export async function resolvePhotoRef(
+  fileId: string,
+  imagesOnly = true,
+): Promise<string | null> {
   if (!isDriveConfigured()) return null;
   const drive = getDriveClient();
   const root = photosRootId();
@@ -220,9 +250,8 @@ export async function resolvePhotoRef(fileId: string): Promise<string | null> {
     supportsAllDrives: true,
   });
   if (meta.data.trashed) return null;
-  if (!meta.data.mimeType || !ALLOWED_PHOTO_MIME.has(meta.data.mimeType)) {
-    return null;
-  }
+  if (!meta.data.mimeType) return null;
+  if (imagesOnly && !isImageMime(meta.data.mimeType)) return null;
   const parentId = meta.data.parents?.[0];
   if (!parentId) return null;
 
@@ -239,6 +268,7 @@ export async function resolvePhotoRef(fileId: string): Promise<string | null> {
 
 export async function downloadPhoto(
   fileId: string,
+  imagesOnly = true,
 ): Promise<{ buffer: Buffer; mimeType: string; name: string }> {
   const drive = getDriveClient();
   const meta = await drive.files.get({
@@ -247,7 +277,8 @@ export async function downloadPhoto(
     supportsAllDrives: true,
   });
   if (meta.data.trashed) throw new DrivePhotosError("File not found");
-  if (!meta.data.mimeType || !ALLOWED_PHOTO_MIME.has(meta.data.mimeType)) {
+  if (!meta.data.mimeType) throw new DrivePhotosError("File not found");
+  if (imagesOnly && !isImageMime(meta.data.mimeType)) {
     throw new DrivePhotosError("Not an image file");
   }
   const res = await drive.files.get(
@@ -258,7 +289,7 @@ export async function downloadPhoto(
   return {
     buffer: Buffer.from(data),
     mimeType: meta.data.mimeType,
-    name: meta.data.name || "photo",
+    name: meta.data.name || (imagesOnly ? "photo" : "file"),
   };
 }
 

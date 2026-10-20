@@ -4,12 +4,13 @@ import { after } from "next/server";
 import { logAudit } from "@/lib/audit";
 import { requireProfile } from "@/lib/auth";
 import {
-  ALLOWED_PHOTO_MIME,
   DrivePhotosError,
   deletePropertyPhoto,
   isDriveConfigured,
+  isImageMime,
+  listPropertyAttachments,
   listPropertyPhotos,
-  MAX_PHOTO_BYTES,
+  maxBytesForMime,
   renamePropertyPhoto,
   uploadPropertyPhotos,
   type DrivePhoto,
@@ -39,11 +40,15 @@ async function loadPropertyForPhotos(refNoRaw: string) {
   return property;
 }
 
-async function livePhotos(propertyId: string, refNo: string): Promise<DrivePhoto[]> {
+/** All Drive files for the property; image order is saved for PDF reports. */
+async function liveAttachments(propertyId: string, refNo: string): Promise<DrivePhoto[]> {
   const supabase = await createClient();
-  const photos = await withSavedOrder(supabase, propertyId, await listPropertyPhotos(refNo));
-  after(() => syncPropertyMedia(propertyId, photos));
-  return photos;
+  const all = await listPropertyAttachments(refNo);
+  const images = all.filter((f) => isImageMime(f.mimeType));
+  const other = all.filter((f) => !isImageMime(f.mimeType));
+  const orderedImages = await withSavedOrder(supabase, propertyId, images);
+  after(() => syncPropertyMedia(propertyId, orderedImages));
+  return [...orderedImages, ...other];
 }
 
 async function syncPropertyMedia(
@@ -116,7 +121,7 @@ export async function listPropertyPhotosAction(
       return { ok: true, configured: false, canManage, photos: [] };
     }
 
-    const photos = await livePhotos(property.id, property.ref_no);
+    const photos = await liveAttachments(property.id, property.ref_no);
     return { ok: true, configured: true, canManage, photos };
   } catch (e) {
     const message =
@@ -124,12 +129,12 @@ export async function listPropertyPhotosAction(
         ? e.message
         : e instanceof Error
           ? e.message
-          : "Failed to load photos";
+          : "Failed to load attachments";
     return { ok: false, error: message, configured };
   }
 }
 
-/** Public / guest: Active listings only. Soft-fails. */
+/** Public / guest: Active listings only. Soft-fails. Images only. */
 export async function listPublicPropertyPhotosAction(
   refNoRaw: string,
 ): Promise<PhotoListResult> {
@@ -170,7 +175,7 @@ export async function uploadPropertyPhotosAction(
     if (!configured) {
       return {
         ok: false,
-        error: "Drive photos are not configured",
+        error: "Drive attachments are not configured",
         configured: false,
       };
     }
@@ -187,14 +192,8 @@ export async function uploadPropertyPhotosAction(
     const files: { name: string; mimeType: string; buffer: Buffer }[] = [];
     for (const entry of formData.getAll("files")) {
       if (!(entry instanceof File)) continue;
-      if (!ALLOWED_PHOTO_MIME.has(entry.type)) {
-        return {
-          ok: false,
-          error: `Unsupported type: ${entry.name}`,
-          configured: true,
-        };
-      }
-      if (entry.size > MAX_PHOTO_BYTES) {
+      const mime = entry.type || "application/octet-stream";
+      if (entry.size > maxBytesForMime(mime)) {
         return {
           ok: false,
           error: `File too large: ${entry.name}`,
@@ -203,8 +202,8 @@ export async function uploadPropertyPhotosAction(
       }
       const buf = Buffer.from(await entry.arrayBuffer());
       files.push({
-        name: entry.name || "photo.jpg",
-        mimeType: entry.type,
+        name: entry.name || (isImageMime(mime) ? "photo.jpg" : "attachment"),
+        mimeType: mime,
         buffer: buf,
       });
     }
@@ -221,11 +220,11 @@ export async function uploadPropertyPhotosAction(
       subjectType: "property",
       subjectId: property.id,
       subjectLabel: property.ref_no,
-      summary: `Uploaded ${files.length} photo(s) for ${property.ref_no}`,
+      summary: `Uploaded ${files.length} attachment(s) for ${property.ref_no}`,
       details: { count: files.length },
     });
 
-    const photos = await livePhotos(property.id, property.ref_no);
+    const photos = await liveAttachments(property.id, property.ref_no);
     return {
       ok: true,
       configured: true,
@@ -279,7 +278,7 @@ export async function deletePropertyPhotoAction(
       details: { fileId },
     });
 
-    const photos = await livePhotos(property.id, property.ref_no);
+    const photos = await liveAttachments(property.id, property.ref_no);
     return { ok: true, configured: true, canManage: true, photos };
   } catch (e) {
     const message =
@@ -329,7 +328,7 @@ export async function renamePropertyPhotoAction(
       details: { fileId, name },
     });
 
-    const photos = await livePhotos(property.id, property.ref_no);
+    const photos = await liveAttachments(property.id, property.ref_no);
     return { ok: true, configured: true, canManage: true, photos };
   } catch (e) {
     const message =
@@ -365,14 +364,16 @@ export async function reorderPropertyPhotosAction(
       return { ok: false, error: "Not allowed", configured: true };
     }
 
+    // Reorder is for images only (PDF report order); other files keep Drive name order.
     const live = await listPropertyPhotos(property.ref_no);
     const byId = new Map(live.map((p) => [p.id, p]));
     const ordered = orderedFileIds
       .map((id) => byId.get(id))
       .filter(Boolean) as DrivePhoto[];
     const rest = live.filter((p) => !orderedFileIds.includes(p.id));
-    const photos = [...ordered, ...rest];
-    await syncPropertyMedia(property.id, photos);
+    const images = [...ordered, ...rest];
+    await syncPropertyMedia(property.id, images);
+    const photos = await liveAttachments(property.id, property.ref_no);
 
     return { ok: true, configured: true, canManage: true, photos };
   } catch (e) {

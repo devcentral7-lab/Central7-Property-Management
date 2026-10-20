@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-import { CITIES_SETTING_KEY, cityKey, citySpellingKey, cleanCityName, sortCities } from "@/lib/cities";
+import {
+  CITIES_SETTING_KEY,
+  cityKey,
+  citySpellingKey,
+  cleanCityName,
+  sortCities,
+  stripCountryFromCity,
+} from "@/lib/cities";
 import { loadCities } from "@/lib/cities-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -67,6 +74,36 @@ export async function addCity(raw: string): Promise<Result> {
       details: { city_count: cities.length + 1 },
     });
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed." };
+  }
+}
+
+/**
+ * Any staff member: if this city is not on the curated list yet (e.g. picked from
+ * Google Places), add it. Idempotent — already-listed names succeed quietly.
+ */
+export async function ensureCity(raw: string): Promise<Result & { name?: string }> {
+  try {
+    await requireProfile();
+    const name = stripCountryFromCity(raw);
+    if (!name) return { ok: false, error: "Enter a city name." };
+    if (name.length > MAX_NAME) return { ok: false, error: `City names can be at most ${MAX_NAME} characters.` };
+    const cities = await loadCities();
+    const existing = cities.find((c) => citySpellingKey(c) === citySpellingKey(name));
+    if (existing) return { ok: true, name: existing };
+
+    await saveCities([...cities, name]);
+    await logAudit({
+      category: "settings",
+      action: "city_add",
+      subjectType: "city",
+      subjectId: name,
+      subjectLabel: name,
+      summary: `Added city ${name} (from Places)`,
+      details: { city_count: cities.length + 1, source: "places" },
+    });
+    return { ok: true, name };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed." };
   }

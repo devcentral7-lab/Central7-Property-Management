@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
 import { getNextInvoiceNo, saveInvoice, type InvoiceInput } from "@/app/app/finance/actions";
+import { MoneyInput } from "@/components/money-input";
 import {
   CATEGORIES,
   financeListHref,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/finance-shared";
 
 const inputClass = "mt-1 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm font-normal";
+const moneyClass = `${inputClass} tabular-nums`;
 const labelClass = "text-sm font-medium";
 
 type AgentRow = { key: number; agent_id: string; amount: string };
@@ -59,10 +61,6 @@ export function InvoiceForm({
   );
   const typeEdited = useRef(!isNew);
   const [amount, setAmount] = useState(invoice ? String(invoice.amount) : "");
-  const [c7Booking, setC7Booking] = useState(
-    invoice?.c7_booking === null || invoice?.c7_booking === undefined ? "" : String(invoice.c7_booking),
-  );
-  const bookingEdited = useRef(!isNew);
   const [revenueMonth, setRevenueMonth] = useState(
     invoice?.revenue_month ? invoice.revenue_month.slice(0, 7) : todayIso().slice(0, 7),
   );
@@ -82,21 +80,14 @@ export function InvoiceForm({
   const amountNum = toAmount(amount || "0");
   const splitTotal = rows.reduce((s, r) => s + (toAmount(r.amount || "0") || 0), 0);
   const splitDiff = Math.round((amountNum - splitTotal) * 100) / 100;
-  const bookable = category === "C7 Brokering" || category === "C7 Management";
 
   function retype(nextCategory: string, nextDetails: string) {
     if (!typeEdited.current) setRevenueType(revenueTypeFor(nextCategory, nextDetails));
   }
 
-  function onAmount(v: string) {
-    setAmount(v);
-    if (!bookingEdited.current) setC7Booking(bookable ? v : "");
-  }
-
   function onCategory(v: string) {
     setCategory(v);
     retype(v, details);
-    if (!bookingEdited.current) setC7Booking(v === "C7 Brokering" || v === "C7 Management" ? amount : "");
   }
 
   async function onInvoiceDate(v: string) {
@@ -146,7 +137,9 @@ export function InvoiceForm({
       category,
       revenue_type: revenueType,
       amount: amountNum,
-      c7_booking: c7Booking.trim() === "" ? null : toAmount(c7Booking),
+      // Kept in the DB for older reports; always matches the invoice amount for brokering/management.
+      c7_booking:
+        category === "C7 Brokering" || category === "C7 Management" ? amountNum : null,
       revenue_month: revenueMonth,
       property_ref: propertyRef,
       notes,
@@ -204,7 +197,7 @@ export function InvoiceForm({
             />
           </label>
           <label className={`${labelClass} sm:col-span-2`}>
-            Customer
+            Customer Name
             <input
               value={customer}
               onChange={(e) => setCustomer(e.target.value)}
@@ -276,26 +269,12 @@ export function InvoiceForm({
           </label>
           <label className={labelClass}>
             Amount (LKR)
-            <input
-              inputMode="decimal"
+            <MoneyInput
               value={amount}
-              onChange={(e) => onAmount(e.target.value)}
+              onValueChange={setAmount}
               placeholder="0"
               required
-              className={`${inputClass} tabular-nums`}
-            />
-          </label>
-          <label className={labelClass}>
-            C7 booking <span className="font-normal text-[var(--muted)]">(optional)</span>
-            <input
-              inputMode="decimal"
-              value={c7Booking}
-              onChange={(e) => {
-                bookingEdited.current = true;
-                setC7Booking(e.target.value);
-              }}
-              placeholder={bookable ? "Same as amount" : "—"}
-              className={`${inputClass} tabular-nums`}
+              className={moneyClass}
             />
           </label>
         </div>
@@ -347,11 +326,10 @@ export function InvoiceForm({
                     </option>
                   ))}
                 </select>
-                <input
-                  inputMode="decimal"
+                <MoneyInput
                   value={r.amount}
-                  onChange={(e) =>
-                    setRows((cur) => cur.map((x) => (x.key === r.key ? { ...x, amount: e.target.value } : x)))
+                  onValueChange={(v) =>
+                    setRows((cur) => cur.map((x) => (x.key === r.key ? { ...x, amount: v } : x)))
                   }
                   aria-label="Commission amount"
                   placeholder="Amount"
@@ -396,11 +374,10 @@ export function InvoiceForm({
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className={labelClass}>
                 Amount received
-                <input
-                  inputMode="decimal"
+                <MoneyInput
                   value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  className={`${inputClass} tabular-nums`}
+                  onValueChange={setPayAmount}
+                  className={moneyClass}
                 />
               </label>
               <label className={labelClass}>

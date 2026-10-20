@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { ensureCity } from "@/app/app/cities/actions";
 import { splitListParam } from "@/lib/list-param";
 import { clearedHere } from "@/components/live-filter-form";
+import { citySpellingKey, stripCountryFromCity } from "@/lib/cities";
+import { useCitySuggestions } from "@/hooks/use-city-suggestions";
 
 export type MultiSelectOption = { value: string; label: string };
 
@@ -19,6 +22,7 @@ export function MultiSelectFilter({
   addLabel,
   emptyLabel,
   className = "",
+  placesSuggest = false,
 }: {
   name: string;
   label: string;
@@ -30,6 +34,8 @@ export function MultiSelectFilter({
   addLabel: string;
   emptyLabel: string;
   className?: string;
+  /** When true, merge Google Places (Sri Lanka) results into the dropdown. */
+  placesSuggest?: boolean;
 }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -38,9 +44,25 @@ export function MultiSelectFilter({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(-1);
-  const term = query.trim().toLowerCase();
-  const visible = options.filter((o) => o.label.toLowerCase().includes(term));
-  const labelOf = (value: string) => options.find((o) => o.value === value)?.label ?? value;
+  const known = useMemo(() => options.map((o) => o.value), [options]);
+  const { suggestions } = useCitySuggestions(placesSuggest ? known : [], placesSuggest && open ? query : null);
+  const visible = useMemo(() => {
+    if (!placesSuggest) {
+      const term = query.trim().toLowerCase();
+      return options
+        .filter((o) => o.label.toLowerCase().includes(term))
+        .map((o) => ({ ...o, source: "known" as const }));
+    }
+    return suggestions.map((s) => ({
+      value: s.value,
+      label: s.value,
+      source: s.source,
+    }));
+  }, [placesSuggest, options, query, suggestions]);
+  const labelOf = (value: string) =>
+    options.find((o) => o.value === value)?.label ??
+    suggestions.find((s) => s.value === value)?.label ??
+    value;
 
   useEffect(() => {
     const form = field.current?.form;
@@ -73,10 +95,18 @@ export function MultiSelectFilter({
     }
   }
 
-  function toggle(value: string) {
-    commit(selected.includes(value) ? selected.filter((v) => v !== value) : [...selected, value]);
+  function toggle(value: string, source: "known" | "google" = "known") {
+    const name = stripCountryFromCity(value);
+    const next = selected.includes(name)
+      ? selected.filter((v) => v !== name)
+      : [...selected, name];
+    commit(next);
     setQuery("");
     input.current?.focus();
+    if (placesSuggest && source === "google" && next.includes(name)) {
+      const knownHit = known.some((c) => citySpellingKey(c) === citySpellingKey(name));
+      if (!knownHit) void ensureCity(name);
+    }
   }
 
   function move(index: number) {
@@ -88,7 +118,7 @@ export function MultiSelectFilter({
   return (
     <div className={`min-w-0 ${className}`}>
       <input ref={field} type="hidden" name={name} defaultValue={defaultValue} />
-      <label htmlFor={id} className="block text-sm font-medium">
+      <label htmlFor={id} className="block text-sm font-semibold tracking-wide">
         {label}
       </label>
       <div className="relative mt-1">
@@ -153,7 +183,7 @@ export function MultiSelectFilter({
               } else if (event.key === "Enter") {
                 event.preventDefault();
                 const option = visible[active] ?? (visible.length === 1 ? visible[0] : undefined);
-                if (open && option) toggle(option.value);
+                if (open && option) toggle(option.value, option.source);
               } else if (event.key === "Backspace" && !query && selected.length) {
                 commit(selected.slice(0, -1));
               } else if (event.key === "Escape" && open) {
@@ -203,7 +233,7 @@ export function MultiSelectFilter({
                   aria-selected={checked}
                   className={`flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm text-[var(--ink)] hover:bg-[var(--bg-accent)] ${index === active ? "bg-[var(--bg-accent)]" : ""}`}
                   onPointerDown={(event) => event.preventDefault()}
-                  onClick={() => toggle(option.value)}
+                  onClick={() => toggle(option.value, option.source)}
                 >
                   <span
                     aria-hidden
@@ -217,7 +247,12 @@ export function MultiSelectFilter({
                       </svg>
                     ) : null}
                   </span>
-                  {option.label}
+                  <span className="min-w-0">
+                    <span className="block truncate">{option.label}</span>
+                    {option.source === "google" ? (
+                      <span className="block text-[11px] text-[var(--muted)]">From Google Maps</span>
+                    ) : null}
+                  </span>
                 </li>
               );
             })}

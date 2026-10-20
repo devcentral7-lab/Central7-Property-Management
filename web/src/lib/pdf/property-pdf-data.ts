@@ -84,6 +84,7 @@ async function loadPhotos(
   propertyId: string,
   refNo: string,
 ): Promise<PdfPhoto[]> {
+  // listPropertyPhotos already excludes non-image attachments in the Drive folder.
   if (!isDriveConfigured()) return [];
   try {
     const ordered = await withSavedOrder(supabase, propertyId, await listPropertyPhotos(refNo));

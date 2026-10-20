@@ -143,7 +143,6 @@ export default async function InvoicePage({
               <span className="whitespace-pre-line">{inv.details || "—"}</span>
             </Field>
           </div>
-          <Field label="C7 booking">{inv.c7_booking === null ? "—" : formatLkr(inv.c7_booking)}</Field>
           <Field label="Category">{inv.category}</Field>
           <Field label="Revenue type">{inv.revenue_type}</Field>
           <Field label="Source">

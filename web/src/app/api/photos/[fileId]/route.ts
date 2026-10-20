@@ -28,12 +28,14 @@ export async function GET(
       return new NextResponse("Invalid file", { status: 400 });
     }
 
-    const refNo = await resolvePhotoRef(fileId);
+    const profile = await getOptionalProfile();
+    // Guests only get images on Active listings; staff can download any attachment.
+    const imagesOnly = !profile;
+    const refNo = await resolvePhotoRef(fileId, imagesOnly);
     if (!refNo) {
       return new NextResponse("Not found", { status: 404 });
     }
 
-    const profile = await getOptionalProfile();
     if (!profile) {
       const supabase = await createClient();
       const { data } = await supabase
@@ -46,25 +48,28 @@ export async function GET(
       }
     }
 
-    const { buffer, mimeType } = await downloadPhoto(fileId);
+    const { buffer, mimeType, name } = await downloadPhoto(fileId, imagesOnly);
     const width = Number(new URL(request.url).searchParams.get("w"));
     let body = buffer;
     let contentType = mimeType;
-    if (THUMB_WIDTHS.has(width) && mimeType !== "image/gif") {
-      try {
-        body = await resizeToJpeg(buffer, width);
-        contentType = "image/jpeg";
-      } catch {
-        /* serve the original if it can't be decoded */
+    if (imagesOnly || mimeType.startsWith("image/")) {
+      if (THUMB_WIDTHS.has(width) && mimeType !== "image/gif") {
+        try {
+          body = await resizeToJpeg(buffer, width);
+          contentType = "image/jpeg";
+        } catch {
+          /* serve the original if it can't be decoded */
+        }
       }
     }
-    return new NextResponse(new Uint8Array(body), {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "private, max-age=3600",
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Cache-Control": "private, max-age=3600",
+    };
+    if (!mimeType.startsWith("image/")) {
+      headers["Content-Disposition"] = `attachment; filename="${name.replace(/"/g, "")}"`;
+    }
+    return new NextResponse(new Uint8Array(body), { status: 200, headers });
   } catch (e) {
     if (e instanceof DrivePhotosError) {
       return new NextResponse(e.message, { status: 404 });

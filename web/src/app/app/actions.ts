@@ -10,7 +10,7 @@ import { toResult, type ActionResult } from "@/lib/action-result";
 import { loadFormOptions } from "@/lib/form-options";
 import { FURNISHABLE_TYPES } from "@/lib/constants";
 import { loadCities } from "@/lib/cities-server";
-import { matchCities } from "@/lib/cities";
+import { matchCities, stripCountryFromCity } from "@/lib/cities";
 import { loadComplexOptions } from "@/lib/complexes-server";
 import { parseMapsLink } from "@/lib/maps-link";
 import { isDriveConfigured } from "@/lib/drive/photos";
@@ -88,7 +88,7 @@ async function buildPropertyPayload(formData: FormData) {
   const contactType = str(formData.get("contact_type"));
   const contactName = str(formData.get("contact_name"));
   const contact1 = str(formData.get("contact_phone_1"));
-  const typedCity = str(formData.get("city"));
+  const typedCity = stripCountryFromCity(str(formData.get("city")));
   const city = typedCity && (matchCities([typedCity], cities)[0] ?? typedCity);
 
   if (!contactName || !contact1 || !opportunityType || !propertyType || !city || !contactType) {
