@@ -141,6 +141,14 @@ export function cleanCityName(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
 }
 
+/** Drop trailing country from Places labels, e.g. "Jaffna, Sri Lanka" → "Jaffna". */
+export function stripCountryFromCity(raw: string): string {
+  return cleanCityName(raw)
+    .replace(/,?\s*Sri\s*Lanka\.?$/i, "")
+    .replace(/,?\s*LK$/i, "")
+    .trim();
+}
+
 export function cityKey(raw: string): string {
   return cleanCityName(raw).toLowerCase();
 }

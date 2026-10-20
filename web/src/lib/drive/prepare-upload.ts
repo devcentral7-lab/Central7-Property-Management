@@ -1,9 +1,13 @@
+import { isImageMime } from "@/lib/drive/constants";
+
 const MAX_EDGE = 2048;
 const RESIZE_ABOVE_BYTES = 1.5 * 1024 * 1024;
 
-/** Phone photos are often 3–10 MB; send a 2048px JPEG instead. GIFs are kept as-is. */
+/** Phone photos are often 3–10 MB; send a 2048px JPEG instead. GIFs and non-images are kept as-is. */
 export async function prepareForUpload(file: File): Promise<File> {
-  if (file.type === "image/gif" || file.size <= RESIZE_ABOVE_BYTES) return file;
+  if (!isImageMime(file.type) || file.type === "image/gif" || file.size <= RESIZE_ABOVE_BYTES) {
+    return file;
+  }
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));

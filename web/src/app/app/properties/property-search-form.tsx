@@ -224,10 +224,11 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             label="City"
             options={cityOptions}
             defaultValue={filters.city}
-            allLabel="All cities"
+            allLabel="Search Sri Lanka cities"
             addLabel="Add city"
             emptyLabel="No cities found"
             className="xl:col-span-2"
+            placesSuggest
           />
           <label className="text-sm font-medium">
             Opportunity

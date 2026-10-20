@@ -61,3 +61,11 @@ Photos live in Google Drive (folder per property ref under `PHOTOS_ROOT_FOLDER_I
 3. Set in `.env.local` / Vercel:
    - `GOOGLE_SERVICE_ACCOUNT_JSON` — full JSON string
    - `PHOTOS_ROOT_FOLDER_ID` — Drive folder id (default root is documented in `.env.example`)
+
+## City search via Google Places (optional)
+
+City fields (add/edit property, property search, my-properties) use a hybrid list: curated cities and names already on listings first, then Google Places Autocomplete restricted to Sri Lanka. Without an API key, only the curated/DB list is shown.
+
+1. In Google Cloud, enable **Places API (New)** and create an API key.
+2. Restrict the key (API restriction to Places API; application restriction as appropriate).
+3. Set `GOOGLE_MAPS_API_KEY` in `web/.env.local` / Vercel (server-only — never `NEXT_PUBLIC_`).
