@@ -113,8 +113,8 @@ export async function PropertyMinePanel({
         {standalone ? null : <input type="hidden" name="tab" value="mine" />}
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {isAdmin ? (
-            <label className="col-span-2 text-sm font-medium xl:col-span-1">
-              Staff member
+            <label className="col-span-2 text-sm font-semibold xl:col-span-1">
+              User
               <select
                 name="user"
                 defaultValue={target}
@@ -129,8 +129,8 @@ export async function PropertyMinePanel({
               </select>
             </label>
           ) : null}
-          <label className={`col-span-2 text-sm font-medium ${isAdmin ? "xl:col-span-1" : ""}`}>
-            Quick search
+          <label className={`col-span-2 text-sm font-semibold ${isAdmin ? "xl:col-span-1" : ""}`}>
+            Quick Search
             <input
               name="q"
               defaultValue={filters.q}
@@ -139,7 +139,7 @@ export async function PropertyMinePanel({
               className={`${inputClass} mt-1`}
             />
           </label>
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
             Status
             <select name="status" defaultValue={filters.status} data-default-value="Active" className={`${inputClass} mt-1`}>
               <option value="">All statuses</option>
@@ -150,8 +150,8 @@ export async function PropertyMinePanel({
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
-            Property type
+          <label className="text-sm font-semibold">
+            Property Type
             <select
               name="property_type"
               defaultValue={filters.property_type}
@@ -165,7 +165,7 @@ export async function PropertyMinePanel({
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
             Opportunity
             <select
               name="opportunity_type"
@@ -181,8 +181,8 @@ export async function PropertyMinePanel({
             </select>
           </label>
           <CitySelect defaultValue={filters.city} className={inputClass} autoSubmit />
-          <label className="text-sm font-medium">
-            Added from
+          <label className="text-sm font-semibold">
+            Added From
             <input
               type="date"
               name="added_from"
@@ -190,8 +190,8 @@ export async function PropertyMinePanel({
               className={`${inputClass} mt-1`}
             />
           </label>
-          <label className="text-sm font-medium">
-            Added to
+          <label className="text-sm font-semibold">
+            Added To
             <input
               type="date"
               name="added_to"
@@ -199,7 +199,7 @@ export async function PropertyMinePanel({
               className={`${inputClass} mt-1`}
             />
           </label>
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
             Currency
             <select
               name="currency"
@@ -214,8 +214,8 @@ export async function PropertyMinePanel({
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
-            Beds min
+          <label className="text-sm font-semibold">
+            Beds Min
             <input
               name="bedrooms_min"
               defaultValue={filters.bedrooms_min}
@@ -241,7 +241,7 @@ export async function PropertyMinePanel({
               type="reset"
               className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
             >
-              Clear filters
+              Clear Filters
             </button>
           </div>
         </div>
@@ -249,7 +249,7 @@ export async function PropertyMinePanel({
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[var(--muted)]">
-          Showing listings for <strong>{target}</strong> ·{" "}
+          Showing listings of <strong>{target}</strong> ·{" "}
           {total.toLocaleString()} {filtered ? "matching filters" : "total"} · page {page} of{" "}
           {totalPages}
         </p>

@@ -130,7 +130,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="font-display text-base font-semibold">
-            Quick search
+            Quick Search
           </h2>
           <div className="flex items-center gap-2">
             <button
@@ -139,14 +139,14 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               disabled={pending || !paragraph.trim()}
               className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
             >
-              {pending ? "Searching…" : "Search properties"}
+              {pending ? "Searching…" : "Search Properties"}
             </button>
             <button
               type="button"
               onClick={() => clearFilterGroup("property-filters", "basic")}
               className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
             >
-              Clear normal filters
+              Clear Filters
             </button>
           </div>
         </div>
@@ -180,7 +180,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
 
         <div data-filter-group="basic" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <label className="col-span-2 text-sm font-medium">
-            Keyword search
+            Keyword Search
             <input
               name="q"
               defaultValue={filters.q}
@@ -205,7 +205,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             </select>
           </label>
           <label className="text-sm font-medium">
-            Property type
+            Property Type
             <select
               name="property_type"
               defaultValue={filters.property_type}
@@ -282,7 +282,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             onClick={() => setShowAdvanced(!showAdvanced)}
             className="text-sm font-semibold text-[var(--brand-deep)] hover:underline"
           >
-            {showAdvanced ? "Hide advanced filters" : "Show advanced filters"}
+            {showAdvanced ? "Hide Advance Filters" : "Show Advance Filters"}
           </button>
           {showAdvanced ? (
             <button
@@ -290,7 +290,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               onClick={() => clearFilterGroup("property-filters", "advanced")}
               className="rounded-full bg-[var(--brand)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-deep)]"
             >
-              Clear advanced filters
+              Clear Advance Filters
             </button>
           ) : null}
         </div>
@@ -300,7 +300,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
           <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <MultiSelectFilter
               name="complex"
-              label="Apartment complex"
+              label="Apartment Complex"
               options={complexOptions}
               defaultValue={filters.complex}
               allLabel="All complexes"
