@@ -3,6 +3,7 @@ import { COMPANY } from "@/lib/company";
 import { downloadPhoto, isDriveConfigured, listPropertyPhotos } from "@/lib/drive/photos";
 import { resizeToJpeg } from "@/lib/drive/resize";
 import { withSavedOrder } from "@/lib/drive/saved-order";
+import { mergeAmenityLists } from "@/lib/property-details";
 import { typeSpecificKeys } from "@/lib/property-fields";
 import { createClient } from "@/lib/supabase/server";
 
@@ -176,15 +177,10 @@ export async function loadPropertyPdfData(
   if (!isLand) add("Price per sq.ft", money(p.price_per_sqft, currency));
   if (copy === "client") add("Listing type", p.contact_type);
 
-  const seen = new Set<string>();
-  const amenities: PdfAmenity[] = [];
-  for (const raw of [...((p.amenities || []) as string[]), ...((complex?.amenities || []) as string[])]) {
-    const name = amenityName(String(raw || ""));
-    const key = name.toLowerCase();
-    if (!name || seen.has(key)) continue;
-    seen.add(key);
-    amenities.push({ name });
-  }
+  const amenities: PdfAmenity[] = mergeAmenityLists(
+    ((p.amenities || []) as string[]).map((a) => amenityName(String(a || ""))),
+    ((complex?.amenities || []) as string[]).map((a) => amenityName(String(a || ""))),
+  ).map((name) => ({ name }));
 
   const priceNote = rent
     ? null
