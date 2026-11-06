@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlainNumberInput } from "@/components/plain-number-input";
 import { RangeFilter } from "@/components/range-filter";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -221,19 +222,17 @@ export default async function AgentSearchPage({
                 </label>
                 <label className="text-sm font-medium">
                   Beds min
-                  <input
+                  <PlainNumberInput
                     name="bedrooms_min"
                     defaultValue={filters.bedrooms_min}
-                    inputMode="numeric"
                     className={`${inputClass} mt-1`}
                   />
                 </label>
                 <label className="text-sm font-medium">
                   Baths min
-                  <input
+                  <PlainNumberInput
                     name="bathrooms_min"
                     defaultValue={filters.bathrooms_min}
-                    inputMode="numeric"
                     className={`${inputClass} mt-1`}
                   />
                 </label>

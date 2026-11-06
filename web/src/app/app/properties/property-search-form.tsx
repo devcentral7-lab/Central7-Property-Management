@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { PlainNumberInput } from "@/components/plain-number-input";
 import { RangeFilter } from "@/components/range-filter";
 import { useCities } from "@/components/cities-context";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
@@ -394,10 +395,9 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             </label>
             <label className="text-sm font-semibold">
               Parking Min
-              <input
+              <PlainNumberInput
                 name="parking_min"
                 defaultValue={filters.parking_min}
-                inputMode="decimal"
                 className={`${inputClass} mt-1`}
               />
             </label>
