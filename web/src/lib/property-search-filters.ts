@@ -171,21 +171,22 @@ export function describeSearchFilters(f: SearchFilterValues): string {
     .join(" · ");
 }
 
-type Filterable<Q> = {
-  eq(column: string, value: string | boolean): Q;
-  neq(column: string, value: string): Q;
-  ilike(column: string, pattern: string): Q;
-  gte(column: string, value: number | string): Q;
-  lte(column: string, value: number | string): Q;
-  in(column: string, values: readonly string[]): Q;
-  is(column: string, value: null): Q;
-  not(column: string, operator: string, value: null): Q;
-  or(filters: string): Q;
+type Filterable = {
+  eq(column: string, value: string | boolean): Filterable;
+  neq(column: string, value: string): Filterable;
+  ilike(column: string, pattern: string): Filterable;
+  gte(column: string, value: number | string): Filterable;
+  lte(column: string, value: number | string): Filterable;
+  in(column: string, values: readonly string[]): Filterable;
+  is(column: string, value: null): Filterable;
+  not(column: string, operator: string, value: null): Filterable;
+  or(filters: string): Filterable;
 };
 
 /** Same filter rules as the Search & Filter results table. */
-export function applySearchFilters<Q extends Filterable<Q>>(query: Q, f: SearchFilterValues): Q {
-  let q = query;
+export function applySearchFilters<Q>(query: Q, f: SearchFilterValues): Q {
+  // Cast away Supabase's deeply nested builder types (avoids TS2589).
+  let q = query as unknown as Filterable;
   if (f.status) q = q.eq("status", f.status);
   if (f.property_type) q = q.eq("property_type", f.property_type);
   if (f.property_type === "Commercial Property" && f.property_subtype) {
@@ -263,5 +264,5 @@ export function applySearchFilters<Q extends Filterable<Q>>(query: Q, f: SearchF
       `ref_no.ilike.%${term}%,contact_name.ilike.%${term}%,address.ilike.%${term}%,city.ilike.%${term}%,contact_phone_1.ilike.%${term}%,comments.ilike.%${term}%,internal_comments.ilike.%${term}%`,
     );
   }
-  return q;
+  return q as Q;
 }
