@@ -10,6 +10,9 @@ import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions
 import { COMMERCIAL_SUBTYPES } from "@/lib/constants";
 import type { FormOptions } from "@/lib/form-options";
 import { SOCIAL_FILTERS } from "@/lib/social-filters";
+import type { SearchFilterValues } from "@/lib/property-search-filters";
+
+export type { SearchFilterValues };
 
 const inputClass =
   "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-normal";
@@ -17,39 +20,6 @@ const inputClass =
 /** Slider scale only; typed min/max can exceed this. */
 const PRICE_CEILING = 200_000_000;
 const PRICE_STEP = 1_000_000;
-
-export type SearchFilterValues = {
-  q: string;
-  status: string;
-  opportunity_type: string;
-  property_type: string;
-  property_subtype: string;
-  complex: string;
-  added_by: string;
-  contact: string;
-  contact_type: string;
-  phone: string;
-  city: string;
-  furnished: string;
-  currency: string;
-  view: string;
-  bedrooms_min: string;
-  bedrooms_max: string;
-  bathrooms_min: string;
-  bathrooms_max: string;
-  land_min: string;
-  land_max: string;
-  floor_min: string;
-  floor_max: string;
-  price_min: string;
-  price_max: string;
-  budget_min: string;
-  budget_max: string;
-  parking_min: string;
-  do_not_publish: string;
-  social: string;
-  advanced: string;
-};
 
 type Props = {
   options: FormOptions;
@@ -189,7 +159,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             <input
               name="q"
               defaultValue={filters.q}
-              placeholder="Ref, contact, address, city…"
+              placeholder="Ref, Contact, Address, City…"
               className={`${inputClass} mt-1`}
             />
           </label>
@@ -201,7 +171,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               data-default-value="Active"
               className={`${inputClass} mt-1`}
             >
-              <option value="">All statuses</option>
+              <option value="">All Statuses</option>
               {options.statuses.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -216,7 +186,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               defaultValue={filters.property_type}
               className={`${inputClass} mt-1`}
             >
-              <option value="">All types</option>
+              <option value="">All Types</option>
               {options.propertyTypes.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -232,7 +202,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
                 defaultValue={filters.property_subtype}
                 className={`${inputClass} mt-1`}
               >
-                <option value="">All sub types</option>
+                <option value="">All Sub Types</option>
                 {COMMERCIAL_SUBTYPES.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -246,9 +216,9 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             label="City"
             options={cityOptions}
             defaultValue={filters.city}
-            allLabel="Search Sri Lanka cities"
-            addLabel="Add city"
-            emptyLabel="No cities found"
+            allLabel="Search Sri Lanka Cities"
+            addLabel="Add City"
+            emptyLabel="No Cities Found"
             className="xl:col-span-2"
             placesSuggest
           />
@@ -340,25 +310,25 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               label="Apartment Complex"
               options={complexOptions}
               defaultValue={filters.complex}
-              allLabel="All complexes"
-              addLabel="Add complex"
-              emptyLabel="No complexes found"
+              allLabel="All Complexes"
+              addLabel="Add Complex"
+              emptyLabel="No Complexes Found"
             />
             <MultiSelectFilter
               name="added_by"
               label="User"
               options={creatorOptions}
               defaultValue={filters.added_by}
-              allLabel="All users"
-              addLabel="Add user"
-              emptyLabel="No users found"
+              allLabel="All Users"
+              addLabel="Add User"
+              emptyLabel="No Users Found"
             />
             <label className="text-sm font-semibold">
               Name of Contact
               <input
                 name="contact"
                 defaultValue={filters.contact}
-                placeholder="Owner or contact name"
+                placeholder="Owner or Contact Name"
                 className={`${inputClass} mt-1`}
               />
             </label>
@@ -367,7 +337,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               <input
                 name="phone"
                 defaultValue={filters.phone}
-                placeholder="Contact phone number"
+                placeholder="Contact Phone Number"
                 inputMode="tel"
                 className={`${inputClass} mt-1`}
               />

@@ -449,7 +449,7 @@ function PropertyFormInner({
             </div>
             <Field label="Opportunity" required>
               <select required {...bind("opportunity_type")} className={inputBase}>
-                <option value="">Select opportunity</option>
+                <option value="">Select Opportunity</option>
                 {options.opportunityTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -465,7 +465,7 @@ function PropertyFormInner({
                 onChange={(e) => onPropertyTypeChange(e.target.value)}
                 className={inputBase}
               >
-                <option value="">Select type</option>
+                <option value="">Select Type</option>
                 {options.propertyTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -476,7 +476,7 @@ function PropertyFormInner({
             {isCommercial ? (
               <Field label="Property Sub-type">
                 <select {...bind("property_subtype")} className={inputBase}>
-                  <option value="">Select sub-type</option>
+                  <option value="">Select Sub-Type</option>
                   {values.property_subtype &&
                   !(COMMERCIAL_SUBTYPES as readonly string[]).includes(
                     values.property_subtype,
@@ -498,7 +498,7 @@ function PropertyFormInner({
             {furnishable || !propertyType ? (
               <Field label="Furnished">
                 <select {...bind("furnished")} className={inputBase}>
-                  <option value="">Select furnished status</option>
+                  <option value="">Select Furnished Status</option>
                   {options.furnished.map((t) => (
                     <option key={t} value={t}>
                       {t}
@@ -531,7 +531,7 @@ function PropertyFormInner({
               <input
                 {...bind("address")}
                 className={inputBase}
-                placeholder="Street, area"
+                placeholder="Street, Area"
               />
             </Field>
             <LocationLinkField
@@ -546,7 +546,7 @@ function PropertyFormInner({
           <div className={grid3}>
             <Field label="Contact Type" required>
               <select required {...bind("contact_type")} className={inputBase}>
-                <option value="">Select type</option>
+                <option value="">Select Type</option>
                 {options.contactTypes.map((t) => (
                   <option key={t} value={t}>
                     {t}
@@ -597,7 +597,7 @@ function PropertyFormInner({
                 <input
                   {...bind("agent_ref_no")}
                   maxLength={50}
-                  placeholder="Partner's own reference (optional)"
+                  placeholder="Partner's Own Reference (Optional)"
                   className={inputBase}
                 />
               </Field>
@@ -650,7 +650,7 @@ function PropertyFormInner({
                 <input
                   {...bind("suitable_for")}
                   className={inputBase}
-                  placeholder="e.g. Residential, Commercial"
+                  placeholder="E.g. Residential, Commercial"
                 />
               </Field>
             </div>
@@ -664,7 +664,7 @@ function PropertyFormInner({
                   value={values.apartment_complex_id ?? ""}
                   onChange={(id) => setField("apartment_complex_id", id)}
                   options={complexes.map((c) => ({ value: c.id, label: c.name }))}
-                  placeholder="Select complex"
+                  placeholder="Select Complex"
                   emptyLabel="No complexes found"
                   className={inputBase}
                 />
@@ -688,7 +688,7 @@ function PropertyFormInner({
                 <input
                   {...bind("view")}
                   className={inputBase}
-                  placeholder="e.g. Sea, City"
+                  placeholder="E.g. Sea, City"
                 />
               </Field>
             </div>
@@ -700,7 +700,7 @@ function PropertyFormInner({
                 <input
                   {...bind("suitable_for")}
                   className={inputBase}
-                  placeholder="e.g. Office, Retail, Warehouse"
+                  placeholder="E.g. Office, Retail, Warehouse"
                 />
               </Field>
               <Field label="Land Size">
@@ -840,7 +840,7 @@ function PropertyFormInner({
                 <input
                   {...bind("amenities")}
                   className={inputBase}
-                  placeholder="Any extras not listed above"
+                  placeholder="Any Extras Not Listed Above"
                 />
               </Field>
             </div>
@@ -869,7 +869,7 @@ function PropertyFormInner({
                   {...bind("comments")}
                   rows={8}
                   className={`${inputBase} resize-y`}
-                  placeholder="Access, viewing times, special terms…"
+                  placeholder="Access, Viewing Times, Special Terms…"
                 />
               </Field>
               <Field
@@ -880,7 +880,7 @@ function PropertyFormInner({
                   {...bind("internal_comments")}
                   rows={2}
                   className={`${inputBase} resize-y`}
-                  placeholder="Owner notes, negotiation, follow-ups…"
+                  placeholder="Owner Notes, Negotiation, Follow-Ups…"
                 />
               </Field>
             </div>
@@ -1086,7 +1086,7 @@ function LocationLinkField({
           autoComplete="off"
           spellCheck={false}
           value={value}
-          placeholder="Paste Google Maps link"
+          placeholder="Paste Google Maps Link"
           aria-invalid={Boolean(error)}
           ref={(el) => el?.setCustomValidity(error ?? "")}
           onChange={(e) => onChange(e.target.value)}

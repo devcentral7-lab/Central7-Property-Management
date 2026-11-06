@@ -125,7 +125,7 @@ export function CitySelect({
           aria-controls={`${id}-list`}
           aria-activedescendant={open && active >= 0 ? `${id}-${active}` : undefined}
           autoComplete="off"
-          placeholder="Search Sri Lanka cities"
+          placeholder="Search Sri Lanka Cities"
           value={query ?? cityValue}
           className={`${className} pr-10`}
           onFocus={() => setOpen(true)}
