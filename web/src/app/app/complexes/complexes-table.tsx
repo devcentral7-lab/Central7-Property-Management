@@ -11,6 +11,7 @@ import {
   type ComplexListing,
 } from "@/app/app/complexes/actions";
 import { PropertyLink } from "@/app/app/properties/property-modal";
+import { CitySelect } from "@/components/city-select";
 import { ClickableRow } from "@/components/clickable-row";
 import { Pager } from "@/components/pager";
 import { PopupDialog } from "@/components/popup-dialog";
@@ -35,6 +36,12 @@ type Filter = "all" | "used" | "unused" | "incomplete";
 const dangerButtonClass =
   "inline-flex items-center justify-center rounded-full bg-[var(--danger)] px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-60";
 
+const complexLabelClass = "block text-sm font-semibold";
+const complexFieldClass = `${fieldClass} font-normal`;
+
+const AVAILABILITY = ["Available", "Not Available"] as const;
+const YES_NO = ["Yes", "No"] as const;
+
 function isIncomplete(c: ComplexListItem) {
   return !c.location || !c.amenities.length;
 }
@@ -43,45 +50,222 @@ function listingsLabel(n: number) {
   return `${n.toLocaleString()} listing${n === 1 ? "" : "s"}`;
 }
 
-function ComplexFields({ values, locations }: { values?: ComplexListItem; locations: string[] }) {
+function buildingAge(builtYear: string | number | null | undefined): string {
+  const year = Number(builtYear);
+  if (!Number.isInteger(year) || year < 1900) return "";
+  const age = new Date().getFullYear() - year;
+  if (age < 0) return "Not yet built";
+  return age === 1 ? "1 year" : `${age} years`;
+}
+
+function SelectOptions({
+  options,
+  blank = "—",
+}: {
+  options: readonly string[];
+  blank?: string;
+}) {
   return (
     <>
-      <label className={`${labelClass} sm:col-span-2`}>
+      <option value="">{blank}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </>
+  );
+}
+
+function ComplexFields({ values }: { values?: ComplexListItem }) {
+  const [builtYear, setBuiltYear] = useState(values?.built_year != null ? String(values.built_year) : "");
+  const [maintenanceType, setMaintenanceType] = useState(values?.maintenance_type ?? "");
+  const age = buildingAge(builtYear);
+
+  return (
+    <>
+      <label className={`${complexLabelClass} sm:col-span-2`}>
         Name <span className="text-[var(--brand)]">*</span>
-        <input name="name" required autoComplete="off" defaultValue={values?.name ?? ""} className={fieldClass} placeholder="e.g. On320 Residencies" />
+        <input name="name" required autoComplete="off" defaultValue={values?.name ?? ""} className={complexFieldClass} placeholder="e.g. On320 Residencies" />
       </label>
-      <label className={labelClass}>
-        Location
-        <input name="location" list="complex-locations" autoComplete="off" defaultValue={values?.location ?? ""} className={fieldClass} placeholder="e.g. Colombo-02" />
-        <datalist id="complex-locations">
-          {locations.map((l) => (
-            <option key={l} value={l} />
-          ))}
-        </datalist>
-      </label>
-      <label className={labelClass}>
+      <div className="min-w-0 [&_label]:!mt-0 [&_.relative]:!mt-1">
+        <CitySelect
+          name="location"
+          defaultValue={values?.location ?? ""}
+          className={complexFieldClass.replace(/^mt-1\s+/, "")}
+          required={false}
+        />
+      </div>
+      <label className={complexLabelClass}>
         Developer
-        <input name="developer" autoComplete="off" defaultValue={values?.developer ?? ""} className={fieldClass} />
+        <input name="developer" autoComplete="off" defaultValue={values?.developer ?? ""} className={complexFieldClass} />
       </label>
-      <label className={`${labelClass} sm:col-span-2`}>
+      <label className={`${complexLabelClass} sm:col-span-2`}>
         Address
-        <input name="address" autoComplete="off" defaultValue={values?.address ?? ""} className={fieldClass} />
+        <input name="address" autoComplete="off" defaultValue={values?.address ?? ""} className={complexFieldClass} />
       </label>
-      <label className={labelClass}>
-        Built year
-        <input name="built_year" inputMode="numeric" defaultValue={values?.built_year ?? ""} className={fieldClass} placeholder="e.g. 2014" />
+      <label className={complexLabelClass}>
+        Built Year
+        <input
+          name="built_year"
+          inputMode="numeric"
+          value={builtYear}
+          onChange={(e) => setBuiltYear(e.target.value)}
+          className={complexFieldClass}
+          placeholder="e.g. 2014"
+        />
       </label>
-      <label className={labelClass}>
-        Apartments per floor
-        <input name="apartments_per_floor" inputMode="numeric" defaultValue={values?.apartments_per_floor ?? ""} className={fieldClass} />
+      <label className={complexLabelClass}>
+        Age of the Building
+        <input readOnly value={age} className={`${complexFieldClass} bg-[var(--bg)] text-[var(--muted)]`} placeholder="Calculated from built year" />
       </label>
-      <label className={`${labelClass} sm:col-span-2`}>
+      <label className={complexLabelClass}>
+        Apartments Per Floor
+        <input name="apartments_per_floor" inputMode="numeric" defaultValue={values?.apartments_per_floor ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        No of Floors
+        <input name="number_of_floors" inputMode="numeric" defaultValue={values?.number_of_floors ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        COC
+        <select name="coc" defaultValue={values?.coc ?? ""} className={complexFieldClass}>
+          <SelectOptions options={YES_NO} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Deed
+        <select name="deed" defaultValue={values?.deed ?? ""} className={complexFieldClass}>
+          <SelectOptions options={YES_NO} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Lifts
+        <select name="lifts" defaultValue={values?.lifts != null ? String(values.lifts) : ""} className={complexFieldClass}>
+          <option value="">—</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Service Lift
+        <select name="service_lift" defaultValue={values?.service_lift ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        How Many Towers / Wings
+        <input name="towers_wings" inputMode="numeric" defaultValue={values?.towers_wings ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Name of the Tower / Wing
+        <input name="tower_wing_name" autoComplete="off" defaultValue={values?.tower_wing_name ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        How Many Swimming Pools
+        <input name="swimming_pools_count" inputMode="numeric" defaultValue={values?.swimming_pools_count ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Swimming Pool Floor
+        <input name="swimming_pools_floor" autoComplete="off" defaultValue={values?.swimming_pools_floor ?? ""} className={complexFieldClass} placeholder="e.g. Ground / 3" />
+      </label>
+      <label className={complexLabelClass}>
+        Gym Floor
+        <input name="gym_floor" autoComplete="off" defaultValue={values?.gym_floor ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Generator
+        <select name="generator" defaultValue={values?.generator ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Guard Room
+        <select name="guard_room" defaultValue={values?.guard_room ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Common Hall
+        <select name="common_hall" defaultValue={values?.common_hall ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Drivers Washroom
+        <select name="drivers_washroom" defaultValue={values?.drivers_washroom ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Maids Washroom
+        <select name="maids_washroom" defaultValue={values?.maids_washroom ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Contact Number 1 (Management / Admin)
+        <input name="contact_management" inputMode="tel" autoComplete="off" defaultValue={values?.contact_management ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Contact Number 2 (Security)
+        <input name="contact_security" inputMode="tel" autoComplete="off" defaultValue={values?.contact_security ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Parking
+        <select name="parking_type" defaultValue={values?.parking_type ?? ""} className={complexFieldClass}>
+          <SelectOptions options={["Dedicated parking", "First come first serve"]} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Parking Floors
+        <input name="parking_floors" autoComplete="off" defaultValue={values?.parking_floors ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Parking Lift
+        <select name="parking_lift" defaultValue={values?.parking_lift ?? ""} className={complexFieldClass}>
+          <SelectOptions options={AVAILABILITY} />
+        </select>
+      </label>
+      <label className={complexLabelClass}>
+        Maintenance Charges
+        <input
+          name="maintenance_charges"
+          autoComplete="off"
+          defaultValue={values?.maintenance_charges ?? ""}
+          className={complexFieldClass}
+          placeholder="Monthly or per sq.ft price"
+        />
+      </label>
+      <label className={complexLabelClass}>
+        Maintenance
+        <select
+          name="maintenance_type"
+          value={maintenanceType}
+          onChange={(e) => setMaintenanceType(e.target.value)}
+          className={complexFieldClass}
+        >
+          <SelectOptions options={["Outsourced", "Committee"]} />
+        </select>
+      </label>
+      {maintenanceType === "Outsourced" ? (
+        <label className={`${complexLabelClass} sm:col-span-2`}>
+          Maintenance Company
+          <input name="maintenance_company" autoComplete="off" defaultValue={values?.maintenance_company ?? ""} className={complexFieldClass} />
+        </label>
+      ) : null}
+      <label className={`${complexLabelClass} sm:col-span-2`}>
+        Google Pin
+        <input name="google_pin" autoComplete="off" defaultValue={values?.google_pin ?? ""} className={complexFieldClass} placeholder="Google Maps link" />
+      </label>
+      <label className={`${complexLabelClass} sm:col-span-2`}>
         Amenities
-        <textarea name="amenities" rows={4} defaultValue={values?.amenities.join("\n") ?? ""} className={fieldClass} placeholder="One per line, e.g. Swimming Pool" />
+        <textarea name="amenities" rows={4} defaultValue={values?.amenities.join("\n") ?? ""} className={complexFieldClass} placeholder="One per line, e.g. Swimming Pool" />
       </label>
-      <label className={`${labelClass} sm:col-span-2`}>
+      <label className={`${complexLabelClass} sm:col-span-2`}>
         Notes
-        <textarea name="notes" rows={2} defaultValue={values?.notes ?? ""} className={fieldClass} />
+        <textarea name="notes" rows={2} defaultValue={values?.notes ?? ""} className={complexFieldClass} />
       </label>
     </>
   );
@@ -100,7 +284,7 @@ function FormButtons({ pending, onCancel, label, pendingLabel }: { pending: bool
   );
 }
 
-export function AddComplexButton({ locations }: { locations: string[] }) {
+export function AddComplexButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -134,9 +318,9 @@ export function AddComplexButton({ locations }: { locations: string[] }) {
         <Icon name="plus" className="h-4 w-4" />
         Add complex
       </button>
-      <PopupDialog open={open} onClose={() => setOpen(false)} title="Add Apartment Complex" busy={pending} size="lg">
+      <PopupDialog open={open} onClose={() => setOpen(false)} title="Add Apartment Complex" busy={pending} size="xl">
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
-          <ComplexFields locations={locations} />
+          <ComplexFields />
           {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p> : null}
           <FormButtons pending={pending} onCancel={() => setOpen(false)} label="Add complex" pendingLabel="Adding…" />
         </form>
@@ -145,7 +329,7 @@ export function AddComplexButton({ locations }: { locations: string[] }) {
   );
 }
 
-export function ComplexesTable({ rows, locations, canManage = false }: { rows: ComplexListItem[]; locations: string[]; canManage?: boolean }) {
+export function ComplexesTable({ rows, canManage = false }: { rows: ComplexListItem[]; canManage?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
@@ -267,7 +451,7 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
             <h2 className="font-display text-lg font-semibold">Complex Directory</h2>
             <p className="text-xs text-[var(--muted)]">Buildings staff can pick when adding an apartment listing.</p>
           </div>
-          <SearchBox value={query} onChange={setQuery} placeholder="Search name, location or address" />
+          <SearchBox value={query} onChange={setQuery} placeholder="Search name, city or address" />
         </div>
 
         <div className="tab-scroll flex gap-2 border-b border-[var(--line)] px-4 py-3 sm:px-5">
@@ -285,7 +469,7 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
           <thead className="bg-[var(--bg)]/60 text-xs uppercase tracking-wide text-[var(--muted)]">
             <tr>
               <th className="px-5 py-3 font-semibold">Complex</th>
-              <th className="px-4 py-3 font-semibold">Location</th>
+              <th className="px-4 py-3 font-semibold">City</th>
               <th className="px-4 py-3 font-semibold">Built</th>
               <th className="px-4 py-3 font-semibold">Amenities</th>
               <th className="px-4 py-3 font-semibold">Listings</th>
@@ -318,7 +502,7 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{c.name}</p>
                   <p className="truncate text-xs text-[var(--muted)]">
-                    {[c.location, c.built_year ? `Built ${c.built_year}` : null].filter(Boolean).join(" · ") || "No location"}
+                    {[c.location, c.built_year ? `Built ${c.built_year}` : null].filter(Boolean).join(" · ") || "No city"}
                   </p>
                 </div>
                 {actions(c)}
@@ -352,25 +536,63 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
         onClose={() => setViewing(null)}
         title={viewing?.name ?? ""}
         subtitle={viewing ? `Added ${formatJoined(viewing.created_at)}${viewing.added_by ? ` by ${viewing.added_by}` : ""}` : undefined}
-        size="lg"
+        size="xl"
       >
         {viewing ? (
           <div className="space-y-5">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
               {(
                 [
-                  ["Location", viewing.location],
-                  ["Built year", viewing.built_year],
-                  ["Apartments per floor", viewing.apartments_per_floor],
+                  ["City", viewing.location],
                   ["Developer", viewing.developer],
                   ["Address", viewing.address],
+                  ["Built Year", viewing.built_year],
+                  ["Age of the Building", buildingAge(viewing.built_year) || null],
+                  ["Apartments Per Floor", viewing.apartments_per_floor],
+                  ["No of Floors", viewing.number_of_floors],
+                  ["COC", viewing.coc],
+                  ["Deed", viewing.deed],
+                  ["Lifts", viewing.lifts],
+                  ["Service Lift", viewing.service_lift],
+                  ["Towers / Wings", viewing.towers_wings],
+                  ["Tower / Wing Name", viewing.tower_wing_name],
+                  ["Swimming Pools", viewing.swimming_pools_count],
+                  ["Swimming Pool Floor", viewing.swimming_pools_floor],
+                  ["Gym Floor", viewing.gym_floor],
+                  ["Generator", viewing.generator],
+                  ["Guard Room", viewing.guard_room],
+                  ["Common Hall", viewing.common_hall],
+                  ["Drivers Washroom", viewing.drivers_washroom],
+                  ["Maids Washroom", viewing.maids_washroom],
+                  ["Contact (Management / Admin)", viewing.contact_management],
+                  ["Contact (Security)", viewing.contact_security],
+                  ["Parking", viewing.parking_type],
+                  ["Parking Floors", viewing.parking_floors],
+                  ["Parking Lift", viewing.parking_lift],
+                  ["Maintenance Charges", viewing.maintenance_charges],
+                  ["Maintenance", viewing.maintenance_type],
+                  ["Maintenance Company", viewing.maintenance_company],
+                  ["Google Pin", viewing.google_pin],
                 ] as [string, string | number | null][]
-              ).map(([label, value]) => (
-                <div key={label} className={`min-w-0 ${label === "Address" ? "col-span-2" : ""}`}>
-                  <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">{label}</dt>
-                  <dd className="font-medium">{value ?? "—"}</dd>
-                </div>
-              ))}
+              )
+                .filter(([, value]) => value != null && value !== "")
+                .map(([label, value]) => (
+                  <div
+                    key={label}
+                    className={`min-w-0 ${label === "Address" || label === "Google Pin" || label.startsWith("Contact") ? "col-span-2 sm:col-span-3" : ""}`}
+                  >
+                    <dt className="text-xs uppercase tracking-wide text-[var(--muted)]">{label}</dt>
+                    <dd className="font-medium break-words">
+                      {label === "Google Pin" && typeof value === "string" && /^https?:\/\//i.test(value) ? (
+                        <a href={value} target="_blank" rel="noopener noreferrer" className="text-[var(--brand-deep)] hover:underline">
+                          {value}
+                        </a>
+                      ) : (
+                        (value ?? "—")
+                      )}
+                    </dd>
+                  </div>
+                ))}
             </dl>
 
             <div>
@@ -438,10 +660,10 @@ export function ComplexesTable({ rows, locations, canManage = false }: { rows: C
         ) : null}
       </PopupDialog>
 
-      <PopupDialog open={!!editing} onClose={() => setEditing(null)} title={editing ? `Edit ${editing.name}` : ""} busy={pending} size="lg">
+      <PopupDialog open={!!editing} onClose={() => setEditing(null)} title={editing ? `Edit ${editing.name}` : ""} busy={pending} size="xl">
         {editing ? (
           <form key={editing.id} onSubmit={(e) => onSave(e, editing.id)} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
-            <ComplexFields values={editing} locations={locations} />
+            <ComplexFields values={editing} />
             {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p> : null}
             <FormButtons pending={pending} onCancel={() => setEditing(null)} label="Save changes" pendingLabel="Saving…" />
           </form>

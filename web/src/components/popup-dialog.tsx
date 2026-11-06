@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 const SIZES = {
   md: "sm:max-w-md",
   lg: "sm:max-w-2xl",
+  xl: "sm:max-w-4xl",
 } as const;
 
 /** Centred dialog (bottom sheet on mobile) that can stack above the property modal. */

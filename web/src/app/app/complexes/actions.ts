@@ -16,6 +16,30 @@ export type ComplexListItem = {
   apartments_per_floor: number | null;
   amenities: string[];
   notes: string | null;
+  coc: string | null;
+  deed: string | null;
+  lifts: number | null;
+  towers_wings: number | null;
+  tower_wing_name: string | null;
+  service_lift: string | null;
+  swimming_pools_count: number | null;
+  swimming_pools_floor: string | null;
+  gym_floor: string | null;
+  generator: string | null;
+  guard_room: string | null;
+  common_hall: string | null;
+  drivers_washroom: string | null;
+  maids_washroom: string | null;
+  contact_management: string | null;
+  contact_security: string | null;
+  parking_type: string | null;
+  parking_floors: string | null;
+  parking_lift: string | null;
+  number_of_floors: number | null;
+  maintenance_charges: string | null;
+  maintenance_type: string | null;
+  maintenance_company: string | null;
+  google_pin: string | null;
   added_by: string | null;
   created_at: string;
   listing_count: number;
@@ -33,6 +57,44 @@ export type ComplexListing = {
 type Result = { ok: true } | { ok: false; error: string };
 
 const PAGE = 1000;
+
+const COMPLEX_SELECT = [
+  "id",
+  "name",
+  "location",
+  "address",
+  "built_year",
+  "developer",
+  "apartments_per_floor",
+  "amenities",
+  "notes",
+  "coc",
+  "deed",
+  "lifts",
+  "towers_wings",
+  "tower_wing_name",
+  "service_lift",
+  "swimming_pools_count",
+  "swimming_pools_floor",
+  "gym_floor",
+  "generator",
+  "guard_room",
+  "common_hall",
+  "drivers_washroom",
+  "maids_washroom",
+  "contact_management",
+  "contact_security",
+  "parking_type",
+  "parking_floors",
+  "parking_lift",
+  "number_of_floors",
+  "maintenance_charges",
+  "maintenance_type",
+  "maintenance_company",
+  "google_pin",
+  "added_by",
+  "created_at",
+].join(", ");
 
 function str(v: FormDataEntryValue | null): string {
   return String(v ?? "").trim().replace(/\s+/g, " ");
@@ -58,6 +120,7 @@ function parseFields(formData: FormData) {
         .filter(Boolean),
     ),
   ];
+  const maintenanceType = str(formData.get("maintenance_type")) || null;
   return {
     name,
     location: str(formData.get("location")) || null,
@@ -67,6 +130,31 @@ function parseFields(formData: FormData) {
     apartments_per_floor: intOrNull(str(formData.get("apartments_per_floor")), "Apartments per floor", 1, 500),
     amenities,
     notes: String(formData.get("notes") ?? "").trim() || null,
+    coc: str(formData.get("coc")) || null,
+    deed: str(formData.get("deed")) || null,
+    lifts: intOrNull(str(formData.get("lifts")), "Lifts", 1, 3),
+    towers_wings: intOrNull(str(formData.get("towers_wings")), "Towers / Wings", 1, 100),
+    tower_wing_name: str(formData.get("tower_wing_name")) || null,
+    service_lift: str(formData.get("service_lift")) || null,
+    swimming_pools_count: intOrNull(str(formData.get("swimming_pools_count")), "Swimming pools", 0, 50),
+    swimming_pools_floor: str(formData.get("swimming_pools_floor")) || null,
+    gym_floor: str(formData.get("gym_floor")) || null,
+    generator: str(formData.get("generator")) || null,
+    guard_room: str(formData.get("guard_room")) || null,
+    common_hall: str(formData.get("common_hall")) || null,
+    drivers_washroom: str(formData.get("drivers_washroom")) || null,
+    maids_washroom: str(formData.get("maids_washroom")) || null,
+    contact_management: str(formData.get("contact_management")) || null,
+    contact_security: str(formData.get("contact_security")) || null,
+    parking_type: str(formData.get("parking_type")) || null,
+    parking_floors: str(formData.get("parking_floors")) || null,
+    parking_lift: str(formData.get("parking_lift")) || null,
+    number_of_floors: intOrNull(str(formData.get("number_of_floors")), "No of floors", 1, 200),
+    maintenance_charges: str(formData.get("maintenance_charges")) || null,
+    maintenance_type: maintenanceType,
+    maintenance_company:
+      maintenanceType === "Outsourced" ? str(formData.get("maintenance_company")) || null : null,
+    google_pin: str(formData.get("google_pin")) || null,
   };
 }
 
@@ -78,12 +166,7 @@ export async function listComplexes(): Promise<ComplexListItem[]> {
   await requireProfile();
   const admin = await createClient();
   const [complexes, links] = await Promise.all([
-    admin
-      .from("apartment_complexes")
-      .select(
-        "id, name, location, address, built_year, developer, apartments_per_floor, amenities, notes, added_by, created_at",
-      )
-      .order("name"),
+    admin.from("apartment_complexes").select(COMPLEX_SELECT).order("name"),
     (async () => {
       const ids: string[] = [];
       for (let from = 0; ; from += PAGE) {

@@ -15,7 +15,7 @@ const RANGE_PAIRS = [
 
 /** Filters shown above "Show advanced filters"; quick search fills only these. */
 const QUICK_SEARCH_KEYS = [
-  "status", "property_type", "city", "opportunity_type", "furnished", "currency", "price_min", "price_max",
+  "status", "property_type", "property_subtype", "city", "opportunity_type", "contact_type", "furnished", "currency", "price_min", "price_max",
 ] as const;
 
 export function quickSearchFilters(filters: Partial<SearchFilterValues>): Partial<SearchFilterValues> {
@@ -29,8 +29,11 @@ export function quickSearchFilters(filters: Partial<SearchFilterValues>): Partia
 /** Map extracted description fields to the same filters used by the results table. */
 export function paragraphFieldsToFilters(fields: Record<string, string>): Partial<SearchFilterValues> {
   const filters: Partial<SearchFilterValues> = {};
-  for (const key of ["property_type", "opportunity_type", "contact_type", "city", "complex", "furnished", "currency", "view", "status"] as const) {
+  for (const key of ["property_type", "property_subtype", "opportunity_type", "contact_type", "city", "complex", "furnished", "currency", "view", "status"] as const) {
     if (fields[key]?.trim()) filters[key] = fields[key].trim();
+  }
+  if (filters.property_subtype && filters.property_type !== "Commercial Property") {
+    filters.property_type = "Commercial Property";
   }
   const numeric = (value: string | undefined) => {
     const text = value?.replace(/,/g, "").trim();
