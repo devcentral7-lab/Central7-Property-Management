@@ -4,6 +4,10 @@ import { requireProfile } from "@/lib/auth";
 import { loadFormOptions, type FormOptions } from "@/lib/form-options";
 import { loadPropertyActivity, type PropertyActivityEvent } from "@/lib/property-activity";
 import { buildPropertyDetails, type PropertyDetailsModel } from "@/lib/property-details";
+import {
+  isSocialOnlyViewer,
+  propertyOnSocialQueue,
+} from "@/lib/social-property-access";
 import { loadSocialMediaStatus } from "@/lib/social-status";
 import { createClient } from "@/lib/supabase/server";
 import type { ComplexOption } from "@/app/app/properties/new/property-form";
@@ -25,6 +29,8 @@ export type PropertyModalData = {
   canEdit: boolean;
   canChangeStatus: boolean;
   canManagePhotos: boolean;
+  /** Social Media Manager: no contact, activity, PDF, or edit tools. */
+  restrictedView: boolean;
   statusChangeOptions: string[];
   lastPlatforms: string[];
   complexes: ComplexOption[];
@@ -55,6 +61,11 @@ export async function getPropertyModalData(
     if (error) return { ok: false, error: error.message };
     if (!property) return { ok: false, error: "Property not found" };
 
+    const socialOnly = isSocialOnlyViewer(profile);
+    if (socialOnly && !(await propertyOnSocialQueue(supabase, refNo))) {
+      return { ok: false, error: "This listing is not on the social media queue." };
+    }
+
     const isOwner =
       property.created_by === profile.id ||
       (!property.created_by &&
@@ -64,7 +75,7 @@ export async function getPropertyModalData(
 
     const [events, { data: complex }, options, social] =
       await Promise.all([
-        loadPropertyActivity(refNo),
+        socialOnly ? Promise.resolve([]) : loadPropertyActivity(refNo),
         property.apartment_complex_id
           ? supabase
               .from("apartment_complexes")
@@ -76,15 +87,17 @@ export async function getPropertyModalData(
         loadSocialMediaStatus(refNo),
       ]);
 
-    const { data: complexes } = await supabase
-      .from("apartment_complexes")
-      .select("id, name")
-      .order("name");
+    const { data: complexes } = socialOnly
+      ? { data: [] as ComplexOption[] }
+      : await supabase.from("apartment_complexes").select("id, name").order("name");
 
     const attrs = (property.type_attributes || {}) as Record<string, unknown>;
     const amenities = (property.amenities || []) as string[];
     const details = {
-      ...buildPropertyDetails(property, { complexName: complex?.name ?? null }),
+      ...buildPropertyDetails(property, {
+        complexName: complex?.name ?? null,
+        hideContact: socialOnly,
+      }),
       social,
     };
 
@@ -98,12 +111,13 @@ export async function getPropertyModalData(
         refNo: property.ref_no,
         headline: `${property.property_type} · ${property.opportunity_type} · ${property.status}`,
         comments: property.comments,
-        internalComments: property.internal_comments,
+        internalComments: socialOnly ? null : property.internal_comments,
         details,
         events,
-        canEdit,
-        canChangeStatus: isAdmin || isOwner,
-        canManagePhotos: isAdmin || isOwner,
+        canEdit: canEdit && !socialOnly,
+        canChangeStatus: !socialOnly && (isAdmin || isOwner),
+        canManagePhotos: !socialOnly && (isAdmin || isOwner),
+        restrictedView: socialOnly,
         statusChangeOptions: options.statusChangeOptions,
         lastPlatforms: events.find((e) => e.requested_platforms.length)?.requested_platforms ?? [],
         complexes: (complexes ?? []) as ComplexOption[],
@@ -112,11 +126,11 @@ export async function getPropertyModalData(
         initialAmenities: knownAmenities,
         initialValues: {
           agent_ref_no: s(attrs.agent_ref_no),
-          contact_type: s(property.contact_type),
-          contact_name: s(property.contact_name),
-          contact_phone_1: s(property.contact_phone_1),
-          contact_phone_2: s(property.contact_phone_2),
-          contact_email: s(property.contact_email),
+          contact_type: socialOnly ? "" : s(property.contact_type),
+          contact_name: socialOnly ? "" : s(property.contact_name),
+          contact_phone_1: socialOnly ? "" : s(property.contact_phone_1),
+          contact_phone_2: socialOnly ? "" : s(property.contact_phone_2),
+          contact_email: socialOnly ? "" : s(property.contact_email),
           opportunity_type:
             s(property.opportunity_type) ||
             options.opportunityTypes[0] ||

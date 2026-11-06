@@ -66,6 +66,7 @@ export default async function SocialQueuePage({
   if (!(await canAccessSocialQueue(profile))) {
     redirect("/app");
   }
+  const hideOwnerContact = profile.role === "Social Media Manager";
 
   const sp = await searchParams;
   const tab =
@@ -246,7 +247,7 @@ export default async function SocialQueuePage({
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-[var(--muted)]">
                   {summary.length ? <span>{summary.join(" · ")}</span> : null}
-                  {property?.contact_name || property?.contact_phone_1 ? (
+                  {!hideOwnerContact && (property?.contact_name || property?.contact_phone_1) ? (
                     <>
                       {summary.length ? <span aria-hidden>·</span> : null}
                       {property?.contact_name ? (

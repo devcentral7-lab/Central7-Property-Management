@@ -1,8 +1,13 @@
 import Link from "next/link";
 import type { SocialDailyRow } from "@/lib/analytics";
 import type { SocialManagerDashboard } from "@/lib/social-dashboard";
+import {
+  ColumnChart,
+  DonutChart,
+  TrendChart,
+} from "@/app/app/dashboard/charts";
 import { PeriodSelect } from "@/app/app/dashboard/period-select";
-import { BRAND } from "@/app/app/dashboard/palette";
+import { BRAND, SERIES, seriesColor } from "@/app/app/dashboard/palette";
 
 function monthName(ym: string) {
   const [y, m] = ym.split("-").map(Number);
@@ -41,6 +46,36 @@ const COLS: { key: keyof SocialDailyRow; label: string }[] = [
   { key: "dataChange", label: "Data change" },
 ];
 
+const ACTION_COLORS: Record<string, string> = {
+  Published: BRAND.active,
+  Republished: BRAND.charcoal,
+  Drop: BRAND.stone,
+  Lost: BRAND.redDark,
+  Hold: BRAND.redSoft,
+  Closed: BRAND.red,
+  "Data change": BRAND.stoneLight,
+};
+
+function ChartCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4 shadow-[0_1px_2px_rgba(28,25,23,0.04)] sm:p-5">
+      <div className="min-w-0">
+        <h2 className="font-display text-lg font-semibold leading-tight">{title}</h2>
+        {subtitle ? <p className="mt-0.5 text-xs text-[var(--muted)]">{subtitle}</p> : null}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
 export function SocialManagerDashboard({
   name,
   data,
@@ -54,6 +89,17 @@ export function SocialManagerDashboard({
   const republished = social.reduce((s, r) => s + r.republished, 0);
   const remainingPublish = last?.remainingPublish ?? 0;
   const remainingRepublish = last?.remainingRepublish ?? 0;
+
+  const queueMix = [
+    { name: "To publish", value: data.queueNow.pendingPublish },
+    { name: "To republish", value: data.queueNow.pendingRepublish },
+    { name: "Other pending", value: data.queueNow.pendingOther },
+    { name: "Done (all time)", value: data.queueNow.doneTotal },
+  ].filter((d) => d.value > 0);
+
+  const actionColors = data.doneByAction.map(
+    (d, i) => ACTION_COLORS[d.name] ?? seriesColor(i),
+  );
 
   return (
     <div className="space-y-6">
@@ -85,10 +131,10 @@ export function SocialManagerDashboard({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {(
           [
-            { label: "Published", value: published, color: BRAND.red },
+            { label: "Published", value: published, color: BRAND.active },
             { label: "Republished", value: republished, color: BRAND.charcoal },
-            { label: "Remaining to publish", value: remainingPublish, color: BRAND.stone },
-            { label: "Remaining to republish", value: remainingRepublish, color: BRAND.stoneLight },
+            { label: "Remaining to publish", value: remainingPublish, color: BRAND.red },
+            { label: "Remaining to republish", value: remainingRepublish, color: BRAND.stone },
           ] as const
         ).map((t) => (
           <div
@@ -106,6 +152,44 @@ export function SocialManagerDashboard({
             </p>
           </div>
         ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Work completed"
+          subtitle={`${data.rangeLabel} · by queue action`}
+        >
+          <DonutChart data={data.doneByAction} colors={actionColors} unit="items" />
+        </ChartCard>
+        <ChartCard
+          title="Queue right now"
+          subtitle="Pending vs completed on the social media queue"
+        >
+          <DonutChart
+            data={queueMix}
+            colors={[BRAND.red, BRAND.charcoal, BRAND.stone, BRAND.active]}
+            unit="items"
+          />
+        </ChartCard>
+        <ChartCard
+          title="Completed over time"
+          subtitle={`${data.rangeLabel} · items marked done`}
+        >
+          <TrendChart data={data.doneTrend} unit={data.socialUnit} />
+        </ChartCard>
+        <ChartCard
+          title="Publish backlog"
+          subtitle={`${data.rangeLabel} · remaining to publish at end of each ${data.socialUnit}`}
+        >
+          <TrendChart data={data.remainingPublishTrend} unit={data.socialUnit} />
+        </ChartCard>
+        <ChartCard title="Actions breakdown" subtitle={`${data.rangeLabel} · totals`}>
+          <ColumnChart
+            data={data.doneByAction}
+            colors={actionColors.length ? actionColors : SERIES}
+            unit="Items"
+          />
+        </ChartCard>
       </div>
 
       <details

@@ -76,7 +76,7 @@ function telHref(phone: string) {
 
 export function buildPropertyDetails(
   p: Row,
-  extras: { complexName?: string | null },
+  extras: { complexName?: string | null; hideContact?: boolean } = {},
 ): PropertyDetailsModel {
   const propertyType = str(p.property_type);
   const opportunity = str(p.opportunity_type);
@@ -179,7 +179,7 @@ export function buildPropertyDetails(
       { id: "property", title: "Property", fields: property },
       { id: "location", title: "Location", fields: location },
       { id: "pricing", title: "Pricing", fields: pricing },
-      { id: "contact", title: "Owner Contact", fields: contact },
+      ...(extras.hideContact ? [] : [{ id: "contact", title: "Owner Contact", fields: contact }]),
       { id: "record", title: "Listing Record", fields: record },
     ] as DetailSection[]
   ).filter((s) => s.fields.length);

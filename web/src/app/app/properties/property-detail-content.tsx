@@ -11,6 +11,10 @@ import { requireProfile } from "@/lib/auth";
 import { loadFormOptions } from "@/lib/form-options";
 import { loadPropertyActivity } from "@/lib/property-activity";
 import { buildPropertyDetails } from "@/lib/property-details";
+import {
+  isSocialOnlyViewer,
+  propertyOnSocialQueue,
+} from "@/lib/social-property-access";
 import { loadSocialMediaStatus } from "@/lib/social-status";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,16 +31,21 @@ export async function loadPropertyDetail(refNoRaw: string) {
 
   if (error || !property) notFound();
 
+  const socialOnly = isSocialOnlyViewer(profile);
+  if (socialOnly && !(await propertyOnSocialQueue(supabase, refNo))) {
+    notFound();
+  }
+
   const isOwner =
     property.created_by === profile.id ||
     (!property.created_by &&
       property.created_by_name === profile.display_name);
   const isAdmin = profile.role === "Admin";
-  const canEdit = isAdmin;
+  const canEdit = isAdmin && !socialOnly;
 
   const [events, { data: complex }, options, social] =
     await Promise.all([
-      loadPropertyActivity(refNo),
+      socialOnly ? Promise.resolve([]) : loadPropertyActivity(refNo),
       property.apartment_complex_id
         ? supabase
             .from("apartment_complexes")
@@ -49,17 +58,23 @@ export async function loadPropertyDetail(refNoRaw: string) {
     ]);
 
   const details = {
-    ...buildPropertyDetails(property, { complexName: complex?.name ?? null }),
+    ...buildPropertyDetails(property, {
+      complexName: complex?.name ?? null,
+      hideContact: socialOnly,
+    }),
     social,
   };
 
   return {
-    property,
+    property: socialOnly
+      ? { ...property, internal_comments: null, contact_name: null, contact_phone_1: null, contact_phone_2: null, contact_email: null, contact_type: null }
+      : property,
     events,
     details,
     options,
     canEdit,
-    canChangeStatus: isAdmin || isOwner,
+    canChangeStatus: !socialOnly && (isAdmin || isOwner),
+    socialOnly,
   };
 }
 
@@ -75,6 +90,7 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
     options,
     canEdit,
     canChangeStatus,
+    socialOnly,
   } = await loadPropertyDetail(refNo);
 
   return (
@@ -92,8 +108,8 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
               }
             />
           ) : null}
-          <ActivityButton refNo={property.ref_no} events={events} />
-          <ExportPdfButton refNo={property.ref_no} />
+          {!socialOnly ? <ActivityButton refNo={property.ref_no} events={events} /> : null}
+          {!socialOnly ? <ExportPdfButton refNo={property.ref_no} /> : null}
           {canEdit ? (
             <Link
               href={`/app/properties/${property.ref_no}/edit`}
@@ -105,7 +121,10 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
         </>
       }
     >
-      <NotesCards comments={property.comments} internalComments={property.internal_comments} />
+      <NotesCards
+        comments={property.comments}
+        internalComments={socialOnly ? null : property.internal_comments}
+      />
     </PropertyDetailsView>
   );
 }
