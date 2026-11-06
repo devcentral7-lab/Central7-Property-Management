@@ -185,10 +185,11 @@ export async function listComplexes(): Promise<ComplexListItem[]> {
   if (complexes.error) throw complexes.error;
   const counts = new Map<string, number>();
   for (const id of links) counts.set(id, (counts.get(id) ?? 0) + 1);
-  return (complexes.data ?? []).map((c) => ({
-    ...(c as Omit<ComplexListItem, "listing_count">),
-    amenities: (c.amenities as string[] | null) ?? [],
-    listing_count: counts.get(c.id as string) ?? 0,
+  const rows = (complexes.data ?? []) as unknown as Omit<ComplexListItem, "listing_count">[];
+  return rows.map((c) => ({
+    ...c,
+    amenities: c.amenities ?? [],
+    listing_count: counts.get(c.id) ?? 0,
   }));
 }
 
