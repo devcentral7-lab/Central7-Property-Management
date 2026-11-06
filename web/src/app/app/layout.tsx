@@ -24,50 +24,63 @@ export default async function AppLayout({
   }
 
   const isAdmin = profile.role === "Admin";
+  const isSocialManager = profile.role === "Social Media Manager";
   const [cookieStore, socialAccess, cities] = await Promise.all([
     cookies(),
-    isAdmin ? true : canAccessSocialQueue(profile),
+    isAdmin || isSocialManager ? true : canAccessSocialQueue(profile),
     loadCities(),
   ]);
   const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
-  const socialOk = isAdmin || socialAccess;
+  const socialOk = isAdmin || isSocialManager || socialAccess;
 
-  const propertyNav: SidebarNavItem[] = isAdmin
-    ? [{ href: "/app/properties", label: "Properties", icon: "folder" }]
+  const propertyNav: SidebarNavItem[] = isSocialManager
+    ? []
+    : isAdmin
+      ? [{ href: "/app/properties", label: "Properties", icon: "folder" }]
+      : [
+          { href: "/app/properties", label: "Search Property", icon: "search" },
+          { href: "/app/add-property", label: "Add Property", icon: "plus" },
+          { href: "/app/my-properties", label: "My Properties", icon: "folder" },
+        ];
+
+  const nav: SidebarNavItem[] = isSocialManager
+    ? [
+        { href: "/app", label: "My Dashboard", icon: "home", match: "exact" },
+        {
+          href: "/app/social-queue",
+          label: "Social Media Queue",
+          icon: "queue",
+        },
+        { href: "/app/account", label: "Profile", icon: "account" },
+      ]
     : [
-        { href: "/app/properties", label: "Search Property", icon: "search" },
-        { href: "/app/add-property", label: "Add Property", icon: "plus" },
-        { href: "/app/my-properties", label: "My Properties", icon: "folder" },
+        { href: "/app", label: "My Dashboard", icon: "home", match: "exact" },
+        ...propertyNav,
+        { href: "/app/complexes", label: "Apartment Complexes", icon: "building" },
+        ...(isAdmin
+          ? ([
+              { href: "/app/cities", label: "Cities", icon: "map" },
+              {
+                href: "/app/user-management",
+                label: "Users",
+                icon: "users",
+                match: "exact",
+              },
+              { href: "/app/activity", label: "Activity Log", icon: "activity" },
+              { href: "/app/finance", label: "Finance", icon: "finance" },
+            ] as SidebarNavItem[])
+          : []),
+        ...(socialOk
+          ? ([
+              {
+                href: "/app/social-queue",
+                label: "Social Media Queue",
+                icon: "queue",
+              },
+            ] as SidebarNavItem[])
+          : []),
+        { href: "/app/account", label: "Profile", icon: "account" },
       ];
-
-  const nav: SidebarNavItem[] = [
-    { href: "/app", label: "My Dashboard", icon: "home", match: "exact" },
-    ...propertyNav,
-    { href: "/app/complexes", label: "Apartment Complexes", icon: "building" },
-    ...(isAdmin
-      ? ([
-          { href: "/app/cities", label: "Cities", icon: "map" },
-          {
-            href: "/app/user-management",
-            label: "Users",
-            icon: "users",
-            match: "exact",
-          },
-          { href: "/app/activity", label: "Activity Log", icon: "activity" },
-          { href: "/app/finance", label: "Finance", icon: "finance" },
-        ] as SidebarNavItem[])
-      : []),
-    ...(socialOk
-      ? ([
-          {
-            href: "/app/social-queue",
-            label: "Social Media Queue",
-            icon: "queue",
-          },
-        ] as SidebarNavItem[])
-      : []),
-    { href: "/app/account", label: "Profile", icon: "account" },
-  ];
 
   return (
     <CitiesProvider cities={cities}>

@@ -41,7 +41,7 @@ type Props = {
   currentAdminId: string;
 };
 
-type Filter = "all" | "Admin" | "User" | "inactive";
+type Filter = "all" | "Admin" | "User" | "Social Media Manager" | "inactive";
 
 export function StaffTable({ rows, currentAdminId }: Props) {
   const router = useRouter();
@@ -58,6 +58,7 @@ export function StaffTable({ rows, currentAdminId }: Props) {
       all: rows.length,
       Admin: rows.filter((u) => u.role === "Admin").length,
       User: rows.filter((u) => u.role === "User").length,
+      "Social Media Manager": rows.filter((u) => u.role === "Social Media Manager").length,
       inactive: rows.filter((u) => !u.active).length,
     }),
     [rows],
@@ -67,7 +68,12 @@ export function StaffTable({ rows, currentAdminId }: Props) {
     const q = query.trim().toLowerCase();
     return rows.filter((u) => {
       if (filter === "inactive" && u.active) return false;
-      if ((filter === "Admin" || filter === "User") && u.role !== filter) return false;
+      if (
+        (filter === "Admin" || filter === "User" || filter === "Social Media Manager") &&
+        u.role !== filter
+      ) {
+        return false;
+      }
       if (!q) return true;
       return [u.display_name, u.email, u.mobile_number]
         .filter(Boolean)
@@ -195,6 +201,8 @@ export function StaffTable({ rows, currentAdminId }: Props) {
         <Icon name="shield" className="h-3.5 w-3.5" />
         Admin
       </Pill>
+    ) : role === "Social Media Manager" ? (
+      <Pill tone="green">Social Media Manager</Pill>
     ) : (
       <Pill>User</Pill>
     );
@@ -216,6 +224,13 @@ export function StaffTable({ rows, currentAdminId }: Props) {
           <FilterChip active={filter === "all"} count={counts.all} onClick={() => setFilter("all")}>All</FilterChip>
           <FilterChip active={filter === "Admin"} count={counts.Admin} onClick={() => setFilter("Admin")}>Admins</FilterChip>
           <FilterChip active={filter === "User"} count={counts.User} onClick={() => setFilter("User")}>Users</FilterChip>
+          <FilterChip
+            active={filter === "Social Media Manager"}
+            count={counts["Social Media Manager"]}
+            onClick={() => setFilter("Social Media Manager")}
+          >
+            Social
+          </FilterChip>
           <FilterChip active={filter === "inactive"} count={counts.inactive} onClick={() => setFilter("inactive")}>Inactive</FilterChip>
         </div>
 
@@ -328,6 +343,7 @@ export function StaffTable({ rows, currentAdminId }: Props) {
               <select name="role" defaultValue={editing.role} className={fieldClass}>
                 <option value="User">User</option>
                 <option value="Admin">Admin</option>
+                <option value="Social Media Manager">Social Media Manager</option>
               </select>
             </label>
             <div className="sm:col-span-2">

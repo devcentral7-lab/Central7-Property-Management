@@ -75,4 +75,24 @@ export const PAGE_SIZE = 25;
 export type OpportunityType = (typeof OPPORTUNITY_TYPES)[number];
 export type PropertyType = (typeof PROPERTY_TYPES)[number];
 export type ListingStatus = (typeof STATUS_LIST)[number];
-export type StaffRole = "Admin" | "User";
+export const STAFF_ROLES = ["Admin", "User", "Social Media Manager"] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
+
+export function parseStaffRole(raw: string): StaffRole {
+  if (raw === "Admin" || raw === "Social Media Manager") return raw;
+  return "User";
+}
+
+export function isSocialMediaManager(role: StaffRole): boolean {
+  return role === "Social Media Manager";
+}
+
+/** Paths a Social Media Manager may open (queue, dashboard, profile, listing view). */
+export function socialManagerPathAllowed(pathname: string): boolean {
+  if (pathname === "/app" || pathname === "/app/") return true;
+  if (pathname.startsWith("/app/social-queue")) return true;
+  if (pathname.startsWith("/app/account")) return true;
+  // Property detail / modal view from the queue (not list, add, or edit).
+  if (/^\/app\/properties\/[^/]+\/?$/.test(pathname)) return true;
+  return false;
+}
