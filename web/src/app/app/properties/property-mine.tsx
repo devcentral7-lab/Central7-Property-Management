@@ -30,7 +30,7 @@ function formatDate(iso: string) {
   });
 }
 
-const inputClass = "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm";
+const inputClass = "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-normal";
 
 type Props = {
   target: string;
@@ -134,7 +134,7 @@ export async function PropertyMinePanel({
             <input
               name="q"
               defaultValue={filters.q}
-              placeholder="Ref, contact, phone, address…"
+              placeholder="Ref, Contact, Phone, Address…"
               autoComplete="off"
               className={`${inputClass} mt-1`}
             />
@@ -142,7 +142,7 @@ export async function PropertyMinePanel({
           <label className="text-sm font-semibold">
             Status
             <select name="status" defaultValue={filters.status} data-default-value="Active" className={`${inputClass} mt-1`}>
-              <option value="">All statuses</option>
+              <option value="">All Statuses</option>
               {options.statuses.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -157,7 +157,7 @@ export async function PropertyMinePanel({
               defaultValue={filters.property_type}
               className={`${inputClass} mt-1`}
             >
-              <option value="">All types</option>
+              <option value="">All Types</option>
               {options.propertyTypes.map((t) => (
                 <option key={t} value={t}>
                   {t}
@@ -206,7 +206,7 @@ export async function PropertyMinePanel({
               defaultValue={filters.currency}
               className={`${inputClass} mt-1`}
             >
-              <option value="">All currencies</option>
+              <option value="">All Currencies</option>
               {options.currencies.map((currency) => (
                 <option key={currency} value={currency}>
                   {currency}
@@ -218,8 +218,11 @@ export async function PropertyMinePanel({
             Beds Min
             <input
               name="bedrooms_min"
-              defaultValue={filters.bedrooms_min}
+              type="number"
+              min={0}
+              step="any"
               inputMode="decimal"
+              defaultValue={filters.bedrooms_min}
               className={`${inputClass} mt-1`}
             />
           </label>

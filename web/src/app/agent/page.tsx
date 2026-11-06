@@ -10,7 +10,7 @@ import { cityLikePattern } from "@/lib/cities";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const inputClass =
-  "w-full rounded-xl border border-[var(--line)] bg-[var(--card)] px-3 py-2 text-sm";
+  "w-full rounded-xl border border-[var(--line)] bg-[var(--card)] px-3 py-2 text-sm font-normal";
 
 const ADVANCED_KEYS = [
   "currency",
@@ -152,7 +152,7 @@ export default async function AgentSearchPage({
               <input
                 name="q"
                 defaultValue={filters.q}
-                placeholder="Ref, city, address…"
+                placeholder="Ref, City, Address…"
                 className={`${inputClass} mt-1`}
               />
             </label>

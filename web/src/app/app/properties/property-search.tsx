@@ -1,14 +1,16 @@
 import { Pager } from "@/components/pager";
-import { splitListParam } from "@/lib/list-param";
-import { cityLikePattern } from "@/lib/cities";
 import { PAGE_SIZE } from "@/lib/constants";
 import { loadFormOptions } from "@/lib/form-options";
+import {
+  appendSearchFilters,
+  applySearchFilters,
+  hasSearchFilters,
+  type SearchFilterValues,
+} from "@/lib/property-search-filters";
 import { createClient } from "@/lib/supabase/server";
 import { bedsBaths, bedsBathsShort } from "@/lib/property-details";
-import {
-  PropertySearchForm,
-  type SearchFilterValues,
-} from "@/app/app/properties/property-search-form";
+import { ExportExcelButton } from "@/app/app/properties/export-excel-button";
+import { PropertySearchForm } from "@/app/app/properties/property-search-form";
 import { StatusBadge } from "@/components/status-badge";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 
@@ -17,25 +19,18 @@ function formatMoney(n: number | null, currency: string) {
   return `${currency} ${Number(n).toLocaleString()}`;
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function complexName(v: unknown): string | null {
   const c = (Array.isArray(v) ? v[0] : v) as { name?: string | null } | null;
   return c?.name ?? null;
 }
 
-function numOrNull(v: string): number | null {
-  if (!v.trim()) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 type Props = {
   filters: SearchFilterValues;
   page: number;
+  isAdmin?: boolean;
 };
 
-export async function PropertySearchPanel({ filters, page }: Props) {
+export async function PropertySearchPanel({ filters, page, isAdmin = false }: Props) {
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
@@ -48,110 +43,18 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   const complexes = (complexData ?? []) as { id: string; name: string }[];
   const creators = (creatorData ?? []) as string[];
 
-  let query = supabase
-    .from("properties")
-    .select(
-      "id, ref_no, created_at, created_by_name, opportunity_type, property_type, city, address, status, currency, price_total, bedrooms, bathrooms, land_size_perch, floor_area_sqft, apartment_complexes(name)",
-      { count: "exact" },
-    )
+  const { data, count, error } = await applySearchFilters(
+    supabase
+      .from("properties")
+      .select(
+        "id, ref_no, created_at, created_by_name, opportunity_type, property_type, city, address, status, currency, price_total, bedrooms, bathrooms, land_size_perch, floor_area_sqft, apartment_complexes(name)",
+        { count: "exact" },
+      ),
+    filters,
+  )
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  if (filters.status) query = query.eq("status", filters.status);
-  if (filters.property_type) {
-    query = query.eq("property_type", filters.property_type);
-  }
-  if (
-    filters.property_type === "Commercial Property" &&
-    filters.property_subtype
-  ) {
-    query = query.eq("property_subtype", filters.property_subtype);
-  }
-  const complexIds = splitListParam(filters.complex);
-  if (complexIds.length) {
-    const valid = complexIds.filter((id) => UUID_RE.test(id));
-    query = valid.length
-      ? query.in("apartment_complex_id", valid)
-      : query.is("id", null);
-  }
-  const creatorNames = splitListParam(filters.added_by);
-  if (creatorNames.length) query = query.in("created_by_name", creatorNames);
-  if (filters.contact) {
-    query = query.ilike("contact_name", `%${filters.contact.replace(/[%_]/g, " ")}%`);
-  }
-  if (filters.phone) {
-    const phone = filters.phone.replace(/[%_,]/g, " ");
-    query = query.or(
-      `contact_phone_1.ilike.%${phone}%,contact_phone_2.ilike.%${phone}%`,
-    );
-  }
-  if (filters.opportunity_type) {
-    query = query.eq("opportunity_type", filters.opportunity_type);
-  }
-  if (filters.contact_type) {
-    query = query.eq("contact_type", filters.contact_type);
-  }
-  // Most older listings never recorded furnishing, so blanks count as a possible match.
-  if (filters.furnished) {
-    query = query.or(`furnished.eq."${filters.furnished.replace(/["\\]/g, "")}",furnished.is.null`);
-  }
-  if (filters.currency) query = query.eq("currency", filters.currency);
-  const cityPatterns = splitListParam(filters.city).map(cityLikePattern).filter(Boolean);
-  if (cityPatterns.length === 1) {
-    query = query.ilike("city", cityPatterns[0]);
-  } else if (cityPatterns.length > 1) {
-    query = query.or(cityPatterns.map((p) => `city.ilike."${p}"`).join(","));
-  }
-  if (filters.view) query = query.ilike("view", `%${filters.view}%`);
-  if (filters.do_not_publish === "true") {
-    query = query.eq("do_not_publish", true);
-  } else if (filters.do_not_publish === "false") {
-    query = query.eq("do_not_publish", false);
-  }
-  if (filters.social === "pending") {
-    query = query.not("social_pending", "is", null);
-  } else if (filters.social === "awaiting_approval" || filters.social === "approved") {
-    query = query.eq("social_pending", filters.social);
-  } else if (["published", "taken_down", "never"].includes(filters.social)) {
-    query = query.eq("social_state", filters.social);
-  }
-
-  const bedroomsMin = numOrNull(filters.bedrooms_min);
-  const bedroomsMax = numOrNull(filters.bedrooms_max);
-  const bathroomsMin = numOrNull(filters.bathrooms_min);
-  const bathroomsMax = numOrNull(filters.bathrooms_max);
-  const landMin = numOrNull(filters.land_min);
-  const landMax = numOrNull(filters.land_max);
-  const floorMin = numOrNull(filters.floor_min);
-  const floorMax = numOrNull(filters.floor_max);
-  const priceMin = numOrNull(filters.price_min);
-  const priceMax = numOrNull(filters.price_max);
-  const budgetMin = numOrNull(filters.budget_min);
-  const budgetMax = numOrNull(filters.budget_max);
-  const parkingMin = numOrNull(filters.parking_min);
-
-  if (bedroomsMin != null) query = query.gte("bedrooms", bedroomsMin);
-  if (bedroomsMax != null) query = query.lte("bedrooms", bedroomsMax);
-  if (bathroomsMin != null) query = query.gte("bathrooms", bathroomsMin);
-  if (bathroomsMax != null) query = query.lte("bathrooms", bathroomsMax);
-  if (landMin != null) query = query.gte("land_size_perch", landMin);
-  if (landMax != null) query = query.lte("land_size_perch", landMax);
-  if (floorMin != null) query = query.gte("floor_area_sqft", floorMin);
-  if (floorMax != null) query = query.lte("floor_area_sqft", floorMax);
-  if (priceMin != null) query = query.gte("price_total", priceMin);
-  if (priceMax != null) query = query.lte("price_total", priceMax);
-  if (budgetMin != null) query = query.gte("budget", budgetMin);
-  if (budgetMax != null) query = query.lte("budget", budgetMax);
-  if (parkingMin != null) query = query.gte("parking_spaces", parkingMin);
-
-  if (filters.q) {
-    const q = filters.q.replace(/[%_,]/g, " ");
-    query = query.or(
-      `ref_no.ilike.%${q}%,contact_name.ilike.%${q}%,address.ilike.%${q}%,city.ilike.%${q}%,contact_phone_1.ilike.%${q}%,comments.ilike.%${q}%,internal_comments.ilike.%${q}%`,
-    );
-  }
-
-  const { data, count, error } = await query;
   if (error) {
     return (
       <p className="rounded-xl bg-red-50 p-4 text-[var(--danger)]">
@@ -163,12 +66,15 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   const rows = data ?? [];
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const filtered = hasSearchFilters(filters);
+
+  const exportParams = new URLSearchParams();
+  exportParams.set("scope", "search");
+  appendSearchFilters(exportParams, filters);
 
   function hrefFor(p: number) {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(filters)) {
-      if (v || k === "status") params.set(k, v);
-    }
+    appendSearchFilters(params, filters);
     if (p > 1) params.set("page", String(p));
     const s = params.toString();
     return s ? `/app/properties?${s}` : "/app/properties";
@@ -178,10 +84,19 @@ export async function PropertySearchPanel({ filters, page }: Props) {
     <div className="space-y-4">
       <PropertySearchForm options={options} filters={filters} complexes={complexes} creators={creators} />
 
-      <p className="text-sm text-[var(--muted)]">
-        {total.toLocaleString()} filtered matches · page {page} of {totalPages}{" "}
-        · {PAGE_SIZE} per page
-      </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-[var(--muted)]">
+          {total.toLocaleString()} filtered matches · page {page} of {totalPages}{" "}
+          · {PAGE_SIZE} per page
+        </p>
+        {isAdmin ? (
+          <ExportExcelButton
+            query={exportParams.toString()}
+            filtered={filtered}
+            disabled={!total}
+          />
+        ) : null}
+      </div>
 
       <ul className="divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] md:hidden">
         {rows.map((r) => (

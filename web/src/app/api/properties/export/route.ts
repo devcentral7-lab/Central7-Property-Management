@@ -10,6 +10,11 @@ import {
   describeMineFilters,
   mineFiltersFromParams,
 } from "@/lib/my-properties-filters";
+import {
+  applySearchFilters,
+  describeSearchFilters,
+  searchFiltersFromParams,
+} from "@/lib/property-search-filters";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -70,31 +75,62 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const requested = req.nextUrl.searchParams.get("user")?.trim();
-  const owner =
-    profile.role === "Admin" && requested ? requested : profile.display_name;
-  const filters = mineFiltersFromParams(Object.fromEntries(req.nextUrl.searchParams));
-  const filterSummary = describeMineFilters(filters);
+  const scope = req.nextUrl.searchParams.get("scope")?.trim().toLowerCase();
+  const isSearch = scope === "search";
+  if (isSearch && profile.role !== "Admin") {
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  }
 
   try {
     const supabase = await createClient();
     const rows: ExportPropertyRow[] = [];
-    for (let from = 0; ; from += BATCH) {
-      const { data, error } = await applyMineFilters(
-        supabase.from("properties").select(COLUMNS).eq("created_by_name", owner),
-        filters,
-      )
-        .order("created_at", { ascending: false })
-        .order("ref_no", { ascending: false })
-        .range(from, from + BATCH - 1);
-      if (error) throw new Error(error.message);
-      rows.push(...((data ?? []) as unknown as ExportPropertyRow[]));
-      if (!data || data.length < BATCH) break;
+
+    let filterSummary = "";
+    let ownerLabel = profile.display_name;
+    let auditSummary = "";
+
+    if (isSearch) {
+      const filters = searchFiltersFromParams(Object.fromEntries(req.nextUrl.searchParams));
+      filterSummary = describeSearchFilters(filters);
+      ownerLabel = "search";
+      for (let from = 0; ; from += BATCH) {
+        const { data, error } = await applySearchFilters(
+          supabase.from("properties").select(COLUMNS),
+          filters,
+        )
+          .order("created_at", { ascending: false })
+          .order("ref_no", { ascending: false })
+          .range(from, from + BATCH - 1);
+        if (error) throw new Error(error.message);
+        rows.push(...((data ?? []) as unknown as ExportPropertyRow[]));
+        if (!data || data.length < BATCH) break;
+      }
+      auditSummary = `Exported ${rows.length} ${filterSummary ? "filtered " : ""}search listings to Excel`;
+    } else {
+      const requested = req.nextUrl.searchParams.get("user")?.trim();
+      const owner =
+        profile.role === "Admin" && requested ? requested : profile.display_name;
+      ownerLabel = owner;
+      const filters = mineFiltersFromParams(Object.fromEntries(req.nextUrl.searchParams));
+      filterSummary = describeMineFilters(filters);
+      for (let from = 0; ; from += BATCH) {
+        const { data, error } = await applyMineFilters(
+          supabase.from("properties").select(COLUMNS).eq("created_by_name", owner),
+          filters,
+        )
+          .order("created_at", { ascending: false })
+          .order("ref_no", { ascending: false })
+          .range(from, from + BATCH - 1);
+        if (error) throw new Error(error.message);
+        rows.push(...((data ?? []) as unknown as ExportPropertyRow[]));
+        if (!data || data.length < BATCH) break;
+      }
+      auditSummary = `Exported ${rows.length} ${filterSummary ? "filtered " : ""}listings added by ${owner} to Excel`;
     }
 
     const exportedAt = new Date();
     const xlsx = await buildPropertiesWorkbook(rows, {
-      owner,
+      owner: isSearch ? "Search & Filter" : ownerLabel,
       exportedBy: profile.display_name,
       exportedAt,
       filters: filterSummary,
@@ -106,13 +142,20 @@ export async function GET(req: NextRequest) {
       actorName: profile.display_name,
       actorKind: "staff",
       subjectType: "property_export",
-      subjectLabel: owner,
-      summary: `Exported ${rows.length} ${filterSummary ? "filtered " : ""}listings added by ${owner} to Excel`,
-      details: { owner, count: rows.length, ...(filterSummary ? { filters: filterSummary } : {}) },
+      subjectLabel: ownerLabel,
+      summary: auditSummary,
+      details: {
+        scope: isSearch ? "search" : "mine",
+        owner: ownerLabel,
+        count: rows.length,
+        ...(filterSummary ? { filters: filterSummary } : {}),
+      },
     });
 
     const stamp = exportedAt.toLocaleDateString("en-CA", { timeZone: "Asia/Colombo" });
-    const filename = `central7-listings-${fileSlug(owner)}${filterSummary ? "-filtered" : ""}-${stamp}.xlsx`;
+    const filename = isSearch
+      ? `central7-listings-search${filterSummary ? "-filtered" : ""}-${stamp}.xlsx`
+      : `central7-listings-${fileSlug(ownerLabel)}${filterSummary ? "-filtered" : ""}-${stamp}.xlsx`;
     return new NextResponse(new Uint8Array(xlsx), {
       headers: {
         "Content-Type":

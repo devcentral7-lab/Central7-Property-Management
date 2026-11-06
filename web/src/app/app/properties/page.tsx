@@ -2,54 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireProfile } from "@/lib/auth";
 import { mineFiltersFromParams } from "@/lib/my-properties-filters";
+import { searchFiltersFromParams } from "@/lib/property-search-filters";
 import { PropertyAddPanel } from "@/app/app/properties/property-add";
 import { PropertyMinePanel } from "@/app/app/properties/property-mine";
 import { PropertySearchPanel } from "@/app/app/properties/property-search";
-import type { SearchFilterValues } from "@/app/app/properties/property-search-form";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function one(v: string | string[] | undefined): string {
   if (Array.isArray(v)) return v[0] ?? "";
   return v ?? "";
-}
-
-function filtersFromParams(
-  sp: Record<string, string | string[] | undefined>,
-): SearchFilterValues {
-  return {
-    q: one(sp.q).trim(),
-    // No status param means a fresh search (default Active); an empty one means "All statuses".
-    status: sp.status === undefined ? "Active" : one(sp.status),
-    opportunity_type: one(sp.opportunity_type),
-    property_type: one(sp.property_type),
-    property_subtype: one(sp.property_subtype),
-    complex: one(sp.complex).trim(),
-    added_by: one(sp.added_by).trim(),
-    contact: one(sp.contact).trim(),
-    contact_type: one(sp.contact_type),
-    phone: one(sp.phone).trim(),
-    city: one(sp.city).trim(),
-    furnished: one(sp.furnished),
-    currency: one(sp.currency),
-    view: one(sp.view).trim(),
-    bedrooms_min: one(sp.bedrooms_min).trim(),
-    bedrooms_max: one(sp.bedrooms_max).trim(),
-    bathrooms_min: one(sp.bathrooms_min).trim(),
-    bathrooms_max: one(sp.bathrooms_max).trim(),
-    land_min: one(sp.land_min).trim(),
-    land_max: one(sp.land_max).trim(),
-    floor_min: one(sp.floor_min).trim(),
-    floor_max: one(sp.floor_max).trim(),
-    price_min: one(sp.price_min).trim(),
-    price_max: one(sp.price_max).trim(),
-    budget_min: one(sp.budget_min).trim(),
-    budget_max: one(sp.budget_max).trim(),
-    parking_min: one(sp.parking_min).trim(),
-    do_not_publish: one(sp.do_not_publish),
-    social: one(sp.social),
-    advanced: one(sp.advanced),
-  };
 }
 
 export default async function PropertiesPage({
@@ -72,7 +34,7 @@ export default async function PropertiesPage({
 
   const outerTab = tab === "options" || tab === "add" ? "add" : tab;
 
-  const filters = filtersFromParams(sp);
+  const filters = searchFiltersFromParams(sp);
   const page = Math.max(1, Number(one(sp.page) || "1") || 1);
 
   if (!isAdmin) {
@@ -133,7 +95,7 @@ export default async function PropertiesPage({
 
       <div className="mt-5 sm:mt-8">
         {outerTab === "search" ? (
-          <PropertySearchPanel filters={filters} page={page} />
+          <PropertySearchPanel filters={filters} page={page} isAdmin={isAdmin} />
         ) : null}
         {outerTab === "add" ? (
           <PropertyAddPanel

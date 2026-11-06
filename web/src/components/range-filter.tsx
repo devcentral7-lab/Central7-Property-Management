@@ -92,7 +92,7 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
             name: index === 0 ? minName : maxName,
             defaultValue: index === 0 ? defaultMin : defaultMax,
             className: `${inputClassName} mt-1 h-10`,
-            placeholder: index === 0 ? "No minimum" : "No maximum",
+            placeholder: index === 0 ? "No Minimum" : "No Maximum",
           };
           const update = (raw: string) => typeBound(index, raw);
           return (
