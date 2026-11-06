@@ -63,7 +63,7 @@ export async function getOptionalProfile(): Promise<Profile | null> {
 }
 
 export async function canAccessSocialQueue(profile: Profile): Promise<boolean> {
-  if (profile.role === "Admin") return true;
+  if (profile.role === "Admin" || profile.role === "Social Media Manager") return true;
   const supabase = await createClient();
   const { data } = await supabase.rpc("can_access_social_media_queue");
   return Boolean(data);

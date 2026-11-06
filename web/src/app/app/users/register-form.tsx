@@ -87,6 +87,7 @@ export function RegisterStaffForm() {
             <select name="role" defaultValue="User" className={fieldClass}>
               <option value="User">User</option>
               <option value="Admin">Admin</option>
+              <option value="Social Media Manager">Social Media Manager</option>
             </select>
           </label>
           <div className="sm:col-span-2">

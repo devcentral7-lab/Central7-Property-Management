@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { socialManagerPathAllowed } from "@/lib/constants";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -71,12 +72,18 @@ export async function updateSession(request: NextRequest) {
   if (user && isStaffApp) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("id, active")
+      .select("id, active, role")
       .eq("id", user.id)
       .maybeSingle();
     if (!profile?.active) {
       const url = request.nextUrl.clone();
       url.pathname = "/auth/continue";
+      return NextResponse.redirect(url);
+    }
+    if (profile.role === "Social Media Manager" && !socialManagerPathAllowed(path)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app";
+      url.search = "";
       return NextResponse.redirect(url);
     }
   }

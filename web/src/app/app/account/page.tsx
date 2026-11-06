@@ -86,7 +86,11 @@ export default async function AccountPage() {
             </div>
             <h2 className="mt-3 font-display text-xl font-semibold">{profile.display_name}</h2>
             <p className="text-sm text-[var(--muted)]">
-              {isAdmin ? "Administrator · full access" : "Staff member"}
+              {isAdmin
+                ? "Administrator · full access"
+                : profile.role === "Social Media Manager"
+                  ? "Social media queue & activity only"
+                  : "Staff member"}
             </p>
 
             <div className="mt-4 divide-y divide-[var(--line)] border-t border-[var(--line)]">

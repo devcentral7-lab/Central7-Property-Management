@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { generateTempPassword } from "@/lib/auth-password";
-import type { StaffRole } from "@/lib/constants";
+import { parseStaffRole, type StaffRole } from "@/lib/constants";
 
 export type StaffListItem = {
   id: string;
@@ -91,8 +91,7 @@ export async function registerStaffUser(
   const display_name = str(formData.get("display_name"));
   const email = str(formData.get("email")).toLowerCase();
   const mobile_number = str(formData.get("mobile_number"));
-  const roleRaw = str(formData.get("role"));
-  const role: StaffRole = roleRaw === "Admin" ? "Admin" : "User";
+  const role = parseStaffRole(str(formData.get("role")));
   const active =
     formData.get("active") === "on" || formData.get("active") === "true";
 
@@ -234,8 +233,7 @@ export async function updateStaffUser(
     const display_name = str(formData.get("display_name"));
     const email = str(formData.get("email")).toLowerCase();
     const mobile_number = str(formData.get("mobile_number"));
-    const roleRaw = str(formData.get("role"));
-    const role: StaffRole = roleRaw === "Admin" ? "Admin" : "User";
+    const role = parseStaffRole(str(formData.get("role")));
     const active = formData.get("active") === "on" || formData.get("active") === "true";
 
     if (!userId) return { ok: false, error: "Missing user id." };
