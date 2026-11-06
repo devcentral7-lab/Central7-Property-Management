@@ -21,6 +21,7 @@ export type ComplexListItem = {
   lifts: number | null;
   towers_wings: number | null;
   tower_wing_name: string | null;
+  apartment_types: string[];
   service_lift: string | null;
   swimming_pools_count: number | null;
   swimming_pools_floor: string | null;
@@ -73,6 +74,7 @@ const COMPLEX_SELECT = [
   "lifts",
   "towers_wings",
   "tower_wing_name",
+  "apartment_types",
   "service_lift",
   "swimming_pools_count",
   "swimming_pools_floor",
@@ -113,12 +115,16 @@ function parseFields(formData: FormData) {
   const name = str(formData.get("name"));
   if (!name) throw new Error("Name is required.");
   const amenities = [
-    ...new Set(
-      String(formData.get("amenities") ?? "")
+    ...new Set([
+      ...formData
+        .getAll("amenity")
+        .map((v) => String(v).trim().replace(/\s+/g, " "))
+        .filter(Boolean),
+      ...String(formData.get("amenities") ?? "")
         .split(/[\n,]/)
         .map((a) => a.trim().replace(/\s+/g, " "))
         .filter(Boolean),
-    ),
+    ]),
   ];
   const maintenanceType = str(formData.get("maintenance_type")) || null;
   return {
@@ -134,7 +140,23 @@ function parseFields(formData: FormData) {
     deed: str(formData.get("deed")) || null,
     lifts: intOrNull(str(formData.get("lifts")), "Lifts", 1, 3),
     towers_wings: intOrNull(str(formData.get("towers_wings")), "Towers / Wings", 1, 100),
-    tower_wing_name: str(formData.get("tower_wing_name")) || null,
+    tower_wing_name:
+      [
+        ...new Set(
+          formData
+            .getAll("tower_wing_name")
+            .map((v) => String(v ?? "").trim().replace(/\s+/g, " "))
+            .filter(Boolean),
+        ),
+      ].join(" · ") || null,
+    apartment_types: [
+      ...new Set(
+        String(formData.get("apartment_types") ?? "")
+          .split(/[\n,]/)
+          .map((t) => t.trim().replace(/\s+/g, " "))
+          .filter(Boolean),
+      ),
+    ],
     service_lift: str(formData.get("service_lift")) || null,
     swimming_pools_count: intOrNull(str(formData.get("swimming_pools_count")), "Swimming pools", 0, 50),
     swimming_pools_floor: str(formData.get("swimming_pools_floor")) || null,
@@ -189,6 +211,7 @@ export async function listComplexes(): Promise<ComplexListItem[]> {
   return rows.map((c) => ({
     ...c,
     amenities: c.amenities ?? [],
+    apartment_types: c.apartment_types ?? [],
     listing_count: counts.get(c.id) ?? 0,
   }));
 }
