@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { citySpellingKey } from "@/lib/cities";
+import { citySpellingKey, isBlockedCityName } from "@/lib/cities";
 import type { PlaceSuggestion } from "@/lib/places/sri-lanka-cities";
 
 export type CitySuggestion = {
@@ -12,12 +12,13 @@ export type CitySuggestion = {
 
 function merge(known: readonly string[], remote: readonly PlaceSuggestion[], query: string): CitySuggestion[] {
   const term = query.trim().toLowerCase();
-  const local = (term ? known.filter((c) => c.toLowerCase().includes(term)) : [...known]).map(
-    (value) => ({ value, label: value, source: "known" as const }),
-  );
+  const local = (term ? known.filter((c) => c.toLowerCase().includes(term)) : [...known])
+    .filter((value) => !isBlockedCityName(value))
+    .map((value) => ({ value, label: value, source: "known" as const }));
   const seen = new Set(local.map((c) => citySpellingKey(c.value)));
   const extra: CitySuggestion[] = [];
   for (const r of remote) {
+    if (isBlockedCityName(r.value)) continue;
     const k = citySpellingKey(r.value);
     if (!k || seen.has(k)) continue;
     seen.add(k);

@@ -162,6 +162,11 @@ export function citySpellingKey(raw: string): string {
 }
 const matchKey = citySpellingKey;
 
+/** Bare "Colombo" is not allowed — use Colombo 01–15. */
+export function isBlockedCityName(raw: string): boolean {
+  return citySpellingKey(raw) === "colombo";
+}
+
 /** ilike pattern that ignores spaces and punctuation, so "Colombo 04" also finds "Colombo-04". */
 export function cityLikePattern(raw: string): string {
   const core = raw.replace(/[^\p{L}\p{N}]+/gu, "%").replace(/^%+|%+$/g, "");

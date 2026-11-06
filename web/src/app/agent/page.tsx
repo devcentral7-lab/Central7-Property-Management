@@ -245,9 +245,10 @@ export default async function AgentSearchPage({
                   maxName="price_max"
                   defaultMin={filters.price_min}
                   defaultMax={filters.price_max}
-                  ceiling={filters.currency === "USD" ? 1000000 : 100000000}
-                  step={1000}
+                  ceiling={filters.currency === "USD" ? 1_000_000 : 200_000_000}
+                  step={filters.currency === "USD" ? 1_000 : 1_000_000}
                   money
+                  millions={filters.currency !== "USD"}
                   inputClassName={inputClass}
                 />
                 <RangeFilter

@@ -15,8 +15,8 @@ const inputClass =
   "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-normal";
 
 /** Slider scale only; typed min/max can exceed this. */
-const PRICE_CEILING = 200_000;
-const PRICE_STEP = 1_000;
+const PRICE_CEILING = 200_000_000;
+const PRICE_STEP = 1_000_000;
 
 export type SearchFilterValues = {
   q: string;
@@ -307,6 +307,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               ceiling={PRICE_CEILING}
               step={PRICE_STEP}
               money
+              millions
               inputClassName={inputClass}
             />
           </div>
