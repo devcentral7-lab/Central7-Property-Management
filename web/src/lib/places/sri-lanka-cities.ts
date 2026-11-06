@@ -1,4 +1,4 @@
-import { citySpellingKey, cleanCityName, stripCountryFromCity } from "@/lib/cities";
+import { citySpellingKey, cleanCityName, isBlockedCityName, stripCountryFromCity } from "@/lib/cities";
 
 export type PlaceSuggestion = {
   /** Short name suitable for `properties.city` (e.g. "Kandy"). */
@@ -77,7 +77,7 @@ export async function autocompleteSriLankaCities(
       stripCountryFromCity(main) ||
       stripCountryFromCity(full.split(",")[0] ?? "") ||
       "";
-    if (!value) continue;
+    if (!value || isBlockedCityName(value)) continue;
     const keyName = citySpellingKey(value);
     if (!keyName || seen.has(keyName)) continue;
     seen.add(keyName);

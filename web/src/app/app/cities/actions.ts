@@ -8,6 +8,7 @@ import {
   cityKey,
   citySpellingKey,
   cleanCityName,
+  isBlockedCityName,
   sortCities,
   stripCountryFromCity,
 } from "@/lib/cities";
@@ -58,6 +59,9 @@ export async function addCity(raw: string): Promise<Result> {
     await requireAdmin();
     const name = cleanCityName(raw);
     if (!name) return { ok: false, error: "Enter a city name." };
+    if (isBlockedCityName(name)) {
+      return { ok: false, error: "Use a numbered Colombo city (Colombo 01–15)." };
+    }
     if (name.length > MAX_NAME) return { ok: false, error: `City names can be at most ${MAX_NAME} characters.` };
     const cities = await loadCities();
     const existing = cities.find((c) => citySpellingKey(c) === citySpellingKey(name));
@@ -88,6 +92,9 @@ export async function ensureCity(raw: string): Promise<Result & { name?: string 
     await requireProfile();
     const name = stripCountryFromCity(raw);
     if (!name) return { ok: false, error: "Enter a city name." };
+    if (isBlockedCityName(name)) {
+      return { ok: false, error: "Use a numbered Colombo city (Colombo 01–15)." };
+    }
     if (name.length > MAX_NAME) return { ok: false, error: `City names can be at most ${MAX_NAME} characters.` };
     const cities = await loadCities();
     const existing = cities.find((c) => citySpellingKey(c) === citySpellingKey(name));

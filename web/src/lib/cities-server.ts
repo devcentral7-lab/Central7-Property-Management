@@ -3,6 +3,7 @@ import {
   LEGACY_CITIES,
   cleanCityName,
   citySpellingKey,
+  isBlockedCityName,
   sortCities,
 } from "@/lib/cities";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +24,7 @@ async function loadCuratedCities(): Promise<string[]> {
   if (!Array.isArray(data?.value)) return [...LEGACY_CITIES];
   return (data.value as unknown[])
     .map((v) => cleanCityName(String(v ?? "")))
-    .filter(Boolean);
+    .filter((name) => name && !isBlockedCityName(name));
 }
 
 /** Distinct city spellings already used on listings (paginated past PostgREST's row cap). */
@@ -59,6 +60,7 @@ export async function loadCities(): Promise<string[]> {
   const [curated, used] = await Promise.all([loadCuratedCities(), loadUsedCities()]);
   const byKey = new Map<string, string>();
   for (const name of [...curated, ...used]) {
+    if (isBlockedCityName(name)) continue;
     const key = citySpellingKey(name);
     if (key && !byKey.has(key)) byKey.set(key, name);
   }
