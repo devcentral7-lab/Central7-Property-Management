@@ -55,6 +55,9 @@ export async function GET(
   if (!profile) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (profile.role === "Social Media Manager") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { ref } = await params;
   const copy: PdfCopy = req.nextUrl.searchParams.get("copy") === "agent" ? "agent" : "client";

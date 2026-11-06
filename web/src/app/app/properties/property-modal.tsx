@@ -146,9 +146,9 @@ function ViewBody({
               onDone={onRefresh}
             />
           ) : null}
-          <ActivityButton refNo={data.refNo} events={data.events} />
-          <ExportPdfButton refNo={data.refNo} />
-          <SharePdfButton refNo={data.refNo} text={shareText(data)} />
+          {!data.restrictedView ? <ActivityButton refNo={data.refNo} events={data.events} /> : null}
+          {!data.restrictedView ? <ExportPdfButton refNo={data.refNo} /> : null}
+          {!data.restrictedView ? <SharePdfButton refNo={data.refNo} text={shareText(data)} /> : null}
           {data.canEdit ? (
             <button
               type="button"

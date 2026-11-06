@@ -1,9 +1,9 @@
+import type { DayCount, NamedCount, SocialDailyRow } from "@/lib/analytics";
 import {
   COLOMBO_OFFSET_MS,
   colomboYear,
   type DashboardRange,
 } from "@/lib/dashboard-period";
-import type { SocialDailyRow } from "@/lib/analytics";
 import { createClient } from "@/lib/supabase/server";
 
 const MAX_TREND_DAYS = 400;
@@ -16,6 +16,19 @@ export type SocialManagerDashboard = {
   firstYear: number;
   socialDaily: SocialDailyRow[];
   socialUnit: "day" | "month";
+  /** Completed queue work by action in the selected period. */
+  doneByAction: NamedCount[];
+  /** Done items (publish + republish + other) per day/month. */
+  doneTrend: DayCount[];
+  /** Remaining-to-publish backlog over the period. */
+  remainingPublishTrend: DayCount[];
+  /** Current queue snapshot (not period-filtered). */
+  queueNow: {
+    pendingPublish: number;
+    pendingRepublish: number;
+    pendingOther: number;
+    doneTotal: number;
+  };
 };
 
 function num(v: unknown): number {
@@ -104,6 +117,43 @@ function buildSocialRows(raw: {
   };
 }
 
+function chartsFromDaily(social: SocialDailyRow[], unit: "day" | "month") {
+  const totals = {
+    Published: 0,
+    Republished: 0,
+    Drop: 0,
+    Lost: 0,
+    Hold: 0,
+    Closed: 0,
+    "Data change": 0,
+  };
+  for (const r of social) {
+    totals.Published += r.published;
+    totals.Republished += r.republished;
+    totals.Drop += r.drop;
+    totals.Lost += r.lost;
+    totals.Hold += r.hold;
+    totals.Closed += r.closed;
+    totals["Data change"] += r.dataChange;
+  }
+  const doneByAction: NamedCount[] = Object.entries(totals)
+    .filter(([, v]) => v > 0)
+    .map(([name, value]) => ({ name, value }));
+
+  const doneTrend: DayCount[] = social.map((r) => ({
+    day: r.day,
+    count: r.published + r.republished + r.drop + r.lost + r.hold + r.closed + r.dataChange,
+  }));
+
+  // Keep backlog trend readable: sample every nth point on long daily ranges.
+  const step = unit === "day" && social.length > 45 ? Math.ceil(social.length / 45) : 1;
+  const remainingPublishTrend: DayCount[] = social
+    .filter((_, i) => i % step === 0 || i === social.length - 1)
+    .map((r) => ({ day: r.day, count: r.remainingPublish }));
+
+  return { doneByAction, doneTrend, remainingPublishTrend };
+}
+
 /** Social Media Manager home: queue activity for the selected period only. */
 export async function loadSocialManagerDashboard(
   range: DashboardRange,
@@ -133,13 +183,38 @@ export async function loadSocialManagerDashboard(
   const first = stamps.length ? new Date(Math.min(...stamps.map((d) => d.getTime()))) : now;
   const { from, to } = periodBounds(range, now, first);
 
-  const { data, error } = await supabase.rpc("social_media_dashboard_details", {
-    p_from: from.toISOString(),
-    p_to: to.toISOString(),
-  });
-  if (error) throw error;
+  const [detailsRes, pendingRes, doneRes] = await Promise.all([
+    supabase.rpc("social_media_dashboard_details", {
+      p_from: from.toISOString(),
+      p_to: to.toISOString(),
+    }),
+    supabase
+      .from("social_media_queue")
+      .select("approved_action")
+      .not("approved_at", "is", null)
+      .is("completed_at", null),
+    supabase
+      .from("social_media_queue")
+      .select("id", { count: "exact", head: true })
+      .not("approved_at", "is", null)
+      .not("completed_at", "is", null),
+  ]);
+  if (detailsRes.error) throw detailsRes.error;
+  if (pendingRes.error) throw pendingRes.error;
+  if (doneRes.error) throw doneRes.error;
 
-  const built = buildSocialRows((data ?? {}) as Parameters<typeof buildSocialRows>[0]);
+  const built = buildSocialRows((detailsRes.data ?? {}) as Parameters<typeof buildSocialRows>[0]);
+  const charts = chartsFromDaily(built.socialDaily, built.socialUnit);
+
+  let pendingPublish = 0;
+  let pendingRepublish = 0;
+  let pendingOther = 0;
+  for (const row of pendingRes.data ?? []) {
+    const action = String(row.approved_action ?? "");
+    if (action === "Publish" || action === "New Ad Published") pendingPublish += 1;
+    else if (action === "Republish") pendingRepublish += 1;
+    else pendingOther += 1;
+  }
 
   return {
     rangeLabel: periodLabel(range, now),
@@ -148,5 +223,12 @@ export async function loadSocialManagerDashboard(
     currentYear,
     firstYear: colomboYear(first),
     ...built,
+    ...charts,
+    queueNow: {
+      pendingPublish,
+      pendingRepublish,
+      pendingOther,
+      doneTotal: doneRes.count ?? 0,
+    },
   };
 }
