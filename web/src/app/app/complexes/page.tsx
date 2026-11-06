@@ -14,7 +14,6 @@ export default async function ComplexesPage() {
     loadError = e instanceof Error ? e.message : "Could not load apartment complexes.";
   }
 
-  const locations = [...new Set(rows.map((c) => c.location).filter((l): l is string => Boolean(l)))].sort();
   const stats: { label: string; value: number; hint?: string; icon: IconName; accent?: boolean }[] = [
     { label: "Total complexes", value: rows.length, icon: "building", accent: true },
     {
@@ -32,7 +31,7 @@ export default async function ComplexesPage() {
     {
       label: "Missing details",
       value: rows.filter((c) => !c.location || !c.amenities.length).length,
-      hint: "No location or amenities",
+      hint: "No city or amenities",
       icon: "clock",
     },
   ];
@@ -47,7 +46,7 @@ export default async function ComplexesPage() {
           </p>
         </div>
         <div className="shrink-0">
-          <AddComplexButton locations={locations} />
+          <AddComplexButton />
         </div>
       </header>
 
@@ -60,7 +59,7 @@ export default async function ComplexesPage() {
       {loadError ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-[var(--danger)]">{loadError}</p>
       ) : (
-        <ComplexesTable rows={rows} locations={locations} canManage />
+        <ComplexesTable rows={rows} canManage />
       )}
     </div>
   );

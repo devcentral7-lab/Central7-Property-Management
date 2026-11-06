@@ -13,6 +13,8 @@ export function CitySelect({
   className,
   defaultValue = "",
   autoSubmit = false,
+  name = "city",
+  required,
 }: {
   value?: string;
   onChange?: (city: string) => void;
@@ -20,7 +22,12 @@ export function CitySelect({
   defaultValue?: string;
   /** Optional city filter that submits its form after selecting a city. */
   autoSubmit?: boolean;
+  /** Form field name; defaults to `city`. */
+  name?: string;
+  /** Defaults to required when not used as a filter. */
+  required?: boolean;
 }) {
+  const isRequired = required ?? !autoSubmit;
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -95,23 +102,23 @@ export function CitySelect({
 
   return (
     <div className="min-w-0">
-      {autoSubmit ? <input ref={field} type="hidden" name="city" defaultValue={defaultValue} /> : null}
+      {autoSubmit ? <input ref={field} type="hidden" name={name} defaultValue={defaultValue} /> : null}
       <label
         htmlFor={id}
         className={
-          autoSubmit
+          autoSubmit || !isRequired
             ? "block text-sm font-semibold tracking-wide"
             : "block text-[13px] font-semibold tracking-wide text-[var(--ink)]"
         }
       >
-        City{!autoSubmit ? <span className="ml-0.5 text-[var(--brand)]" aria-hidden>*</span> : null}
+        City{isRequired ? <span className="ml-0.5 text-[var(--brand)]" aria-hidden>*</span> : null}
       </label>
       <div className="relative mt-1.5">
         <input
           ref={input}
           id={id}
-          name={autoSubmit ? undefined : "city"}
-          required={!autoSubmit}
+          name={autoSubmit ? undefined : name}
+          required={isRequired}
           role="combobox"
           aria-autocomplete="list"
           aria-expanded={open}
@@ -134,7 +141,7 @@ export function CitySelect({
             if (match) commit(match);
             else if (autoSubmit && !text.trim()) commit("");
             event.target.setCustomValidity(
-              !autoSubmit && text && !isKnownOrSuggested(text) ? "Select a city from the list." : "",
+              isRequired && text && !isKnownOrSuggested(text) ? "Select a city from the list." : "",
             );
           }}
           onBlur={() => {

@@ -7,24 +7,28 @@ import { useCities } from "@/components/cities-context";
 import { MultiSelectFilter } from "@/components/multi-select-filter";
 import { LiveFilterForm, clearFilterGroup } from "@/components/live-filter-form";
 import { searchPropertiesByParagraph } from "@/app/app/properties/search-actions";
+import { COMMERCIAL_SUBTYPES } from "@/lib/constants";
 import type { FormOptions } from "@/lib/form-options";
 import { SOCIAL_FILTERS } from "@/lib/social-filters";
 
 const inputClass =
-  "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm";
+  "w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-normal";
 
-const PRICE_CEILING = 1_000_000_000;
-const PRICE_STEP = 1_000_000;
+/** Slider scale only; typed min/max can exceed this. */
+const PRICE_CEILING = 200_000;
+const PRICE_STEP = 1_000;
 
 export type SearchFilterValues = {
   q: string;
   status: string;
   opportunity_type: string;
   property_type: string;
+  property_subtype: string;
   complex: string;
   added_by: string;
   contact: string;
   contact_type: string;
+  phone: string;
   city: string;
   furnished: string;
   currency: string;
@@ -60,12 +64,13 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
   const cityOptions = useMemo(() => cities.map((c) => ({ value: c, label: c })), [cities]);
   const complexOptions = useMemo(() => complexes.map((c) => ({ value: c.id, label: c.name })), [complexes]);
   const creatorOptions = useMemo(() => creators.map((c) => ({ value: c, label: c })), [creators]);
+  const isCommercial = filters.property_type === "Commercial Property";
   const hasAdvanced = useMemo(() => {
     const keys: (keyof SearchFilterValues)[] = [
       "complex",
       "added_by",
       "contact",
-      "contact_type",
+      "phone",
       "view",
       "bedrooms_min",
       "bedrooms_max",
@@ -179,7 +184,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
         {showAdvanced ? <input type="hidden" name="advanced" value="1" /> : null}
 
         <div data-filter-group="basic" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          <label className="col-span-2 text-sm font-medium">
+          <label className="col-span-2 text-sm font-semibold">
             Keyword Search
             <input
               name="q"
@@ -188,7 +193,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               className={`${inputClass} mt-1`}
             />
           </label>
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
             Status
             <select
               name="status"
@@ -204,7 +209,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
             Property Type
             <select
               name="property_type"
@@ -219,6 +224,23 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               ))}
             </select>
           </label>
+          {isCommercial ? (
+            <label className="text-sm font-semibold">
+              Property Sub Type
+              <select
+                name="property_subtype"
+                defaultValue={filters.property_subtype}
+                className={`${inputClass} mt-1`}
+              >
+                <option value="">All sub types</option>
+                {COMMERCIAL_SUBTYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <MultiSelectFilter
             name="city"
             label="City"
@@ -230,7 +252,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
             className="xl:col-span-2"
             placesSuggest
           />
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
             Opportunity
             <select
               name="opportunity_type"
@@ -245,7 +267,22 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               ))}
             </select>
           </label>
-          <label className="text-sm font-medium">
+          <label className="text-sm font-semibold">
+            Contact Type
+            <select
+              name="contact_type"
+              defaultValue={filters.contact_type}
+              className={`${inputClass} mt-1`}
+            >
+              <option value="">All</option>
+              {options.contactTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm font-semibold">
             Furnished
             <select
               name="furnished"
@@ -270,7 +307,6 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               ceiling={PRICE_CEILING}
               step={PRICE_STEP}
               money
-              millions
               inputClassName={inputClass}
             />
           </div>
@@ -316,7 +352,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
               addLabel="Add user"
               emptyLabel="No users found"
             />
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold">
               Name of Contact
               <input
                 name="contact"
@@ -325,22 +361,17 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
                 className={`${inputClass} mt-1`}
               />
             </label>
-            <label className="text-sm font-medium">
-              Contact Type
-              <select
-                name="contact_type"
-                defaultValue={filters.contact_type}
+            <label className="text-sm font-semibold">
+              Phone Number
+              <input
+                name="phone"
+                defaultValue={filters.phone}
+                placeholder="Contact phone number"
+                inputMode="tel"
                 className={`${inputClass} mt-1`}
-              >
-                <option value="">All</option>
-                {options.contactTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold">
               Currency
               <select
                 name="currency"
@@ -355,7 +386,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
                 ))}
               </select>
             </label>
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold">
               View
               <input
                 name="view"
@@ -363,7 +394,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
                 className={`${inputClass} mt-1`}
               />
             </label>
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold">
               Do Not Publish
               <select
                 name="do_not_publish"
@@ -375,7 +406,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
                 <option value="true">Do not publish only</option>
               </select>
             </label>
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold">
               Social Media
               <select
                 name="social"
@@ -390,7 +421,7 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
                 ))}
               </select>
             </label>
-            <label className="text-sm font-medium">
+            <label className="text-sm font-semibold">
               Parking Min
               <input
                 name="parking_min"

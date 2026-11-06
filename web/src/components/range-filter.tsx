@@ -35,9 +35,12 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
   const minimum = useRef<HTMLInputElement>(null);
   const maximum = useRef<HTMLInputElement>(null);
   const [bounds, setBounds] = useState(() => [amount(defaultMin), amount(defaultMax)]);
-  const limit = Math.max(ceiling ?? 0, bounds[0] ?? 0, bounds[1] ?? 0);
+  // Slider scale stays fixed at `ceiling`; typed amounts may be higher and are not capped.
+  const sliderMax = ceiling ?? 0;
   const low = bounds[0] ?? 0;
-  const high = Math.max(low, bounds[1] ?? limit);
+  const high = Math.max(low, bounds[1] ?? sliderMax);
+  const sliderLow = Math.min(low, sliderMax);
+  const sliderHigh = Math.min(Math.max(high, sliderLow), sliderMax);
 
   // Native form resets and Clear filters also update the slider handles.
   useEffect(() => {
@@ -58,7 +61,8 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
   }, []);
 
   function slide(index: number, value: number) {
-    const next = index === 0 ? Math.min(value, high) : Math.max(value, low);
+    const cappedHigh = Math.min(high, sliderMax);
+    const next = index === 0 ? Math.min(value, cappedHigh) : Math.max(value, sliderLow);
     const input = index === 0 ? minimum.current : maximum.current;
     if (input) input.value = money ? formatMoneyInput(String(next)) : String(next);
     setBounds((previous) => previous.map((bound, i) => i === index ? next : bound));
@@ -105,27 +109,33 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
         <>
           <div className="relative mx-2 mt-4 h-8">
             <div className="absolute inset-x-0 top-3 h-1.5 rounded-full bg-stone-200" />
-            <div className="absolute top-3 h-1.5 rounded-full bg-[var(--brand)]" style={{ left: `${low / limit * 100}%`, right: `${100 - high / limit * 100}%` }} />
+            <div
+              className="absolute top-3 h-1.5 rounded-full bg-[var(--brand)]"
+              style={{
+                left: `${sliderMax ? (sliderLow / sliderMax) * 100 : 0}%`,
+                right: `${sliderMax ? 100 - (sliderHigh / sliderMax) * 100 : 0}%`,
+              }}
+            />
             {([0, 1] as const).map((index) => (
               <input
                 key={index}
                 type="range"
                 min={0}
-                max={limit}
+                max={sliderMax}
                 step={step}
-                value={index === 0 ? low : high}
+                value={index === 0 ? sliderLow : sliderHigh}
                 aria-label={`${label} ${index === 0 ? "minimum" : "maximum"}`}
-                aria-valuetext={sliderLabel(index === 0 ? low : high, millions)}
+                aria-valuetext={sliderLabel(index === 0 ? sliderLow : sliderHigh, millions)}
                 data-range-filter="true"
                 className="range-filter-handle absolute inset-x-0 top-0 h-8 w-full"
-                style={{ zIndex: index === 0 && low === limit ? 2 : index }}
+                style={{ zIndex: index === 0 && sliderLow >= sliderMax ? 2 : index }}
                 onChange={(event) => slide(index, Number(event.currentTarget.value))}
               />
             ))}
           </div>
           <div className="flex justify-between text-xs tabular-nums text-[var(--muted)]">
             <span>{sliderLabel(0, millions)}</span>
-            <span>{sliderLabel(limit, millions)}</span>
+            <span>{sliderLabel(sliderMax, millions)}</span>
           </div>
         </>
       )}

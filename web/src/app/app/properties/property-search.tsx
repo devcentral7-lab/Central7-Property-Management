@@ -61,6 +61,12 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (filters.property_type) {
     query = query.eq("property_type", filters.property_type);
   }
+  if (
+    filters.property_type === "Commercial Property" &&
+    filters.property_subtype
+  ) {
+    query = query.eq("property_subtype", filters.property_subtype);
+  }
   const complexIds = splitListParam(filters.complex);
   if (complexIds.length) {
     const valid = complexIds.filter((id) => UUID_RE.test(id));
@@ -72,6 +78,12 @@ export async function PropertySearchPanel({ filters, page }: Props) {
   if (creatorNames.length) query = query.in("created_by_name", creatorNames);
   if (filters.contact) {
     query = query.ilike("contact_name", `%${filters.contact.replace(/[%_]/g, " ")}%`);
+  }
+  if (filters.phone) {
+    const phone = filters.phone.replace(/[%_,]/g, " ");
+    query = query.or(
+      `contact_phone_1.ilike.%${phone}%,contact_phone_2.ilike.%${phone}%`,
+    );
   }
   if (filters.opportunity_type) {
     query = query.eq("opportunity_type", filters.opportunity_type);
