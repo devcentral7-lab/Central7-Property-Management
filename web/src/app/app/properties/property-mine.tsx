@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { bedsBaths, bedsBathsShort } from "@/lib/property-details";
 import type { PropertyCard } from "@/lib/types";
+import { PlainNumberInput } from "@/components/plain-number-input";
 import { RangeFilter } from "@/components/range-filter";
 import { CitySelect } from "@/components/city-select";
 import { LiveFilterForm } from "@/components/live-filter-form";
@@ -216,12 +217,8 @@ export async function PropertyMinePanel({
           </label>
           <label className="text-sm font-semibold">
             Beds Min
-            <input
+            <PlainNumberInput
               name="bedrooms_min"
-              type="number"
-              min={0}
-              step="any"
-              inputMode="decimal"
               defaultValue={filters.bedrooms_min}
               className={`${inputClass} mt-1`}
             />

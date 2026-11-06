@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MoneyInput, formatMoneyInput } from "@/components/money-input";
+import { PlainNumberInput } from "@/components/plain-number-input";
 import { clearedHere } from "@/components/live-filter-form";
 
 type Props = {
@@ -99,7 +100,7 @@ export function RangeFilter({ label, minName, maxName, defaultMin, defaultMax, c
             <label key={index} className="min-w-0 text-xs font-medium leading-5 text-[var(--muted)]">
               {index === 0 ? "Min" : "Max"}
               {money ? <MoneyInput {...props} onValueChange={update} /> : (
-                <input {...props} type="number" min="0" step="any" onChange={(event) => update(event.currentTarget.value)} />
+                <PlainNumberInput {...props} onValueChange={update} />
               )}
             </label>
           );
