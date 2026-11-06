@@ -164,7 +164,7 @@ function ComplexFields({
   return (
     <>
       <label className={`${complexLabelClass} sm:col-span-2`}>
-        Name <span className="text-[var(--brand)]">*</span>
+        Apartment Name <span className="text-[var(--brand)]">*</span>
         <input name="name" required autoComplete="off" defaultValue={values?.name ?? ""} className={complexFieldClass} placeholder="e.g. On320 Residencies" />
       </label>
       <div className="min-w-0 [&_label]:!mt-0 [&_.relative]:!mt-1">
@@ -184,7 +184,7 @@ function ComplexFields({
         <input name="address" autoComplete="off" defaultValue={values?.address ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
-        Built Year
+        Year of Completion
         <input
           name="built_year"
           inputMode="numeric"
@@ -196,10 +196,10 @@ function ComplexFields({
       </label>
       <label className={complexLabelClass}>
         Age of the Building
-        <input readOnly value={age} className={`${complexFieldClass} bg-[var(--bg)] text-[var(--muted)]`} placeholder="Calculated from built year" />
+        <input readOnly value={age} className={`${complexFieldClass} bg-[var(--bg)] text-[var(--muted)]`} placeholder="Calculated from year of completion" />
       </label>
       <label className={complexLabelClass}>
-        Apartments Per Floor
+        Average Units per Floor
         <input name="apartments_per_floor" inputMode="numeric" defaultValue={values?.apartments_per_floor ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
@@ -207,7 +207,7 @@ function ComplexFields({
         <input name="number_of_floors" inputMode="numeric" defaultValue={values?.number_of_floors ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
-        COC
+        COC (Certificate of Conformity)
         <select name="coc" defaultValue={values?.coc ?? ""} className={complexFieldClass}>
           <SelectOptions options={AVAILABILITY} />
         </select>
@@ -219,13 +219,14 @@ function ComplexFields({
         </select>
       </label>
       <label className={complexLabelClass}>
-        Lifts
-        <select name="lifts" defaultValue={values?.lifts != null ? String(values.lifts) : ""} className={complexFieldClass}>
-          <option value="">—</option>
-          <option value="1">1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-        </select>
+        No of Lifts
+        <input
+          name="lifts"
+          inputMode="numeric"
+          defaultValue={values?.lifts != null ? String(values.lifts) : ""}
+          className={complexFieldClass}
+          placeholder="e.g. 2"
+        />
       </label>
       <label className={complexLabelClass}>
         Service Lift
@@ -234,7 +235,7 @@ function ComplexFields({
         </select>
       </label>
       <label className={complexLabelClass}>
-        How Many Towers / Wings
+        Number of Towers / Wings
         <input
           name="towers_wings"
           inputMode="numeric"
@@ -288,7 +289,7 @@ function ComplexFields({
         )}
       </div>
       <label className={complexLabelClass}>
-        How Many Swimming Pools
+        Number of Swimming Pools
         <input name="swimming_pools_count" inputMode="numeric" defaultValue={values?.swimming_pools_count ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
@@ -306,8 +307,8 @@ function ComplexFields({
         </select>
       </label>
       <label className={complexLabelClass}>
-        Guard Room
-        <select name="guard_room" defaultValue={values?.guard_room ?? ""} className={complexFieldClass}>
+        Visitors Lobby
+        <select name="visitors_lobby" defaultValue={values?.visitors_lobby ?? ""} className={complexFieldClass}>
           <SelectOptions options={AVAILABILITY} />
         </select>
       </label>
@@ -330,11 +331,19 @@ function ComplexFields({
         </select>
       </label>
       <label className={complexLabelClass}>
-        Contact Number 1 (Management / Admin)
+        Contact Person 1 Name (Management / Admin)
+        <input name="contact_person_1" autoComplete="off" defaultValue={values?.contact_person_1 ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Contact Number 1
         <input name="contact_management" inputMode="tel" autoComplete="off" defaultValue={values?.contact_management ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
-        Contact Number 2 (Security)
+        Contact Person 2 Name (Security)
+        <input name="contact_person_2" autoComplete="off" defaultValue={values?.contact_person_2 ?? ""} className={complexFieldClass} />
+      </label>
+      <label className={complexLabelClass}>
+        Contact Number 2
         <input name="contact_security" inputMode="tel" autoComplete="off" defaultValue={values?.contact_security ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
@@ -344,8 +353,8 @@ function ComplexFields({
         </select>
       </label>
       <label className={complexLabelClass}>
-        Parking Floors
-        <input name="parking_floors" autoComplete="off" defaultValue={values?.parking_floors ?? ""} className={complexFieldClass} />
+        Number of Parking Floors
+        <input name="parking_floors" inputMode="numeric" autoComplete="off" defaultValue={values?.parking_floors ?? ""} className={complexFieldClass} />
       </label>
       <label className={complexLabelClass}>
         Parking Lift
@@ -364,7 +373,7 @@ function ComplexFields({
         />
       </label>
       <label className={complexLabelClass}>
-        Maintenance
+        Maintenance Done By
         <select
           name="maintenance_type"
           value={maintenanceType}
@@ -626,14 +635,14 @@ export function ComplexesTable({
         ) : null}
 
         <table className="hidden w-full text-left text-sm md:table">
-          <thead className="bg-[var(--bg)]/60 text-xs uppercase tracking-wide text-[var(--muted)]">
+          <thead className="bg-[var(--bg)]/60 text-sm text-[var(--ink)]">
             <tr>
-              <th className="px-5 py-3 font-semibold">Complex</th>
-              <th className="px-4 py-3 font-semibold">City</th>
-              <th className="px-4 py-3 font-semibold">Built</th>
-              <th className="px-4 py-3 font-semibold">Amenities</th>
-              <th className="px-4 py-3 font-semibold">Listings</th>
-              {canManage ? <th className="px-5 py-3 text-right font-semibold">
+              <th className="px-5 py-3 font-bold">Complex</th>
+              <th className="px-4 py-3 font-bold">City</th>
+              <th className="px-4 py-3 font-bold">Built</th>
+              <th className="px-4 py-3 font-bold">Amenities</th>
+              <th className="px-4 py-3 font-bold">Listings</th>
+              {canManage ? <th className="px-5 py-3 text-right font-bold">
                 <span className="sr-only">Actions</span>
               </th> : null}
             </tr>
@@ -706,15 +715,15 @@ export function ComplexesTable({
                   ["City", viewing.location],
                   ["Developer", viewing.developer],
                   ["Address", viewing.address],
-                  ["Built Year", viewing.built_year],
+                  ["Year of Completion", viewing.built_year],
                   ["Age of the Building", buildingAge(viewing.built_year) || null],
-                  ["Apartments Per Floor", viewing.apartments_per_floor],
+                  ["Average Units per Floor", viewing.apartments_per_floor],
                   ["No of Floors", viewing.number_of_floors],
-                  ["COC", viewing.coc],
+                  ["COC (Certificate of Conformity)", viewing.coc],
                   ["Deed", viewing.deed],
-                  ["Lifts", viewing.lifts],
+                  ["No of Lifts", viewing.lifts],
                   ["Service Lift", viewing.service_lift],
-                  ["Towers / Wings", viewing.towers_wings],
+                  ["Number of Towers / Wings", viewing.towers_wings],
                   [
                     splitTowerNames(viewing.tower_wing_name).length > 1
                       ? "Tower / Wing Names"
@@ -731,21 +740,23 @@ export function ComplexesTable({
                         tower.types.length ? tower.types.join(" · ") : null,
                       ]) as [string, string | null][])
                     : []),
-                  ["Swimming Pools", viewing.swimming_pools_count],
+                  ["Number of Swimming Pools", viewing.swimming_pools_count],
                   ["Swimming Pool Floor", viewing.swimming_pools_floor],
                   ["Gym Floor", viewing.gym_floor],
                   ["Generator", viewing.generator],
-                  ["Guard Room", viewing.guard_room],
+                  ["Visitors Lobby", viewing.visitors_lobby],
                   ["Common Hall", viewing.common_hall],
                   ["Drivers Washroom", viewing.drivers_washroom],
                   ["Maids Washroom", viewing.maids_washroom],
-                  ["Contact (Management / Admin)", viewing.contact_management],
-                  ["Contact (Security)", viewing.contact_security],
+                  ["Contact Person 1 Name (Management / Admin)", viewing.contact_person_1],
+                  ["Contact Number 1", viewing.contact_management],
+                  ["Contact Person 2 Name (Security)", viewing.contact_person_2],
+                  ["Contact Number 2", viewing.contact_security],
                   ["Parking", viewing.parking_type],
-                  ["Parking Floors", viewing.parking_floors],
+                  ["Number of Parking Floors", viewing.parking_floors],
                   ["Parking Lift", viewing.parking_lift],
                   ["Maintenance Charges", viewing.maintenance_charges],
-                  ["Maintenance", viewing.maintenance_type],
+                  ["Maintenance Done By", viewing.maintenance_type],
                   ["Maintenance Company", viewing.maintenance_company],
                   ["Google Pin", viewing.google_pin],
                 ] as [string, string | number | null][]

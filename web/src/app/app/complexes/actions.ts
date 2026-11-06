@@ -32,10 +32,12 @@ export type ComplexListItem = {
   swimming_pools_floor: string | null;
   gym_floor: string | null;
   generator: string | null;
-  guard_room: string | null;
+  visitors_lobby: string | null;
   common_hall: string | null;
   drivers_washroom: string | null;
   maids_washroom: string | null;
+  contact_person_1: string | null;
+  contact_person_2: string | null;
   contact_management: string | null;
   contact_security: string | null;
   parking_type: string | null;
@@ -85,10 +87,12 @@ const COMPLEX_SELECT = [
   "swimming_pools_floor",
   "gym_floor",
   "generator",
-  "guard_room",
+  "visitors_lobby",
   "common_hall",
   "drivers_washroom",
   "maids_washroom",
+  "contact_person_1",
+  "contact_person_2",
   "contact_management",
   "contact_security",
   "parking_type",
@@ -151,7 +155,7 @@ function normalizeApartmentTypes(raw: unknown): ComplexTowerApartmentTypes[] {
 
 function parseFields(formData: FormData) {
   const name = str(formData.get("name"));
-  if (!name) throw new Error("Name is required.");
+  if (!name) throw new Error("Apartment Name is required.");
   const amenities = [
     ...new Set([
       ...formData
@@ -180,25 +184,27 @@ function parseFields(formData: FormData) {
     location: str(formData.get("location")) || null,
     address: str(formData.get("address")) || null,
     developer: str(formData.get("developer")) || null,
-    built_year: intOrNull(str(formData.get("built_year")), "Built year", 1900, new Date().getFullYear() + 10),
-    apartments_per_floor: intOrNull(str(formData.get("apartments_per_floor")), "Apartments per floor", 1, 500),
+    built_year: intOrNull(str(formData.get("built_year")), "Year of Completion", 1900, new Date().getFullYear() + 10),
+    apartments_per_floor: intOrNull(str(formData.get("apartments_per_floor")), "Average Units per floor", 1, 500),
     amenities,
     notes: String(formData.get("notes") ?? "").trim() || null,
     coc: str(formData.get("coc")) || null,
     deed: str(formData.get("deed")) || null,
-    lifts: intOrNull(str(formData.get("lifts")), "Lifts", 1, 3),
-    towers_wings: intOrNull(str(formData.get("towers_wings")), "Towers / Wings", 1, 100),
+    lifts: intOrNull(str(formData.get("lifts")), "No of Lifts", 0, 100),
+    towers_wings: intOrNull(str(formData.get("towers_wings")), "Number of Towers / Wings", 1, 100),
     tower_wing_name: apartment_types.map((t) => t.name).filter(Boolean).join(" · ") || null,
     apartment_types,
     service_lift: str(formData.get("service_lift")) || null,
-    swimming_pools_count: intOrNull(str(formData.get("swimming_pools_count")), "Swimming pools", 0, 50),
+    swimming_pools_count: intOrNull(str(formData.get("swimming_pools_count")), "Number of Swimming Pools", 0, 50),
     swimming_pools_floor: str(formData.get("swimming_pools_floor")) || null,
     gym_floor: str(formData.get("gym_floor")) || null,
     generator: str(formData.get("generator")) || null,
-    guard_room: str(formData.get("guard_room")) || null,
+    visitors_lobby: str(formData.get("visitors_lobby")) || null,
     common_hall: str(formData.get("common_hall")) || null,
     drivers_washroom: str(formData.get("drivers_washroom")) || null,
     maids_washroom: str(formData.get("maids_washroom")) || null,
+    contact_person_1: str(formData.get("contact_person_1")) || null,
+    contact_person_2: str(formData.get("contact_person_2")) || null,
     contact_management: str(formData.get("contact_management")) || null,
     contact_security: str(formData.get("contact_security")) || null,
     parking_type: str(formData.get("parking_type")) || null,
