@@ -2,14 +2,18 @@ import { requireProfile } from "@/lib/auth";
 import { listComplexes } from "@/app/app/complexes/actions";
 import { AddComplexButton, ComplexesTable } from "@/app/app/complexes/complexes-table";
 import { StatCard, type IconName } from "@/app/app/user-management/ui";
+import { loadFormOptions } from "@/lib/form-options";
 
 export default async function ComplexesPage() {
   await requireProfile();
 
   let rows: Awaited<ReturnType<typeof listComplexes>> = [];
+  let amenityOptions: string[] = [];
   let loadError: string | null = null;
   try {
-    rows = await listComplexes();
+    const [complexes, options] = await Promise.all([listComplexes(), loadFormOptions()]);
+    rows = complexes;
+    amenityOptions = options.amenities;
   } catch (e) {
     loadError = e instanceof Error ? e.message : "Could not load apartment complexes.";
   }
@@ -46,7 +50,7 @@ export default async function ComplexesPage() {
           </p>
         </div>
         <div className="shrink-0">
-          <AddComplexButton />
+          <AddComplexButton amenityOptions={amenityOptions} />
         </div>
       </header>
 
@@ -59,7 +63,7 @@ export default async function ComplexesPage() {
       {loadError ? (
         <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-[var(--danger)]">{loadError}</p>
       ) : (
-        <ComplexesTable rows={rows} canManage />
+        <ComplexesTable rows={rows} amenityOptions={amenityOptions} canManage />
       )}
     </div>
   );

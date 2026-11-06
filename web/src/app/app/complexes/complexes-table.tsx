@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type InputHTMLAttributes, type ReactNode } from "react";
 import {
   createComplex,
   deleteComplex,
@@ -58,6 +58,15 @@ function buildingAge(builtYear: string | number | null | undefined): string {
   return age === 1 ? "1 year" : `${age} years`;
 }
 
+/** Split saved tower/wing names (joined with ·, commas, or newlines). */
+function splitTowerNames(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  return raw
+    .split(/\n+| · |,|;/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function SelectOptions({
   options,
   blank = "—",
@@ -77,10 +86,62 @@ function SelectOptions({
   );
 }
 
-function ComplexFields({ values }: { values?: ComplexListItem }) {
+function AmenityChip({
+  children,
+  ...inputProps
+}: InputHTMLAttributes<HTMLInputElement> & { children: ReactNode }) {
+  return (
+    <label className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm font-normal transition hover:border-stone-300 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand)]/5">
+      <input type="checkbox" {...inputProps} className="h-4 w-4 shrink-0 accent-[var(--brand)]" />
+      <span className="min-w-0 truncate">{children}</span>
+    </label>
+  );
+}
+
+function ComplexFields({
+  values,
+  amenityOptions,
+}: {
+  values?: ComplexListItem;
+  amenityOptions: string[];
+}) {
   const [builtYear, setBuiltYear] = useState(values?.built_year != null ? String(values.built_year) : "");
   const [maintenanceType, setMaintenanceType] = useState(values?.maintenance_type ?? "");
+  const savedTowerNames = useMemo(() => splitTowerNames(values?.tower_wing_name), [values?.tower_wing_name]);
+  const [towerCount, setTowerCount] = useState(() => {
+    if (values?.towers_wings != null) return String(values.towers_wings);
+    return savedTowerNames.length ? String(savedTowerNames.length) : "";
+  });
+  const [towerNames, setTowerNames] = useState<string[]>(() => {
+    const n = Math.max(values?.towers_wings ?? savedTowerNames.length, savedTowerNames.length, 0);
+    if (n <= 0) return savedTowerNames.length ? savedTowerNames : [""];
+    return Array.from({ length: n }, (_, i) => savedTowerNames[i] ?? "");
+  });
+  const listed = useMemo(() => new Set(amenityOptions), [amenityOptions]);
+  const initialKnown = useMemo(
+    () => (values?.amenities ?? []).filter((a) => listed.has(a)),
+    [values?.amenities, listed],
+  );
+  const initialExtras = useMemo(
+    () => (values?.amenities ?? []).filter((a) => !listed.has(a)).join(", "),
+    [values?.amenities, listed],
+  );
+  const [amenityChecks, setAmenityChecks] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(amenityOptions.map((a) => [a, initialKnown.includes(a)])),
+  );
   const age = buildingAge(builtYear);
+  const towerSlots = Math.min(100, Math.max(0, Number(towerCount) || 0));
+
+  function setTowerCountValue(raw: string) {
+    setTowerCount(raw);
+    const n = Math.min(100, Math.max(0, Number(raw) || 0));
+    setTowerNames((prev) => {
+      if (n <= 0) return prev.length ? prev : [""];
+      if (prev.length === n) return prev;
+      if (prev.length < n) return [...prev, ...Array.from({ length: n - prev.length }, () => "")];
+      return prev.slice(0, n);
+    });
+  }
 
   return (
     <>
@@ -156,11 +217,46 @@ function ComplexFields({ values }: { values?: ComplexListItem }) {
       </label>
       <label className={complexLabelClass}>
         How Many Towers / Wings
-        <input name="towers_wings" inputMode="numeric" defaultValue={values?.towers_wings ?? ""} className={complexFieldClass} />
+        <input
+          name="towers_wings"
+          inputMode="numeric"
+          value={towerCount}
+          onChange={(e) => setTowerCountValue(e.target.value)}
+          className={complexFieldClass}
+          placeholder="e.g. 3"
+        />
       </label>
-      <label className={complexLabelClass}>
-        Name of the Tower / Wing
-        <input name="tower_wing_name" autoComplete="off" defaultValue={values?.tower_wing_name ?? ""} className={complexFieldClass} />
+      <div className={`${towerSlots > 1 ? "sm:col-span-2" : ""} grid gap-3 ${towerSlots > 1 ? "sm:grid-cols-2" : ""}`}>
+        {(towerSlots > 0 ? towerNames.slice(0, towerSlots) : [towerNames[0] ?? ""]).map((name, index) => (
+          <label key={index} className={complexLabelClass}>
+            {towerSlots > 1 ? `Tower / Wing ${index + 1} Name` : "Name of the Tower / Wing"}
+            <input
+              name="tower_wing_name"
+              autoComplete="off"
+              value={name}
+              onChange={(e) =>
+                setTowerNames((prev) => {
+                  const next = [...prev];
+                  next[index] = e.target.value;
+                  return next;
+                })
+              }
+              className={complexFieldClass}
+              placeholder={towerSlots > 1 ? `e.g. Tower ${index + 1}` : "e.g. East Wing"}
+            />
+          </label>
+        ))}
+      </div>
+      <label className={`${complexLabelClass} sm:col-span-2`}>
+        Apartment Types
+        <input
+          name="apartment_types"
+          autoComplete="off"
+          defaultValue={(values?.apartment_types ?? []).join(", ")}
+          className={complexFieldClass}
+          placeholder="e.g. Type A, Type B, Type C"
+        />
+        <span className="mt-1 block text-xs font-normal text-[var(--muted)]">Comma-separated type names</span>
       </label>
       <label className={complexLabelClass}>
         How Many Swimming Pools
@@ -259,10 +355,37 @@ function ComplexFields({ values }: { values?: ComplexListItem }) {
         Google Pin
         <input name="google_pin" autoComplete="off" defaultValue={values?.google_pin ?? ""} className={complexFieldClass} placeholder="Google Maps link" />
       </label>
-      <label className={`${complexLabelClass} sm:col-span-2`}>
-        Amenities
-        <textarea name="amenities" rows={4} defaultValue={values?.amenities.join("\n") ?? ""} className={complexFieldClass} placeholder="One per line, e.g. Swimming Pool" />
-      </label>
+      <div className="sm:col-span-2">
+        <p className={complexLabelClass}>Amenities</p>
+        <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {amenityOptions.map((a) => (
+            <AmenityChip
+              key={a}
+              name="amenity"
+              value={a}
+              checked={Boolean(amenityChecks[a])}
+              onChange={(e) =>
+                setAmenityChecks((prev) => ({
+                  ...prev,
+                  [a]: e.target.checked,
+                }))
+              }
+            >
+              {a}
+            </AmenityChip>
+          ))}
+        </div>
+        <label className={`${complexLabelClass} mt-4`}>
+          Other Amenities
+          <input
+            name="amenities"
+            autoComplete="off"
+            defaultValue={initialExtras}
+            className={complexFieldClass}
+            placeholder="Any extras not listed above (comma-separated)"
+          />
+        </label>
+      </div>
       <label className={`${complexLabelClass} sm:col-span-2`}>
         Notes
         <textarea name="notes" rows={2} defaultValue={values?.notes ?? ""} className={complexFieldClass} />
@@ -284,7 +407,7 @@ function FormButtons({ pending, onCancel, label, pendingLabel }: { pending: bool
   );
 }
 
-export function AddComplexButton() {
+export function AddComplexButton({ amenityOptions }: { amenityOptions: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -320,7 +443,7 @@ export function AddComplexButton() {
       </button>
       <PopupDialog open={open} onClose={() => setOpen(false)} title="Add Apartment Complex" busy={pending} size="xl">
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
-          <ComplexFields />
+          <ComplexFields amenityOptions={amenityOptions} />
           {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p> : null}
           <FormButtons pending={pending} onCancel={() => setOpen(false)} label="Add complex" pendingLabel="Adding…" />
         </form>
@@ -329,7 +452,15 @@ export function AddComplexButton() {
   );
 }
 
-export function ComplexesTable({ rows, canManage = false }: { rows: ComplexListItem[]; canManage?: boolean }) {
+export function ComplexesTable({
+  rows,
+  amenityOptions,
+  canManage = false,
+}: {
+  rows: ComplexListItem[];
+  amenityOptions: string[];
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
@@ -555,7 +686,16 @@ export function ComplexesTable({ rows, canManage = false }: { rows: ComplexListI
                   ["Lifts", viewing.lifts],
                   ["Service Lift", viewing.service_lift],
                   ["Towers / Wings", viewing.towers_wings],
-                  ["Tower / Wing Name", viewing.tower_wing_name],
+                  [
+                    splitTowerNames(viewing.tower_wing_name).length > 1
+                      ? "Tower / Wing Names"
+                      : "Tower / Wing Name",
+                    splitTowerNames(viewing.tower_wing_name).join(" · ") || viewing.tower_wing_name,
+                  ],
+                  [
+                    "Apartment Types",
+                    viewing.apartment_types?.length ? viewing.apartment_types.join(" · ") : null,
+                  ],
                   ["Swimming Pools", viewing.swimming_pools_count],
                   ["Swimming Pool Floor", viewing.swimming_pools_floor],
                   ["Gym Floor", viewing.gym_floor],
@@ -663,7 +803,7 @@ export function ComplexesTable({ rows, canManage = false }: { rows: ComplexListI
       <PopupDialog open={!!editing} onClose={() => setEditing(null)} title={editing ? `Edit ${editing.name}` : ""} busy={pending} size="xl">
         {editing ? (
           <form key={editing.id} onSubmit={(e) => onSave(e, editing.id)} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
-            <ComplexFields values={editing} />
+            <ComplexFields key={editing.id} values={editing} amenityOptions={amenityOptions} />
             {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p> : null}
             <FormButtons pending={pending} onCancel={() => setEditing(null)} label="Save changes" pendingLabel="Saving…" />
           </form>
