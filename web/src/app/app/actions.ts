@@ -13,7 +13,7 @@ import { loadCities } from "@/lib/cities-server";
 import { matchCities, stripCountryFromCity } from "@/lib/cities";
 import { loadComplexOptions } from "@/lib/complexes-server";
 import { parseMapsLink } from "@/lib/maps-link";
-import { isDriveConfigured } from "@/lib/drive/photos";
+import { getOrCreatePropertyFolder, isDriveConfigured } from "@/lib/drive/photos";
 import {
   extractPropertyFieldsWithGemini,
   isGeminiConfigured,
@@ -294,6 +294,18 @@ async function saveProperty(formData: FormData) {
         { onConflict: "ref_no" },
       );
       if (queueErr) throw queueErr;
+    }
+  }
+
+  // Always create the Drive folder on add, even when no files are attached yet.
+  if (isDriveConfigured()) {
+    try {
+      await getOrCreatePropertyFolder(property.ref_no);
+    } catch (e) {
+      console.error(
+        "saveProperty drive folder",
+        e instanceof Error ? e.message : e,
+      );
     }
   }
 
