@@ -40,7 +40,6 @@ const complexLabelClass = "block text-sm font-semibold";
 const complexFieldClass = `${fieldClass} font-normal`;
 
 const AVAILABILITY = ["Available", "Not Available"] as const;
-const YES_NO = ["Yes", "No"] as const;
 
 function isIncomplete(c: ComplexListItem) {
   return !c.location || !c.amenities.length;
@@ -107,16 +106,31 @@ function ComplexFields({
 }) {
   const [builtYear, setBuiltYear] = useState(values?.built_year != null ? String(values.built_year) : "");
   const [maintenanceType, setMaintenanceType] = useState(values?.maintenance_type ?? "");
-  const savedTowerNames = useMemo(() => splitTowerNames(values?.tower_wing_name), [values?.tower_wing_name]);
+  const savedTowerRows = useMemo(() => {
+    const fromTypes = values?.apartment_types ?? [];
+    const names = splitTowerNames(values?.tower_wing_name);
+    const n = Math.max(values?.towers_wings ?? 0, names.length, fromTypes.length, 0);
+    if (n <= 0) {
+      if (fromTypes.length) {
+        return fromTypes.map((row) => ({
+          name: row.name || "",
+          types: (row.types ?? []).join(", "),
+        }));
+      }
+      return names.length
+        ? names.map((name) => ({ name, types: "" }))
+        : [{ name: "", types: "" }];
+    }
+    return Array.from({ length: n }, (_, i) => ({
+      name: fromTypes[i]?.name || names[i] || "",
+      types: (fromTypes[i]?.types ?? []).join(", "),
+    }));
+  }, [values?.apartment_types, values?.tower_wing_name, values?.towers_wings]);
   const [towerCount, setTowerCount] = useState(() => {
     if (values?.towers_wings != null) return String(values.towers_wings);
-    return savedTowerNames.length ? String(savedTowerNames.length) : "";
+    return savedTowerRows.some((r) => r.name || r.types) ? String(savedTowerRows.length) : "";
   });
-  const [towerNames, setTowerNames] = useState<string[]>(() => {
-    const n = Math.max(values?.towers_wings ?? savedTowerNames.length, savedTowerNames.length, 0);
-    if (n <= 0) return savedTowerNames.length ? savedTowerNames : [""];
-    return Array.from({ length: n }, (_, i) => savedTowerNames[i] ?? "");
-  });
+  const [towerRows, setTowerRows] = useState(() => savedTowerRows);
   const listed = useMemo(() => new Set(amenityOptions), [amenityOptions]);
   const initialKnown = useMemo(
     () => (values?.amenities ?? []).filter((a) => listed.has(a)),
@@ -132,15 +146,19 @@ function ComplexFields({
   const age = buildingAge(builtYear);
   const towerSlots = Math.min(100, Math.max(0, Number(towerCount) || 0));
 
+  function resizeTowerRows(prev: { name: string; types: string }[], n: number) {
+    if (n <= 0) return prev.length ? prev : [{ name: "", types: "" }];
+    if (prev.length === n) return prev;
+    if (prev.length < n) {
+      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ name: "", types: "" }))];
+    }
+    return prev.slice(0, n);
+  }
+
   function setTowerCountValue(raw: string) {
     setTowerCount(raw);
     const n = Math.min(100, Math.max(0, Number(raw) || 0));
-    setTowerNames((prev) => {
-      if (n <= 0) return prev.length ? prev : [""];
-      if (prev.length === n) return prev;
-      if (prev.length < n) return [...prev, ...Array.from({ length: n - prev.length }, () => "")];
-      return prev.slice(0, n);
-    });
+    setTowerRows((prev) => resizeTowerRows(prev, n));
   }
 
   return (
@@ -191,13 +209,13 @@ function ComplexFields({
       <label className={complexLabelClass}>
         COC
         <select name="coc" defaultValue={values?.coc ?? ""} className={complexFieldClass}>
-          <SelectOptions options={YES_NO} />
+          <SelectOptions options={AVAILABILITY} />
         </select>
       </label>
       <label className={complexLabelClass}>
         Deed
         <select name="deed" defaultValue={values?.deed ?? ""} className={complexFieldClass}>
-          <SelectOptions options={YES_NO} />
+          <SelectOptions options={AVAILABILITY} />
         </select>
       </label>
       <label className={complexLabelClass}>
@@ -226,38 +244,49 @@ function ComplexFields({
           placeholder="e.g. 3"
         />
       </label>
-      <div className={`${towerSlots > 1 ? "sm:col-span-2" : ""} grid gap-3 ${towerSlots > 1 ? "sm:grid-cols-2" : ""}`}>
-        {(towerSlots > 0 ? towerNames.slice(0, towerSlots) : [towerNames[0] ?? ""]).map((name, index) => (
-          <label key={index} className={complexLabelClass}>
-            {towerSlots > 1 ? `Tower / Wing ${index + 1} Name` : "Name of the Tower / Wing"}
-            <input
-              name="tower_wing_name"
-              autoComplete="off"
-              value={name}
-              onChange={(e) =>
-                setTowerNames((prev) => {
-                  const next = [...prev];
-                  next[index] = e.target.value;
-                  return next;
-                })
-              }
-              className={complexFieldClass}
-              placeholder={towerSlots > 1 ? `e.g. Tower ${index + 1}` : "e.g. East Wing"}
-            />
-          </label>
-        ))}
+      <div className="sm:col-span-2 grid gap-3">
+        {(towerSlots > 0 ? towerRows.slice(0, towerSlots) : [towerRows[0] ?? { name: "", types: "" }]).map(
+          (row, index) => (
+            <div key={index} className="grid gap-3 sm:grid-cols-2">
+              <label className={complexLabelClass}>
+                {towerSlots > 1 ? `Tower / Wing ${index + 1} Name` : "Name of the Tower / Wing"}
+                <input
+                  name="tower_wing_name"
+                  autoComplete="off"
+                  value={row.name}
+                  onChange={(e) =>
+                    setTowerRows((prev) => {
+                      const next = [...prev];
+                      next[index] = { ...next[index], name: e.target.value };
+                      return next;
+                    })
+                  }
+                  className={complexFieldClass}
+                  placeholder={towerSlots > 1 ? `e.g. Tower ${index + 1}` : "e.g. East Wing"}
+                />
+              </label>
+              <label className={complexLabelClass}>
+                {towerSlots > 1 ? `Tower / Wing ${index + 1} Apartment Types` : "Apartment Types"}
+                <input
+                  name="apartment_types"
+                  autoComplete="off"
+                  value={row.types}
+                  onChange={(e) =>
+                    setTowerRows((prev) => {
+                      const next = [...prev];
+                      next[index] = { ...next[index], types: e.target.value };
+                      return next;
+                    })
+                  }
+                  className={complexFieldClass}
+                  placeholder="e.g. Type A, Type B"
+                />
+                <span className="mt-1 block text-xs font-normal text-[var(--muted)]">Comma-separated</span>
+              </label>
+            </div>
+          ),
+        )}
       </div>
-      <label className={`${complexLabelClass} sm:col-span-2`}>
-        Apartment Types
-        <input
-          name="apartment_types"
-          autoComplete="off"
-          defaultValue={(values?.apartment_types ?? []).join(", ")}
-          className={complexFieldClass}
-          placeholder="e.g. Type A, Type B, Type C"
-        />
-        <span className="mt-1 block text-xs font-normal text-[var(--muted)]">Comma-separated type names</span>
-      </label>
       <label className={complexLabelClass}>
         How Many Swimming Pools
         <input name="swimming_pools_count" inputMode="numeric" defaultValue={values?.swimming_pools_count ?? ""} className={complexFieldClass} />
@@ -692,10 +721,16 @@ export function ComplexesTable({
                       : "Tower / Wing Name",
                     splitTowerNames(viewing.tower_wing_name).join(" · ") || viewing.tower_wing_name,
                   ],
-                  [
-                    "Apartment Types",
-                    viewing.apartment_types?.length ? viewing.apartment_types.join(" · ") : null,
-                  ],
+                  ...(viewing.apartment_types?.length
+                    ? (viewing.apartment_types.map((tower, index) => [
+                        tower.name
+                          ? `${tower.name} Types`
+                          : viewing.apartment_types.length > 1
+                            ? `Tower ${index + 1} Types`
+                            : "Apartment Types",
+                        tower.types.length ? tower.types.join(" · ") : null,
+                      ]) as [string, string | null][])
+                    : []),
                   ["Swimming Pools", viewing.swimming_pools_count],
                   ["Swimming Pool Floor", viewing.swimming_pools_floor],
                   ["Gym Floor", viewing.gym_floor],

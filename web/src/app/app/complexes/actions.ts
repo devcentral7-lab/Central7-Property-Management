@@ -6,6 +6,11 @@ import { logAudit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
+export type ComplexTowerApartmentTypes = {
+  name: string;
+  types: string[];
+};
+
 export type ComplexListItem = {
   id: string;
   name: string;
@@ -21,7 +26,7 @@ export type ComplexListItem = {
   lifts: number | null;
   towers_wings: number | null;
   tower_wing_name: string | null;
-  apartment_types: string[];
+  apartment_types: ComplexTowerApartmentTypes[];
   service_lift: string | null;
   swimming_pools_count: number | null;
   swimming_pools_floor: string | null;
@@ -111,6 +116,39 @@ function intOrNull(raw: string, label: string, min: number, max: number): number
   return n;
 }
 
+function commaList(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[\n,]/)
+        .map((t) => t.trim().replace(/\s+/g, " "))
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function normalizeApartmentTypes(raw: unknown): ComplexTowerApartmentTypes[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const name = String((row as { name?: unknown }).name ?? "").trim().replace(/\s+/g, " ");
+      const typesRaw = (row as { types?: unknown }).types;
+      const types = Array.isArray(typesRaw)
+        ? [
+            ...new Set(
+              typesRaw
+                .map((t) => String(t ?? "").trim().replace(/\s+/g, " "))
+                .filter(Boolean),
+            ),
+          ]
+        : [];
+      if (!name && !types.length) return null;
+      return { name, types };
+    })
+    .filter((row): row is ComplexTowerApartmentTypes => row != null);
+}
+
 function parseFields(formData: FormData) {
   const name = str(formData.get("name"));
   if (!name) throw new Error("Name is required.");
@@ -127,6 +165,16 @@ function parseFields(formData: FormData) {
     ]),
   ];
   const maintenanceType = str(formData.get("maintenance_type")) || null;
+  const towerNames = formData
+    .getAll("tower_wing_name")
+    .map((v) => String(v ?? "").trim().replace(/\s+/g, " "));
+  const towerTypeInputs = formData.getAll("apartment_types").map((v) => String(v ?? ""));
+  const apartment_types = towerNames
+    .map((towerName, index) => ({
+      name: towerName,
+      types: commaList(towerTypeInputs[index] ?? ""),
+    }))
+    .filter((row) => row.name || row.types.length);
   return {
     name,
     location: str(formData.get("location")) || null,
@@ -140,23 +188,8 @@ function parseFields(formData: FormData) {
     deed: str(formData.get("deed")) || null,
     lifts: intOrNull(str(formData.get("lifts")), "Lifts", 1, 3),
     towers_wings: intOrNull(str(formData.get("towers_wings")), "Towers / Wings", 1, 100),
-    tower_wing_name:
-      [
-        ...new Set(
-          formData
-            .getAll("tower_wing_name")
-            .map((v) => String(v ?? "").trim().replace(/\s+/g, " "))
-            .filter(Boolean),
-        ),
-      ].join(" · ") || null,
-    apartment_types: [
-      ...new Set(
-        String(formData.get("apartment_types") ?? "")
-          .split(/[\n,]/)
-          .map((t) => t.trim().replace(/\s+/g, " "))
-          .filter(Boolean),
-      ),
-    ],
+    tower_wing_name: apartment_types.map((t) => t.name).filter(Boolean).join(" · ") || null,
+    apartment_types,
     service_lift: str(formData.get("service_lift")) || null,
     swimming_pools_count: intOrNull(str(formData.get("swimming_pools_count")), "Swimming pools", 0, 50),
     swimming_pools_floor: str(formData.get("swimming_pools_floor")) || null,
@@ -211,7 +244,7 @@ export async function listComplexes(): Promise<ComplexListItem[]> {
   return rows.map((c) => ({
     ...c,
     amenities: c.amenities ?? [],
-    apartment_types: c.apartment_types ?? [],
+    apartment_types: normalizeApartmentTypes(c.apartment_types),
     listing_count: counts.get(c.id) ?? 0,
   }));
 }
