@@ -468,13 +468,13 @@ export function AddComplexButton({ amenityOptions }: { amenityOptions: string[] 
         className={primaryButtonClass}
       >
         <Icon name="plus" className="h-4 w-4" />
-        Add complex
+        Add Complex
       </button>
       <PopupDialog open={open} onClose={() => setOpen(false)} title="Add Apartment Complex" busy={pending} size="xl">
         <form onSubmit={onSubmit} className="grid gap-4 sm:grid-cols-2" suppressHydrationWarning>
           <ComplexFields amenityOptions={amenityOptions} />
           {error ? <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)] sm:col-span-2">{error}</p> : null}
-          <FormButtons pending={pending} onCancel={() => setOpen(false)} label="Add complex" pendingLabel="Adding…" />
+          <FormButtons pending={pending} onCancel={() => setOpen(false)} label="Add Complex" pendingLabel="Adding…" />
         </form>
       </PopupDialog>
     </>

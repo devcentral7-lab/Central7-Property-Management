@@ -45,9 +45,6 @@ export default async function ComplexesPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold sm:text-3xl">Apartment Complexes</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            View, add, edit and remove the apartment buildings used on listings.
-          </p>
         </div>
         <div className="shrink-0">
           <AddComplexButton amenityOptions={amenityOptions} />

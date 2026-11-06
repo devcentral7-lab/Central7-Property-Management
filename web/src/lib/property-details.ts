@@ -74,9 +74,31 @@ function telHref(phone: string) {
   return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
+/** Property amenities first, then complex defaults — case-insensitive, no duplicates. */
+export function mergeAmenityLists(
+  propertyAmenities: readonly unknown[] | null | undefined,
+  complexAmenities: readonly unknown[] | null | undefined = [],
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of [...(propertyAmenities ?? []), ...(complexAmenities ?? [])]) {
+    const name = String(raw ?? "").trim().replace(/\s+/g, " ");
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
 export function buildPropertyDetails(
   p: Row,
-  extras: { complexName?: string | null; hideContact?: boolean } = {},
+  extras: {
+    complexName?: string | null;
+    complexAmenities?: readonly string[] | null;
+    hideContact?: boolean;
+  } = {},
 ): PropertyDetailsModel {
   const propertyType = str(p.property_type);
   const opportunity = str(p.opportunity_type);
@@ -202,7 +224,10 @@ export function buildPropertyDetails(
     priceNote: has(p.price_total) ? priceNote : null,
     facts,
     sections,
-    amenities: ((p.amenities || []) as string[]).filter(has),
+    amenities: mergeAmenityLists(
+      (p.amenities || []) as string[],
+      extras.complexAmenities,
+    ),
     doNotPublish: Boolean(p.do_not_publish),
     social: null,
   };

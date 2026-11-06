@@ -49,10 +49,10 @@ export async function loadPropertyDetail(refNoRaw: string) {
       property.apartment_complex_id
         ? supabase
             .from("apartment_complexes")
-            .select("name")
+            .select("name, amenities")
             .eq("id", property.apartment_complex_id)
             .maybeSingle()
-        : Promise.resolve({ data: null }),
+        : Promise.resolve({ data: null as { name: string; amenities: string[] | null } | null }),
       loadFormOptions(),
       loadSocialMediaStatus(refNo),
     ]);
@@ -60,6 +60,7 @@ export async function loadPropertyDetail(refNoRaw: string) {
   const details = {
     ...buildPropertyDetails(property, {
       complexName: complex?.name ?? null,
+      complexAmenities: complex?.amenities ?? [],
       hideContact: socialOnly,
     }),
     social,
