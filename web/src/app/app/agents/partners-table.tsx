@@ -241,7 +241,6 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
         <div className="flex flex-col gap-3 border-b border-[var(--line)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="font-display text-lg font-semibold">Partner Directory</h2>
-            <p className="text-xs text-[var(--muted)]">Agencies and brokers who list through Central7.</p>
           </div>
           <SearchBox value={query} onChange={setQuery} placeholder="Search company, contact or username" />
         </div>
@@ -259,14 +258,14 @@ export function PartnersTable({ rows }: { rows: PartnerListItem[] }) {
         ) : null}
 
         <table className="hidden w-full text-left text-sm md:table">
-          <thead className="bg-[var(--bg)]/60 text-xs uppercase tracking-wide text-[var(--muted)]">
+          <thead className="bg-[var(--bg)]/60 text-sm text-[var(--ink)]">
             <tr>
-              <th className="px-5 py-3 font-semibold">Partner</th>
-              <th className="px-4 py-3 font-semibold">Contact</th>
-              <th className="px-4 py-3 font-semibold">Approval</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Login</th>
-              <th className="px-5 py-3 text-right font-semibold">
+              <th className="px-5 py-3 font-bold">Partner</th>
+              <th className="px-4 py-3 font-bold">Contact</th>
+              <th className="px-4 py-3 font-bold">Approval</th>
+              <th className="px-4 py-3 font-bold">Status</th>
+              <th className="px-4 py-3 font-bold">Login</th>
+              <th className="px-5 py-3 text-right font-bold">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>

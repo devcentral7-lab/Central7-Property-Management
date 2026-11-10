@@ -108,13 +108,13 @@ export function RegisterPartnerForm() {
         className={primaryButtonClass}
       >
         <Icon name="plus" className="h-4 w-4" />
-        Add partner
+        Add Partner
       </button>
 
       <PopupDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Register Partner"
+        title="Add Partner"
         subtitle="Partner agencies sign in with the Agent role."
         busy={pending}
         size="lg"
@@ -133,7 +133,7 @@ export function RegisterPartnerForm() {
               Cancel
             </button>
             <button type="submit" disabled={pending} className={`flex-1 sm:flex-none ${primaryButtonClass}`}>
-              {pending ? "Registering…" : "Register partner"}
+              {pending ? "Adding…" : "Add Partner"}
             </button>
           </div>
         </form>

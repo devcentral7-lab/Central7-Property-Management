@@ -353,14 +353,14 @@ function NumberTable({
   scroll?: boolean;
 }) {
   const sum = rows.reduce((acc, r) => acc + r.value, 0);
-  const th = `pb-2 font-semibold ${scroll ? "sticky top-0 z-[1] bg-[var(--card)]" : ""}`;
+  const th = `pb-2 font-bold text-[var(--ink)] ${scroll ? "sticky top-0 z-[1] bg-[var(--card)]" : ""}`;
   return (
     <Section title={title} subtitle={subtitle} icon={icon}>
       {rows.length ? (
         <div className={scroll ? "max-h-[30rem] overflow-y-auto" : undefined}>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wider text-[var(--muted)]">
+            <tr className="text-left text-sm text-[var(--ink)]">
               <th className={`${th} pr-3`}>{nameHeader}</th>
               <th className={`${th} hidden pr-3 sm:table-cell`}>Share</th>
               <th className={`${th} pr-3 text-right`}>Count</th>
@@ -436,7 +436,7 @@ function NumberTable({
 }
 
 const stickyTh =
-  "sticky top-0 z-[1] whitespace-nowrap bg-[var(--card)] pb-2 pr-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]";
+  "sticky top-0 z-[1] whitespace-nowrap bg-[var(--card)] pb-2 pr-3 text-sm font-bold text-[var(--ink)]";
 
 function Num({ value, strong = false }: { value: number; strong?: boolean }) {
   return (
@@ -691,8 +691,8 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
                       {c.label}
                     </th>
                   ))}
-                  <th className={`${stickyTh} text-right`}>Remaining to publish</th>
-                  <th className={`${stickyTh} pr-0 text-right`}>Remaining to republish</th>
+                  <th className={`${stickyTh} text-right`}>Remaining to Publish</th>
+                  <th className={`${stickyTh} pr-0 text-right`}>Remaining to Republish</th>
                 </tr>
               </thead>
               <tbody>

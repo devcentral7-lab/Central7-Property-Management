@@ -104,7 +104,7 @@ function Section({
   );
 }
 
-const th = "whitespace-nowrap pb-2 pr-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]";
+const th = "whitespace-nowrap pb-2 pr-3 text-sm font-bold text-[var(--ink)]";
 const td = "py-2.5 pr-3";
 const num = "py-2.5 pr-3 text-right tabular-nums whitespace-nowrap";
 
@@ -487,7 +487,7 @@ export default async function FinancePage({ searchParams }: { searchParams: Sear
                 {[
                   ["Date", ""],
                   ["Invoice", ""],
-                  ["Customer / details", ""],
+                  ["Customer / Details", ""],
                   ["Type", ""],
                   ["Agents", ""],
                   ["Amount", "text-right"],

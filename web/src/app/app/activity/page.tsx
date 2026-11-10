@@ -677,15 +677,15 @@ export default async function ActivityPage({
 
       <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)] md:block">
         <table className="w-full min-w-[860px] text-left text-sm">
-          <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/50 text-[var(--muted)]">
+          <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/50 text-[var(--ink)]">
             <tr>
-              <th className="px-4 py-3">When</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Action</th>
-              <th className="px-4 py-3">Actor</th>
-              <th className="px-4 py-3">Subject</th>
-              <th className="px-4 py-3">Details</th>
-              <th className="min-w-52 px-4 py-3">Status</th>
+              <th className="px-4 py-3 font-bold">When</th>
+              <th className="px-4 py-3 font-bold">Category</th>
+              <th className="px-4 py-3 font-bold">Action</th>
+              <th className="px-4 py-3 font-bold">Actor</th>
+              <th className="px-4 py-3 font-bold">Subject</th>
+              <th className="px-4 py-3 font-bold">Details</th>
+              <th className="min-w-52 px-4 py-3 font-bold">Status</th>
             </tr>
           </thead>
           <tbody>

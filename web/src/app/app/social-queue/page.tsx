@@ -4,7 +4,6 @@ import { canAccessSocialQueue, requireProfile } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PropertyLink } from "@/app/app/properties/property-modal";
 import { StatusBadge } from "@/components/status-badge";
-import { PhoneWithWhatsApp } from "@/components/whatsapp-link";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { Pager, pageFromParam } from "@/components/pager";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -20,12 +19,10 @@ type QueueProperty = {
   property_type: string | null;
   city: string | null;
   status: string | null;
-  contact_name: string | null;
-  contact_phone_1: string | null;
 } | null;
 
 const SELECT =
-  "id, ref_no, approved_action, approved_by, approved_at, completed_at, requested_platforms, platform_dates, comment, property:properties(opportunity_type, property_type, city, status, contact_name, contact_phone_1)";
+  "id, ref_no, approved_action, approved_by, approved_at, completed_at, requested_platforms, platform_dates, comment, property:properties(opportunity_type, property_type, city, status)";
 
 const STATUS_OPTIONS = [
   "Publish",
@@ -66,7 +63,6 @@ export default async function SocialQueuePage({
   if (!(await canAccessSocialQueue(profile))) {
     redirect("/app");
   }
-  const hideOwnerContact = profile.role === "Social Media Manager";
 
   const sp = await searchParams;
   const tab =
@@ -245,28 +241,11 @@ export default async function SocialQueuePage({
                   ) : null}
                   {property?.status ? <StatusBadge status={property.status} className="text-xs" /> : null}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-[var(--muted)]">
-                  {summary.length ? <span>{summary.join(" · ")}</span> : null}
-                  {!hideOwnerContact && (property?.contact_name || property?.contact_phone_1) ? (
-                    <>
-                      {summary.length ? <span aria-hidden>·</span> : null}
-                      {property?.contact_name ? (
-                        <span className="text-[var(--ink)]">{property.contact_name}</span>
-                      ) : null}
-                      {property?.contact_phone_1 ? (
-                        <PhoneWithWhatsApp phone={property.contact_phone_1}>
-                          <a
-                            href={`tel:${property.contact_phone_1}`}
-                            data-nav-skip
-                            className="font-medium text-[var(--brand)] hover:underline"
-                          >
-                            {property.contact_phone_1}
-                          </a>
-                        </PhoneWithWhatsApp>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
+                {summary.length ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-[var(--muted)]">
+                    <span>{summary.join(" · ")}</span>
+                  </div>
+                ) : null}
 
                 {row.comment ? (
                   <div className="mt-3 rounded-lg border-l-[3px] border-[var(--brand)] bg-[var(--brand)]/[0.06] px-3.5 py-2.5">
