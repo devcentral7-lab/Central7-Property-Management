@@ -1,12 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import {
-  SocialQueueActions,
-  SocialQueueStatusBadge,
-  type SocialQueueStatus,
-} from "@/app/app/social-queue/queue-actions";
-import { DataChangeActions } from "@/app/app/activity/data-change-actions";
 import { PropertyLink, PropertyRow } from "@/app/app/properties/property-modal";
 import { LinkRow } from "@/components/clickable-row";
 import { LiveFilterForm } from "@/components/live-filter-form";
@@ -32,27 +26,7 @@ type FeedRow = {
   subject_href: string | null;
   summary: string | null;
   detail_lines: string[];
-  /** Social approvals: what the agent asked for (Publish, Drop, …). */
-  intent?: string | null;
-  queue_id?: string;
-  queue_status?: SocialQueueStatus;
-  queue_platforms?: string[];
-  data_change?: {
-    id: string;
-    resolved_at: string | null;
-    resolved_by: string | null;
-    resolution_note: string | null;
-    queue_status: SocialQueueStatus | null;
-  };
 };
-
-type PropertyBits = {
-  property_type: string | null;
-  opportunity_type: string | null;
-  city: string | null;
-  created_by_name?: string | null;
-};
-type Embedded<T> = T | T[] | null;
 
 type AuditRow = {
   id: string | number;
@@ -77,30 +51,6 @@ type WorkflowRow = {
   action: string;
   comment: string | null;
   requested_platforms: string[] | null;
-};
-
-type SocialRow = {
-  id: string;
-  ref_no: string;
-  approved_action: string | null;
-  approved_at: string | null;
-  completed_at: string | null;
-  requested_platforms: string[] | null;
-  created_at: string;
-  updated_at: string | null;
-  property: Embedded<PropertyBits>;
-};
-
-type DataChangeRow = {
-  id: string;
-  occurred_at: string;
-  ref_no: string;
-  actor_name: string | null;
-  comment: string | null;
-  resolved_at: string | null;
-  resolved_by: string | null;
-  resolution_note: string | null;
-  property: Embedded<PropertyBits>;
 };
 
 function EventRow({
@@ -140,23 +90,8 @@ function humanize(action: string) {
   return text ? text[0].toUpperCase() + text.slice(1) : text;
 }
 
-function IntentPill({ intent }: { intent: string }) {
-  const tone = ["Publish", "Republish", "New Ad Published"].includes(intent)
-    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-    : intent === "Hold"
-      ? "border-amber-200 bg-amber-50 text-amber-800"
-      : "border-rose-200 bg-rose-50 text-rose-800";
-  return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${tone}`}>
-      {intent}
-    </span>
-  );
-}
-
 const CATEGORIES = [
   { id: "all", label: "All" },
-  { id: "social", label: "Social media approvals" },
-  { id: "data_change", label: "Data changes" },
   { id: "queue", label: "Social media queue" },
   { id: "auth", label: "Logins" },
   { id: "property", label: "Properties" },
@@ -169,8 +104,9 @@ const CATEGORIES = [
 
 const DEFAULT_CATEGORY = CATEGORIES[0].id;
 
+const APPROVAL_REDIRECTS = new Set(["social", "data_change"]);
+
 function categoryLabel(category: string) {
-  if (category === "social") return "Social media";
   return CATEGORIES.find((c) => c.id === category)?.label ?? category;
 }
 
@@ -181,20 +117,10 @@ function formatDetails(details: unknown): string[] {
   return Object.entries(details as Record<string, unknown>)
     .filter(([, v]) => v != null && v !== "")
     .map(([k, v]) => {
-      const value =
-        typeof v === "object" ? JSON.stringify(v) : String(v);
+      const value = typeof v === "object" ? JSON.stringify(v) : String(v);
       return `${k}: ${value}`;
     })
     .slice(0, 8);
-}
-
-function socialStatus(row: {
-  approved_at: string | null;
-  completed_at: string | null;
-}): SocialQueueStatus {
-  if (row.completed_at) return "published";
-  if (row.approved_at) return "approved";
-  return "pending";
 }
 
 export default async function ActivityPage({
@@ -207,12 +133,18 @@ export default async function ActivityPage({
 
   const sp = await searchParams;
   const requested = one(sp.category).toLowerCase();
+  if (APPROVAL_REDIRECTS.has(requested)) {
+    const params = new URLSearchParams({ tab: requested });
+    const q = one(sp.q).trim();
+    if (q) params.set("q", q);
+    if (one(sp.pending) === "1") params.set("pending", "1");
+    redirect(`/app/admin-approvals?${params}`);
+  }
+
   const category = CATEGORIES.some((c) => c.id === requested)
     ? requested
     : DEFAULT_CATEGORY;
   const q = one(sp.q).trim();
-  const pendingOnly = one(sp.pending) === "1";
-  const showPendingToggle = category === "all" || category === "data_change";
   const page = pageFromParam(sp.page);
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -220,59 +152,12 @@ export default async function ActivityPage({
   const like = (cols: string[]) => cols.map((c) => `${c}.ilike.%${term}%`).join(",");
   const supabase = await createClient();
 
-  const pendingSocial = () => {
-    let query = supabase
-      .from("social_media_queue")
-      .select(
-        "id, ref_no, approved_action, approved_by, approved_at, requested_platforms, completed_at, created_at, updated_at, property:properties(property_type, opportunity_type, city, created_by_name)",
-        { count: "exact" },
-      )
-      .is("approved_at", null)
-      .is("completed_at", null)
-      .neq("requested_platforms", "{}");
-    if (term) query = query.or(like(["ref_no", "approved_action"]));
-    return query.order("updated_at", { ascending: false, nullsFirst: false });
-  };
-  const dataChanges = () => {
-    let query = supabase
-      .from("property_status_events")
-      .select(
-        "id, occurred_at, ref_no, actor_name, comment, resolved_at, resolved_by, resolution_note, property:properties(property_type, opportunity_type, city)",
-        { count: "exact" },
-      )
-      .eq("action", "Data Change")
-      .is("archived_at", null);
-    if (pendingOnly) query = query.is("resolved_at", null);
-    if (term) query = query.or(like(["ref_no", "actor_name", "comment"]));
-    return query.order("occurred_at", { ascending: false });
-  };
-
   async function loadCategory(): Promise<{
     error: string | null;
     total: number;
     audit?: AuditRow[];
     workflow?: WorkflowRow[];
-    social?: SocialRow[];
-    dataChange?: DataChangeRow[];
   }> {
-    if (category === "all") {
-      // Two tables share one timeline: take the newest rows of each up to this page, then merge.
-      const [s, d] = await Promise.all([pendingSocial().range(0, to), dataChanges().range(0, to)]);
-      return {
-        error: s.error?.message || d.error?.message || null,
-        total: (s.count ?? 0) + (d.count ?? 0),
-        social: s.data ?? [],
-        dataChange: d.data ?? [],
-      };
-    }
-    if (category === "social") {
-      const s = await pendingSocial().range(from, to);
-      return { error: s.error?.message ?? null, total: s.count ?? 0, social: s.data ?? [] };
-    }
-    if (category === "data_change") {
-      const d = await dataChanges().range(from, to);
-      return { error: d.error?.message ?? null, total: d.count ?? 0, dataChange: d.data ?? [] };
-    }
     if (category === "workflow") {
       let query = supabase
         .from("property_status_events")
@@ -284,44 +169,26 @@ export default async function ActivityPage({
       const w = await query.order("occurred_at", { ascending: false }).range(from, to);
       return { error: w.error?.message ?? null, total: w.count ?? 0, workflow: w.data ?? [] };
     }
+
     let query = supabase
       .from("audit_log")
       .select(
         "id, occurred_at, category, action, actor_name, actor_kind, subject_type, subject_id, subject_label, summary, details, ip",
         { count: "exact" },
-      )
-      .eq("category", category);
+      );
+    if (category !== "all") query = query.eq("category", category);
     if (term) query = query.or(like(["actor_name", "subject_label", "summary", "action"]));
     const a = await query.order("occurred_at", { ascending: false }).range(from, to);
     return { error: a.error?.message ?? null, total: a.count ?? 0, audit: a.data ?? [] };
   }
 
-  const [loaded, pendingHead, openHead] = await Promise.all([
-    loadCategory(),
-    supabase
-      .from("social_media_queue")
-      .select("id", { count: "exact", head: true })
-      .is("approved_at", null)
-      .is("completed_at", null)
-      .neq("requested_platforms", "{}"),
-    supabase
-      .from("property_status_events")
-      .select("id", { count: "exact", head: true })
-      .eq("action", "Data Change")
-      .is("archived_at", null)
-      .is("resolved_at", null),
-  ]);
-
+  const loaded = await loadCategory();
   if (loaded.error) {
     return <p className="text-[var(--danger)]">{loaded.error}</p>;
   }
 
   const auditRows = loaded.audit ?? [];
   const workflowRows = loaded.workflow ?? [];
-  const socialRows = loaded.social ?? [];
-  const dataChangeRows = loaded.dataChange ?? [];
-  const pendingApprovals = pendingHead.count ?? 0;
-  const openDataChanges = openHead.count ?? 0;
   const total = loaded.total;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -372,129 +239,24 @@ export default async function ActivityPage({
     });
   }
 
-  const socialRefs = [...new Set(socialRows.map((r) => r.ref_no))];
-  const requesterByRef = new Map<string, string>();
-  if (socialRefs.length) {
-    const { data: requestEvents } = await supabase
-      .from("property_status_events")
-      .select("ref_no, actor_name")
-      .in("ref_no", socialRefs)
-      .not("actor_name", "is", null)
-      .order("occurred_at", { ascending: false })
-      .limit(500);
-    for (const ev of requestEvents ?? []) {
-      if (ev.actor_name && !requesterByRef.has(ev.ref_no)) {
-        requesterByRef.set(ev.ref_no, ev.actor_name);
-      }
-    }
-  }
-
-  for (const row of socialRows) {
-    const property = (Array.isArray(row.property) ? row.property[0] : row.property) as {
-      property_type: string | null;
-      opportunity_type: string | null;
-      city: string | null;
-      created_by_name: string | null;
-    } | null;
-    const platforms = Array.isArray(row.requested_platforms)
-      ? (row.requested_platforms as string[])
-      : [];
-    const occurred =
-      row.completed_at ||
-      row.approved_at ||
-      row.updated_at ||
-      row.created_at;
-    const requester = requesterByRef.get(row.ref_no) ?? property?.created_by_name ?? null;
-    const propertySummary = [
-      property?.property_type,
-      property?.opportunity_type,
-      property?.city,
-    ].filter(Boolean).join(" · ");
-    feed.push({
-      id: `smq-${row.id}`,
-      occurred_at: occurred,
-      category: "social",
-      action: "awaiting_approval",
-      actor_name: requester,
-      actor_kind: requester ? "requested" : null,
-      subject_label: row.ref_no,
-      subject_href: `/app/properties/${row.ref_no}`,
-      summary: propertySummary || null,
-      detail_lines: ["Needs approval before it appears on the Social media queue."],
-      intent: row.approved_action,
-      queue_id: row.id,
-      queue_status: socialStatus(row),
-      queue_platforms: platforms,
-    });
-  }
-
-  const resolvedRefs = [
-    ...new Set(dataChangeRows.filter((r) => r.resolved_at).map((r) => r.ref_no)),
-  ];
-  const dataChangeQueue = new Map<string, { approved_at: string | null; completed_at: string | null }>();
-  if (resolvedRefs.length) {
-    const { data: queueRows } = await supabase
-      .from("social_media_queue")
-      .select("ref_no, approved_at, completed_at")
-      .in("ref_no", resolvedRefs);
-    for (const row of queueRows ?? []) dataChangeQueue.set(row.ref_no, row);
-  }
-
-  for (const row of dataChangeRows) {
-    const property = (Array.isArray(row.property) ? row.property[0] : row.property) as {
-      property_type: string | null;
-      opportunity_type: string | null;
-      city: string | null;
-    } | null;
-    const queueRow = dataChangeQueue.get(row.ref_no);
-    // Queue rows are per ref; only the request that created this item owns it.
-    const sentToQueue =
-      row.resolved_at &&
-      queueRow?.approved_at &&
-      new Date(queueRow.approved_at).getTime() === new Date(row.resolved_at).getTime();
-    feed.push({
-      id: `dc-${row.id}`,
-      occurred_at: row.occurred_at,
-      category: "data_change",
-      action: "data_change_request",
-      actor_name: row.actor_name,
-      actor_kind: row.actor_name ? "requested" : null,
-      subject_label: row.ref_no,
-      subject_href: `/app/properties/${row.ref_no}`,
-      summary: row.comment || "No details given",
-      detail_lines: [
-        [property?.property_type, property?.opportunity_type, property?.city]
-          .filter(Boolean)
-          .join(" · "),
-      ].filter(Boolean),
-      data_change: {
-        id: row.id,
-        resolved_at: row.resolved_at,
-        resolved_by: row.resolved_by,
-        resolution_note: row.resolution_note,
-        queue_status: sentToQueue && queueRow ? socialStatus(queueRow) : null,
-      },
-    });
-  }
-
-  feed.sort(
-    (a, b) =>
-      new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
-  );
-
-  const visible = category === "all" ? feed.slice(from, to + 1) : feed;
-
   function hrefFor(p: number) {
     const params = new URLSearchParams({ category });
     if (q) params.set("q", q);
-    if (pendingOnly) params.set("pending", "1");
     if (p > 1) params.set("page", String(p));
     return `/app/activity?${params}`;
   }
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-semibold sm:text-3xl">Activity Log</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <h1 className="font-display text-2xl font-semibold sm:text-3xl">Activity Log</h1>
+        <Link
+          href="/app/admin-approvals"
+          className="shrink-0 rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold text-[var(--ink)] hover:bg-[var(--bg-accent)]"
+        >
+          Admin Approvals
+        </Link>
+      </div>
 
       <LiveFilterForm
         action="/app/activity"
@@ -524,38 +286,14 @@ export default async function ActivityPage({
             className="mt-1 w-full rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
           />
         </label>
-        {showPendingToggle ? (
-          <label className="flex cursor-pointer select-none items-center gap-2.5 self-start rounded-xl border border-[var(--line)] px-3 py-2 text-sm font-medium sm:self-auto">
-            <input
-              type="checkbox"
-              name="pending"
-              value="1"
-              defaultChecked={pendingOnly}
-              className="peer sr-only"
-            />
-            <span
-              aria-hidden
-              className="relative h-5 w-9 shrink-0 rounded-full bg-[var(--line)] transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow-sm after:transition-transform peer-checked:bg-[var(--sidebar)] peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--brand)]/40"
-            />
-            Pending approvals only
-          </label>
-        ) : pendingOnly ? (
-          <input type="hidden" name="pending" value="1" />
-        ) : null}
       </LiveFilterForm>
 
       <div className="tab-scroll -mx-4 mt-4 px-4 sm:mx-0 sm:px-0">
         {CATEGORIES.map((c) => {
           const href = `/app/activity?category=${c.id}${
             q ? `&q=${encodeURIComponent(q)}` : ""
-          }${pendingOnly ? "&pending=1" : ""}`;
+          }`;
           const active = category === c.id;
-          const badge =
-            c.id === "all"
-              ? pendingApprovals + openDataChanges
-              : c.id === "data_change"
-                ? openDataChanges
-                : 0;
           return (
             <Link
               key={c.id}
@@ -567,16 +305,6 @@ export default async function ActivityPage({
               }`}
             >
               {c.label}
-              {badge ? (
-                <span
-                  className={`ml-1.5 inline-flex min-w-5 justify-center rounded-full px-1.5 text-[10px] leading-4 ${
-                    active ? "bg-white text-[var(--brand)]" : "bg-[var(--brand)] text-white"
-                  }`}
-                  title={`${badge} to do`}
-                >
-                  {badge}
-                </span>
-              ) : null}
             </Link>
           );
         })}
@@ -588,25 +316,13 @@ export default async function ActivityPage({
       </p>
 
       <ul className="mt-4 divide-y divide-[var(--line)] overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] md:hidden">
-        {visible.map((e) => (
+        {feed.map((e) => (
           <EventRow key={e.id} e={e} as="li" className="px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-medium">{humanize(e.action)}</p>
-                <p className="text-xs text-[var(--muted)]">
-                  {categoryLabel(e.category)}
-                  {" · "}
-                  {e.occurred_at
-                    ? new Date(e.occurred_at).toLocaleString()
-                    : "—"}
-                </p>
-              </div>
-              {e.subject_href && e.subject_label ? (
-                <div className="shrink-0 text-sm">
-                  {e.subject_href.startsWith("/app/properties/") ? (
-                    <PropertyLink refNo={e.subject_label}>
-                      {e.subject_label}
-                    </PropertyLink>
+                {e.subject_href && e.subject_label ? (
+                  e.subject_href.startsWith("/app/properties/") ? (
+                    <PropertyLink refNo={e.subject_label}>{e.subject_label}</PropertyLink>
                   ) : (
                     <Link
                       href={e.subject_href}
@@ -614,29 +330,24 @@ export default async function ActivityPage({
                     >
                       {e.subject_label}
                     </Link>
-                  )}
-                </div>
-              ) : e.subject_label ? (
-                <span className="shrink-0 text-sm">{e.subject_label}</span>
-              ) : null}
-            </div>
-            {e.actor_name ? (
-              <p className="mt-1 text-sm">
-                {e.actor_name}
-                {e.actor_kind ? (
-                  <span className="text-xs text-[var(--muted)]">
-                    {" "}
-                    · {e.actor_kind}
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-            {e.intent || e.summary ? (
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                {e.intent ? <IntentPill intent={e.intent} /> : null}
-                {e.summary ? <p className="break-words text-sm">{e.summary}</p> : null}
+                  )
+                ) : (
+                  <p className="font-semibold">{e.subject_label || "—"}</p>
+                )}
+                <p className="mt-0.5 text-sm">
+                  {e.actor_name || "—"}
+                  {e.actor_kind ? (
+                    <span className="text-xs text-[var(--muted)]"> · {e.actor_kind}</span>
+                  ) : null}
+                </p>
               </div>
-            ) : null}
+              <p className="shrink-0 text-xs text-[var(--muted)]">
+                {e.occurred_at ? new Date(e.occurred_at).toLocaleString() : "—"}
+              </p>
+            </div>
+            <p className="mt-2 text-sm font-medium">{humanize(e.action)}</p>
+            <p className="text-xs text-[var(--muted)]">{categoryLabel(e.category)}</p>
+            {e.summary ? <p className="mt-1 break-words text-sm">{e.summary}</p> : null}
             {e.detail_lines.length ? (
               <ul className="mt-1 space-y-0.5 break-words text-xs text-[var(--muted)]">
                 {e.detail_lines.map((line) => (
@@ -644,79 +355,37 @@ export default async function ActivityPage({
                 ))}
               </ul>
             ) : null}
-            {e.queue_id && e.queue_status ? (
-              <div className="mt-3 space-y-2 border-t border-[var(--line)] pt-3" data-row-ignore>
-                <SocialQueueStatusBadge status={e.queue_status} />
-                <SocialQueueActions
-                  id={e.queue_id}
-                  status={e.queue_status}
-                  mode="activity"
-                  platforms={e.queue_platforms}
-                />
-              </div>
-            ) : null}
-            {e.data_change ? (
-              <div className="mt-3 border-t border-[var(--line)] pt-3" data-row-ignore>
-                <DataChangeActions
-                  id={e.data_change.id}
-                  resolvedAt={e.data_change.resolved_at}
-                  resolvedBy={e.data_change.resolved_by}
-                  note={e.data_change.resolution_note}
-                  queueStatus={e.data_change.queue_status}
-                />
-              </div>
-            ) : null}
           </EventRow>
         ))}
-        {!visible.length ? (
-          <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">
-            No events yet.
-          </li>
+        {!feed.length ? (
+          <li className="px-4 py-8 text-center text-sm text-[var(--muted)]">No events yet.</li>
         ) : null}
       </ul>
 
       <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)] md:block">
-        <table className="w-full min-w-[860px] text-left text-sm">
+        <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/50 text-[var(--ink)]">
             <tr>
+              <th className="px-4 py-3 font-bold">Ref No</th>
+              <th className="px-4 py-3 font-bold">User</th>
               <th className="px-4 py-3 font-bold">When</th>
               <th className="px-4 py-3 font-bold">Category</th>
               <th className="px-4 py-3 font-bold">Action</th>
-              <th className="px-4 py-3 font-bold">Actor</th>
-              <th className="px-4 py-3 font-bold">Subject</th>
               <th className="px-4 py-3 font-bold">Details</th>
-              <th className="min-w-52 px-4 py-3 font-bold">Status</th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((e) => (
+            {feed.map((e) => (
               <EventRow
                 key={e.id}
                 e={e}
                 as="tr"
                 className="border-b border-[var(--line)] align-top last:border-0"
               >
-                <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--muted)]">
-                  {e.occurred_at
-                    ? new Date(e.occurred_at).toLocaleString()
-                    : "—"}
-                </td>
-                <td className="px-4 py-3">{categoryLabel(e.category)}</td>
-                <td className="px-4 py-3 font-medium">{humanize(e.action)}</td>
-                <td className="px-4 py-3">
-                  {e.actor_name || "—"}
-                  {e.actor_kind ? (
-                    <span className="mt-0.5 block text-xs text-[var(--muted)]">
-                      {e.actor_kind}
-                    </span>
-                  ) : null}
-                </td>
                 <td className="px-4 py-3">
                   {e.subject_href && e.subject_label ? (
                     e.subject_href.startsWith("/app/properties/") ? (
-                      <PropertyLink refNo={e.subject_label}>
-                        {e.subject_label}
-                      </PropertyLink>
+                      <PropertyLink refNo={e.subject_label}>{e.subject_label}</PropertyLink>
                     ) : (
                       <Link
                         href={e.subject_href}
@@ -730,12 +399,18 @@ export default async function ActivityPage({
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {e.intent || e.summary ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {e.intent ? <IntentPill intent={e.intent} /> : null}
-                      {e.summary ? <p className="text-sm">{e.summary}</p> : null}
-                    </div>
+                  {e.actor_name || "—"}
+                  {e.actor_kind ? (
+                    <span className="mt-0.5 block text-xs text-[var(--muted)]">{e.actor_kind}</span>
                   ) : null}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--muted)]">
+                  {e.occurred_at ? new Date(e.occurred_at).toLocaleString() : "—"}
+                </td>
+                <td className="px-4 py-3">{categoryLabel(e.category)}</td>
+                <td className="px-4 py-3 font-medium">{humanize(e.action)}</td>
+                <td className="px-4 py-3">
+                  {e.summary ? <p className="text-sm">{e.summary}</p> : null}
                   {e.detail_lines.length ? (
                     <ul className="mt-1 space-y-0.5 text-xs text-[var(--muted)]">
                       {e.detail_lines.map((line) => (
@@ -744,39 +419,11 @@ export default async function ActivityPage({
                     </ul>
                   ) : null}
                 </td>
-                <td className="px-4 py-3">
-                  {e.queue_id && e.queue_status ? (
-                    <div className="space-y-2" data-row-ignore>
-                      <SocialQueueStatusBadge status={e.queue_status} />
-                      <SocialQueueActions
-                        id={e.queue_id}
-                        status={e.queue_status}
-                        mode="activity"
-                        platforms={e.queue_platforms}
-                      />
-                    </div>
-                  ) : e.data_change ? (
-                    <div data-row-ignore>
-                      <DataChangeActions
-                        id={e.data_change.id}
-                        resolvedAt={e.data_change.resolved_at}
-                        resolvedBy={e.data_change.resolved_by}
-                        note={e.data_change.resolution_note}
-                        queueStatus={e.data_change.queue_status}
-                      />
-                    </div>
-                  ) : (
-                    "—"
-                  )}
-                </td>
               </EventRow>
             ))}
-            {!visible.length ? (
+            {!feed.length ? (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-8 text-center text-sm text-[var(--muted)]"
-                >
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--muted)]">
                   No events yet.
                 </td>
               </tr>

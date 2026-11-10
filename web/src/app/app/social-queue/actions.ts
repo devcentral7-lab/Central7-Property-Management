@@ -29,6 +29,7 @@ async function requireQueueOperator() {
 
 function revalidateQueue() {
   revalidatePath("/app/social-queue");
+  revalidatePath("/app/admin-approvals");
   revalidatePath("/app/activity");
   revalidatePath("/app");
 }

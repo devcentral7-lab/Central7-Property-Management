@@ -66,6 +66,11 @@ export default async function AppLayout({
                 icon: "users",
                 match: "exact",
               },
+              {
+                href: "/app/admin-approvals",
+                label: "Admin Approvals",
+                icon: "check",
+              },
               { href: "/app/activity", label: "Activity Log", icon: "activity" },
               { href: "/app/finance", label: "Finance", icon: "finance" },
             ] as SidebarNavItem[])

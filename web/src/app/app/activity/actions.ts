@@ -181,6 +181,7 @@ async function resolve(id: string, chosenPlatforms?: string[]): Promise<ResolveD
     },
   });
 
+  revalidatePath("/app/admin-approvals");
   revalidatePath("/app/activity");
   revalidatePath("/app/social-queue");
   revalidatePath("/app");

@@ -110,7 +110,9 @@ function skeletonFor(url: URL) {
       />
     );
   }
-  if (path.startsWith("/app/activity")) return <ActivitySkeleton />;
+  if (path.startsWith("/app/activity") || path.startsWith("/app/admin-approvals")) {
+    return <ActivitySkeleton />;
+  }
   if (path.startsWith("/app/social-queue")) return <SocialQueueSkeleton />;
   if (
     path.startsWith("/app/user-management") ||

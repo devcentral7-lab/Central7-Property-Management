@@ -873,12 +873,12 @@ export function AdminDashboard({
           />
           <TileGroup
             title="Awaiting Approval"
-            hint="on the Activity log"
+            hint="on Admin Approvals"
             icon="clock"
             cols="lg:grid-cols-4"
             tiles={[
-              { label: "Publish pending approval", value: ov.publish_pending_approval, tone: "attention", href: "/app/activity?category=social" },
-              { label: "Republish pending approval", value: ov.republish_pending_approval, tone: "attention", href: "/app/activity?category=social" },
+              { label: "Publish pending approval", value: ov.publish_pending_approval, tone: "attention", href: "/app/admin-approvals?tab=social" },
+              { label: "Republish pending approval", value: ov.republish_pending_approval, tone: "attention", href: "/app/admin-approvals?tab=social" },
             ]}
           />
         </div>
