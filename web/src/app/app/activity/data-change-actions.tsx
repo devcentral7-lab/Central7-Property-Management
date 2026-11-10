@@ -54,32 +54,36 @@ export function DataChangeActions({
   if (resolvedAt) {
     const detail = note || message;
     return (
-      <div className="space-y-1.5">
-        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-          Done
-        </span>
-        <p className="text-xs text-[var(--muted)]">
-          {resolvedBy ? `by ${resolvedBy} · ` : ""}
+      <div className="max-w-72 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+            Done
+          </span>
+          {queueStatus ? <SocialQueueStatusBadge status={queueStatus} /> : null}
+        </div>
+        <p className="text-[11px] text-[var(--muted)]">
+          {resolvedBy ? `${resolvedBy} · ` : ""}
           {formatWhen(resolvedAt)}
         </p>
-        {queueStatus ? (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-[var(--muted)]">
-            Social media: <SocialQueueStatusBadge status={queueStatus} />
-          </div>
+        {detail ? (
+          <p className="line-clamp-2 text-[11px] leading-snug text-[var(--muted)]" title={detail}>
+            {detail}
+          </p>
         ) : null}
-        {detail ? <p className="max-w-64 text-xs text-[var(--muted)]">{detail}</p> : null}
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+      <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
         To do
       </span>
       {platformChoices ? (
-        <fieldset className="max-w-64 space-y-2 rounded-lg border border-[var(--line)] p-2.5">
-          <legend className="px-1 text-xs font-semibold text-[var(--ink)]">Where is this listing posted?</legend>
+        <fieldset className="max-w-72 space-y-2 rounded-xl border border-[var(--line)] bg-[var(--bg-accent)]/40 p-2.5">
+          <legend className="px-1 text-[11px] font-semibold text-[var(--ink)]">
+            Where is this listing posted?
+          </legend>
           <div className="flex flex-wrap gap-x-3 gap-y-1.5">
             {platformChoices.map((p) => (
               <label key={p} className="inline-flex items-center gap-1.5 text-xs">
@@ -87,7 +91,9 @@ export function DataChangeActions({
                   type="checkbox"
                   checked={picked.includes(p)}
                   onChange={(e) =>
-                    setPicked((prev) => (e.target.checked ? [...prev, p] : prev.filter((x) => x !== p)))
+                    setPicked((prev) =>
+                      e.target.checked ? [...prev, p] : prev.filter((x) => x !== p),
+                    )
                   }
                 />
                 {p}
@@ -99,32 +105,30 @@ export function DataChangeActions({
               type="button"
               disabled={pending || !picked.length}
               onClick={() => markDone(picked)}
-              className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+              className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
             >
-              {pending ? "Saving…" : "Done · send to social media queue"}
+              {pending ? "Saving…" : "Send to queue"}
             </button>
             <button
               type="button"
               disabled={pending}
               onClick={() => markDone([])}
-              className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--bg-accent)] disabled:opacity-60"
+              className="rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--ink)] hover:bg-[var(--bg-accent)] disabled:opacity-60"
             >
-              Done · not on social media
+              Not on social
             </button>
           </div>
         </fieldset>
       ) : (
-        <div>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => markDone()}
-            title="Mark done after updating the listing. If it's posted on social media, it goes to the social media queue."
-            className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
-          >
-            {pending ? "Saving…" : "Mark as done"}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => markDone()}
+          title="Mark done after updating the listing. If it's posted on social media, it goes to the social media queue."
+          className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:opacity-60"
+        >
+          {pending ? "Saving…" : "Mark as done"}
+        </button>
       )}
       {error ? <p className="text-xs font-medium text-[var(--danger)]">{error}</p> : null}
     </div>

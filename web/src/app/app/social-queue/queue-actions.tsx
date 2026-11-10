@@ -203,18 +203,32 @@ export function queueStatusLabel(status: SocialQueueStatus) {
   return "Done";
 }
 
-export function SocialQueueStatusBadge({ status }: { status: SocialQueueStatus }) {
+export function SocialQueueStatusBadge({
+  status,
+  compact = false,
+}: {
+  status: SocialQueueStatus;
+  compact?: boolean;
+}) {
   const styles =
     status === "pending"
       ? "bg-amber-50 text-amber-800 border-amber-200"
       : status === "approved"
         ? "bg-sky-50 text-sky-800 border-sky-200"
         : "bg-emerald-50 text-emerald-800 border-emerald-200";
+  const label =
+    compact && status === "pending"
+      ? "Pending"
+      : compact && status === "approved"
+        ? "Approved"
+        : queueStatusLabel(status);
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${styles}`}
+      className={`inline-flex rounded-full border font-semibold ${styles} ${
+        compact ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-0.5 text-xs"
+      }`}
     >
-      {queueStatusLabel(status)}
+      {label}
     </span>
   );
 }
@@ -273,36 +287,31 @@ export function SocialQueueActions({
     if (status !== "pending") return null;
     const noneSelected = platforms.length > 0 && selected.length === 0;
     return (
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {platforms.length ? (
-          <div role="group" aria-label="Platforms to approve">
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">
-              Approve for
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {platforms.map((p) => {
-                const checked = selected.includes(p);
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={checked}
-                    disabled={pending}
-                    onClick={() => toggle(p)}
-                    title={checked ? `Approve for ${p}` : `Not approved for ${p}`}
-                    className={`group/chip inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 text-xs font-semibold transition disabled:opacity-60 ${
-                      checked
-                        ? "border-[var(--sidebar)] bg-[var(--sidebar)] text-white"
-                        : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--sidebar)]/40"
-                    }`}
-                  >
-                    <TickCircle checked={checked} size="h-4 w-4" />
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
+          <div role="group" aria-label="Platforms to approve" className="flex flex-wrap gap-1">
+            {platforms.map((p) => {
+              const checked = selected.includes(p);
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={checked}
+                  disabled={pending}
+                  onClick={() => toggle(p)}
+                  title={checked ? `Approve for ${p}` : `Not approved for ${p}`}
+                  className={`group/chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold transition disabled:opacity-60 ${
+                    checked
+                      ? "border-[var(--sidebar)] bg-[var(--sidebar)] text-white"
+                      : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--sidebar)]/40"
+                  }`}
+                >
+                  <TickCircle checked={checked} size="h-3.5 w-3.5" />
+                  {p}
+                </button>
+              );
+            })}
           </div>
         ) : null}
         {declining ? (
@@ -315,14 +324,14 @@ export function SocialQueueActions({
               autoFocus
               disabled={pending}
               placeholder="Reason (optional)"
-              className="w-full rounded-lg border border-[var(--line)] bg-white px-2 py-1.5 text-xs"
+              className="w-full rounded-lg border border-[var(--line)] bg-white px-2.5 py-1.5 text-xs"
             />
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => run("decline")}
-                className="rounded-full bg-[var(--danger)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                className="rounded-lg bg-[var(--danger)] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-60"
               >
                 {pending ? "Declining…" : "Confirm decline"}
               </button>
@@ -334,32 +343,32 @@ export function SocialQueueActions({
                   setReason("");
                   setError(null);
                 }}
-                className="rounded-full border border-[var(--line)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-accent)] disabled:opacity-60"
+                className="rounded-lg border border-[var(--line)] px-3 py-1.5 text-xs font-semibold hover:bg-[var(--bg-accent)] disabled:opacity-60"
               >
                 Cancel
               </button>
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               disabled={pending || noneSelected}
               onClick={() => run("approve")}
               title={noneSelected ? "Select at least one platform" : undefined}
-              className="rounded-full bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-[var(--brand)] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[var(--brand-deep)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {pending
                 ? "Saving…"
                 : platforms.length && selected.length < platforms.length
-                  ? `Approve ${selected.length} of ${platforms.length}`
+                  ? `Approve ${selected.length}/${platforms.length}`
                   : "Approve"}
             </button>
             <button
               type="button"
               disabled={pending}
               onClick={() => setDeclining(true)}
-              className="rounded-full border border-[var(--line)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--danger)] hover:bg-[var(--bg-accent)] disabled:opacity-60"
+              className="rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--danger)] hover:bg-[var(--bg-accent)] disabled:opacity-60"
             >
               Decline
             </button>

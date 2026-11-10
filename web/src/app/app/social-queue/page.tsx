@@ -76,7 +76,7 @@ export default async function SocialQueuePage({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  // Only approved (or done) items appear here — pending approval stays on Activity.
+  // Only approved (or done) items appear here — pending approval stays on Admin Approvals.
   // Separate query chains avoid Supabase TS "excessively deep" errors.
   const { data, count, error } =
     tab === "published"
@@ -130,7 +130,7 @@ export default async function SocialQueuePage({
     <div>
       <h1 className="font-display text-2xl font-semibold sm:text-3xl">Social Media Queue</h1>
       <p className="mt-2 text-sm text-[var(--muted)]">
-        Items appear here after approval on the Activity log. Tick each platform
+        Items appear here after approval on Admin Approvals. Tick each platform
         as you post it — Done unlocks once every platform is ticked.
       </p>
 
@@ -267,7 +267,7 @@ export default async function SocialQueuePage({
               ? `No ${tab === "published" ? "done" : "pending"} ${status} items.`
               : tab === "published"
               ? "No done items yet."
-              : "No pending items. Approve requests from the Activity log first."}
+              : "No pending items. Approve requests from Admin Approvals first."}
           </li>
         ) : null}
       </ul>
