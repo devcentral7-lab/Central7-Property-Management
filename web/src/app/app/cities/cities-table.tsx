@@ -66,9 +66,9 @@ export function AddCityButton() {
         className={primaryButtonClass}
       >
         <Icon name="plus" className="h-4 w-4" />
-        Add city
+        Add City
       </button>
-      <PopupDialog open={open} onClose={() => setOpen(false)} title="Add City" subtitle="It appears in every city dropdown straight away." busy={pending}>
+      <PopupDialog open={open} onClose={() => setOpen(false)} title="Add City" busy={pending}>
         <form onSubmit={onSubmit} className="space-y-4" suppressHydrationWarning>
           <label className={labelClass}>
             City name <span className="text-[var(--brand)]">*</span>
@@ -80,7 +80,7 @@ export function AddCityButton() {
               Cancel
             </button>
             <button type="submit" disabled={pending} className={`flex-1 sm:flex-none ${primaryButtonClass}`}>
-              {pending ? "Adding…" : "Add city"}
+              {pending ? "Adding…" : "Add City"}
             </button>
           </div>
         </form>
@@ -211,7 +211,6 @@ export function CitiesTable({ rows }: { rows: CityStatsRow[] }) {
         <div className="flex flex-col gap-3 border-b border-[var(--line)] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="font-display text-lg font-semibold">Listings by City</h2>
-            <p className="text-xs text-[var(--muted)]">Click a city to see its listings. Every status is counted.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort cities" className="rounded-full border border-[var(--line)] bg-[var(--card)] px-3 py-2 text-sm outline-none focus:border-[var(--brand)]">
@@ -241,15 +240,15 @@ export function CitiesTable({ rows }: { rows: CityStatsRow[] }) {
         ) : null}
 
         <table className="hidden w-full text-left text-sm md:table">
-          <thead className="bg-[var(--bg)]/60 text-xs uppercase tracking-wide text-[var(--muted)]">
+          <thead className="bg-[var(--bg)]/60 text-sm text-[var(--ink)]">
             <tr>
-              <th className="px-5 py-3 font-semibold">City</th>
-              <th className="px-4 py-3 font-semibold">Listings</th>
-              <th className="px-4 py-3 font-semibold">Active</th>
-              <th className="px-4 py-3 font-semibold">For sale</th>
-              <th className="px-4 py-3 font-semibold">For rent</th>
-              <th className="px-4 py-3 font-semibold">Property types</th>
-              <th className="px-5 py-3 text-right font-semibold">
+              <th className="px-5 py-3 font-bold">City</th>
+              <th className="px-4 py-3 font-bold">Listings</th>
+              <th className="px-4 py-3 font-bold">Active</th>
+              <th className="px-4 py-3 font-bold">For Sale</th>
+              <th className="px-4 py-3 font-bold">For Rent</th>
+              <th className="px-4 py-3 font-bold">Property Types</th>
+              <th className="px-5 py-3 text-right font-bold">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>

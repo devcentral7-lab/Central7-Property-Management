@@ -58,13 +58,13 @@ export function RegisterStaffForm() {
         className={primaryButtonClass}
       >
         <Icon name="userPlus" className="h-4 w-4" />
-        Add staff user
+        Add User
       </button>
 
       <PopupDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Register Staff User"
+        title="Add User"
         subtitle="A 10-digit temporary password is generated automatically."
         busy={pending}
         size="lg"
@@ -103,7 +103,7 @@ export function RegisterStaffForm() {
               Cancel
             </button>
             <button type="submit" disabled={pending} className={`flex-1 sm:flex-none ${primaryButtonClass}`}>
-              {pending ? "Registering…" : "Register user"}
+              {pending ? "Adding…" : "Add User"}
             </button>
           </div>
         </form>

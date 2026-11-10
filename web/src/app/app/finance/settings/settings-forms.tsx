@@ -5,7 +5,7 @@ import { saveAgent, saveTargets } from "@/app/app/finance/actions";
 import { formatLkr, type FinanceAgent, type FinanceTargetRow } from "@/lib/finance-shared";
 
 const cellInput = "w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm";
-const th = "whitespace-nowrap pb-2 pr-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[var(--muted)]";
+const th = "whitespace-nowrap pb-2 pr-3 text-left text-sm font-bold text-[var(--ink)]";
 
 function parseAmount(v: string): number | null {
   const t = v.replace(/,/g, "").trim();
@@ -56,7 +56,7 @@ export function TargetsForm({ year, rows }: { year: number; rows: FinanceTargetR
             <tr>
               <th className={th}>Agent</th>
               <th className={`${th} w-56`}>Target {year} (LKR)</th>
-              <th className={`${th} text-right`}>{year - 1} target</th>
+              <th className={`${th} text-right`}>{year - 1} Target</th>
               <th className={`${th} text-right`}>Achieved {year}</th>
               <th className={th}>Progress</th>
             </tr>
@@ -239,7 +239,7 @@ export function AgentsManager({ agents, profiles }: { agents: FinanceAgent[]; pr
         <thead>
           <tr>
             <th className={th}>Name</th>
-            <th className={th}>Linked login</th>
+            <th className={th}>Linked Login</th>
             <th className={th}>Role</th>
             <th className={th}>Status</th>
             <th className={`${th} text-right`}>Invoices</th>

@@ -46,9 +46,6 @@ export default async function CitiesPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold sm:text-3xl">Cities</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Add or remove the cities staff can pick on listings and filters, and see how listings break down by city.
-          </p>
         </div>
         <div className="shrink-0">
           <AddCityButton />

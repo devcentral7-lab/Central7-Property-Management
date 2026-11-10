@@ -46,7 +46,7 @@ export default async function UserManagementPage({
   const tabs = [
     {
       id: "users" as const,
-      label: "Staff",
+      label: "User",
       icon: "users" as IconName,
       href: "/app/user-management",
       count: staffError ? null : staffRows.length,
@@ -63,7 +63,7 @@ export default async function UserManagementPage({
   const stats: { label: string; value: number; hint?: string; icon: IconName; accent?: boolean }[] =
     tab === "users"
       ? [
-          { label: "Total Staff", value: staffRows.length, icon: "users", accent: true },
+          { label: "Total Users", value: staffRows.length, icon: "users", accent: true },
           {
             label: "Admins",
             value: staffRows.filter((u) => u.role === "Admin").length,
@@ -111,9 +111,6 @@ export default async function UserManagementPage({
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold sm:text-3xl">User Management</h1>
-          <p className="mt-1 text-sm text-[var(--muted)]">
-            Manage staff accounts and partner agencies, their roles and sign-in access.
-          </p>
         </div>
         <div className="shrink-0">
           {tab === "users" ? <RegisterStaffForm /> : <RegisterPartnerForm />}

@@ -234,22 +234,22 @@ export function SocialManagerDashboard({
               <table className="w-full min-w-max text-sm">
                 <thead>
                   <tr>
-                    <th className="sticky top-0 bg-[var(--card)] pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    <th className="sticky top-0 bg-[var(--card)] pb-2 pr-3 text-left text-sm font-bold text-[var(--ink)]">
                       {data.socialUnit === "month" ? "Month" : "Date"}
                     </th>
                     {COLS.map((c) => (
                       <th
                         key={c.key}
-                        className="sticky top-0 bg-[var(--card)] pb-2 pr-3 text-right text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
+                        className="sticky top-0 bg-[var(--card)] pb-2 pr-3 text-right text-sm font-bold text-[var(--ink)]"
                       >
                         {c.label}
                       </th>
                     ))}
-                    <th className="sticky top-0 bg-[var(--card)] pb-2 pr-3 text-right text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Remaining to publish
+                    <th className="sticky top-0 bg-[var(--card)] pb-2 pr-3 text-right text-sm font-bold text-[var(--ink)]">
+                      Remaining to Publish
                     </th>
-                    <th className="sticky top-0 bg-[var(--card)] pb-2 text-right text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Remaining to republish
+                    <th className="sticky top-0 bg-[var(--card)] pb-2 text-right text-sm font-bold text-[var(--ink)]">
+                      Remaining to Republish
                     </th>
                   </tr>
                 </thead>

@@ -290,15 +290,15 @@ export async function PropertyMinePanel({
 
       <div className="mt-6 hidden overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--card)] md:block">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/60 text-[var(--muted)]">
+          <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/60 text-[var(--ink)]">
             <tr>
-              <th className="px-4 py-3 font-medium">Ref</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium">City</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Beds / Baths</th>
-              <th className="px-4 py-3 font-medium">Price</th>
-              <th className="px-4 py-3 font-medium">Added</th>
+              <th className="px-4 py-3 font-bold">Ref</th>
+              <th className="px-4 py-3 font-bold">Type</th>
+              <th className="px-4 py-3 font-bold">City</th>
+              <th className="px-4 py-3 font-bold">Status</th>
+              <th className="px-4 py-3 font-bold">Beds / Baths</th>
+              <th className="px-4 py-3 font-bold">Price</th>
+              <th className="px-4 py-3 font-bold">Added</th>
             </tr>
           </thead>
           <tbody>
