@@ -31,6 +31,8 @@ function revalidateQueue() {
   revalidatePath("/app/social-queue");
   revalidatePath("/app/admin-approvals");
   revalidatePath("/app/activity");
+  revalidatePath("/app/properties");
+  revalidatePath("/app/my-properties");
   revalidatePath("/app");
 }
 
@@ -193,7 +195,7 @@ async function setPlatform(id: string, platform: string, done: boolean) {
     details: { platform },
   });
 
-  revalidatePath("/app/social-queue");
+  revalidateQueue();
 }
 
 async function publish(formData: FormData) {
