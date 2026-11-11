@@ -115,9 +115,10 @@ function IntentPill({ intent }: { intent: string }) {
     : intent === "Hold"
       ? "border-amber-200 bg-amber-50 text-amber-800"
       : "border-rose-200 bg-rose-50 text-rose-800";
+  const label = intent === "Republish" ? "Social Media Refresh" : intent;
   return (
     <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone}`}>
-      {intent}
+      {label}
     </span>
   );
 }

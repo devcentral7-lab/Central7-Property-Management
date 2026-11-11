@@ -405,7 +405,7 @@ async function changePropertyStatus(formData: FormData) {
   const chosenPlatforms = new Set(formData.getAll("platforms").map((v) => str(v)));
   const republishPlatforms = options.platforms.filter((p) => chosenPlatforms.has(p));
   if (action === "Republish" && !republishPlatforms.length) {
-    throw new Error("Select at least one social media platform to republish on.");
+    throw new Error("Select at least one social media platform for Social Media Refresh.");
   }
 
   const { data: property, error } = await supabase

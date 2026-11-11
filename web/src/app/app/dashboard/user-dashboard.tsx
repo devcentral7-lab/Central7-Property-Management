@@ -297,13 +297,21 @@ export function UserDashboard({
 
       <RefSearch />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-5">
         <Link href="/app/my-properties" className="rounded-2xl transition hover:brightness-110">
           <StatCard label="My listings" value={data.total} hint="View all my properties" icon="building" accent />
         </Link>
         <StatCard label="Active" value={data.active} hint={`${activeShare}% of my listings`} icon="check" />
         <StatCard label="Added this month" value={data.addedThisMonth} icon="calendar" />
         <StatCard label="Last 30 days" value={data.addedLast30} hint="New listings" icon="clock" />
+        <Link href="/app/ikman-decisions" className="rounded-2xl transition hover:brightness-110">
+          <StatCard
+            label="Ikman decisions"
+            value={data.ikmanPending}
+            hint="Waiting for your choice"
+            icon="check"
+          />
+        </Link>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

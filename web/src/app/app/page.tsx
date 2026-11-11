@@ -103,7 +103,7 @@ export default async function AppHomePage({
   const years = performanceYears(period.year);
 
   const [result, performance] = await Promise.all([
-    loadUserDashboard(profile.display_name).then(
+    loadUserDashboard(profile.display_name, profile.id).then(
       (data) => ({ data, error: null }),
       (e: unknown) => ({
         data: null,

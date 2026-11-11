@@ -67,6 +67,8 @@ export type CompanyOverview = {
   lost_to_update_social: number;
   publish_pending_approval: number;
   republish_pending_approval: number;
+  ikman_pending_owner: number;
+  ikman_ready_admin: number;
 };
 
 export type AgentContactSplit = {
@@ -452,25 +454,40 @@ export async function loadAdminAnalytics(range: DashboardRange): Promise<AdminAn
   const allCities = toNamed(breakdown.active_cities);
   const isCatchAll = (name: string) => /^(other|unspecified)$/i.test(name.trim());
 
+  const [ikmanPendingRes, ikmanReadyRes] = await Promise.all([
+    supabase
+      .from("ikman_republish_items")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending_owner"),
+    supabase
+      .from("ikman_republish_items")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "approved_by_owner"),
+  ]);
+
   const ov = (overviewRes.data ?? {}) as Record<string, unknown>;
-  const overview = Object.fromEntries(
-    (
-      [
-        "properties_added",
-        "published_by_social",
-        "republished",
-        "closed",
-        "dropped",
-        "lost",
-        "publish_on_social",
-        "republish_on_social",
-        "drop_to_update_social",
-        "lost_to_update_social",
-        "publish_pending_approval",
-        "republish_pending_approval",
-      ] as const
-    ).map((k) => [k, num(ov[k])]),
-  ) as CompanyOverview;
+  const overview = {
+    ...(Object.fromEntries(
+      (
+        [
+          "properties_added",
+          "published_by_social",
+          "republished",
+          "closed",
+          "dropped",
+          "lost",
+          "publish_on_social",
+          "republish_on_social",
+          "drop_to_update_social",
+          "lost_to_update_social",
+          "publish_pending_approval",
+          "republish_pending_approval",
+        ] as const
+      ).map((k) => [k, num(ov[k])]),
+    ) as Omit<CompanyOverview, "ikman_pending_owner" | "ikman_ready_admin">),
+    ikman_pending_owner: ikmanPendingRes.count ?? 0,
+    ikman_ready_admin: ikmanReadyRes.count ?? 0,
+  } satisfies CompanyOverview;
 
   return {
     period: range.period,

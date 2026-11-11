@@ -38,7 +38,7 @@ function Num({ value, strong = false }: { value: number; strong?: boolean }) {
 
 const COLS: { key: keyof SocialDailyRow; label: string }[] = [
   { key: "published", label: "Published" },
-  { key: "republished", label: "Republished" },
+  { key: "republished", label: "Social Media Refresh" },
   { key: "drop", label: "Drop" },
   { key: "lost", label: "Lost" },
   { key: "hold", label: "Hold" },
@@ -92,7 +92,7 @@ export function SocialManagerDashboard({
 
   const queueMix = [
     { name: "To publish", value: data.queueNow.pendingPublish },
-    { name: "To republish", value: data.queueNow.pendingRepublish },
+    { name: "To refresh", value: data.queueNow.pendingRepublish },
     { name: "Other pending", value: data.queueNow.pendingOther },
     { name: "Done (all time)", value: data.queueNow.doneTotal },
   ].filter((d) => d.value > 0);
@@ -132,9 +132,9 @@ export function SocialManagerDashboard({
         {(
           [
             { label: "Published", value: published, color: BRAND.active },
-            { label: "Republished", value: republished, color: BRAND.charcoal },
+            { label: "Social Media Refresh", value: republished, color: BRAND.charcoal },
             { label: "Remaining to publish", value: remainingPublish, color: BRAND.red },
-            { label: "Remaining to republish", value: remainingRepublish, color: BRAND.stone },
+            { label: "Remaining to refresh", value: remainingRepublish, color: BRAND.stone },
           ] as const
         ).map((t) => (
           <div
@@ -249,7 +249,7 @@ export function SocialManagerDashboard({
                       Remaining to Publish
                     </th>
                     <th className="sticky top-0 bg-[var(--card)] pb-2 text-right text-sm font-bold text-[var(--ink)]">
-                      Remaining to Republish
+                      Remaining Social Refresh
                     </th>
                   </tr>
                 </thead>
