@@ -12,6 +12,7 @@ export type UserDashboardData = {
   active: number;
   addedThisMonth: number;
   addedLast30: number;
+  ikmanPending: number;
   byStatus: CountRow[];
   byType: CountRow[];
   byOpportunity: CountRow[];
@@ -33,7 +34,10 @@ function colomboMonthStart(now = new Date()) {
 }
 
 /** Everything on the User dashboard, scoped to listings created by this staff member. */
-export async function loadUserDashboard(displayName: string): Promise<UserDashboardData> {
+export async function loadUserDashboard(
+  displayName: string,
+  ownerId?: string,
+): Promise<UserDashboardData> {
   const supabase = await createClient();
   const options = await loadFormOptions();
   const statuses = options.statuses.length ? options.statuses : ["Active"];
@@ -56,7 +60,16 @@ export async function loadUserDashboard(displayName: string): Promise<UserDashbo
 
   const since30 = new Date(Date.now() - 30 * 24 * 60 * 60_000).toISOString();
 
-  const [total, addedThisMonth, addedLast30, statusCounts, typeCounts, oppCounts, recentRes, activityRes] =
+  const ikmanById = ownerId
+    ? supabase
+        .from("ikman_republish_items")
+        .select("id")
+        .eq("status", "pending_owner")
+        .eq("owner_id", ownerId)
+        .limit(500)
+    : Promise.resolve({ data: [] as { id: string }[], error: null });
+
+  const [total, addedThisMonth, addedLast30, statusCounts, typeCounts, oppCounts, recentRes, activityRes, ikmanByName, ikmanIdRows] =
     await Promise.all([
       countOf(mine()),
       countOf(mine().gte("created_at", colomboMonthStart())),
@@ -77,10 +90,22 @@ export async function loadUserDashboard(displayName: string): Promise<UserDashbo
         .is("archived_at", null)
         .order("occurred_at", { ascending: false })
         .limit(8),
+      supabase
+        .from("ikman_republish_items")
+        .select("id")
+        .eq("status", "pending_owner")
+        .eq("owner_name", displayName)
+        .limit(500),
+      ikmanById,
     ]);
 
   if (recentRes.error) throw new Error(recentRes.error.message);
   if (activityRes.error) throw new Error(activityRes.error.message);
+
+  const ikmanSeen = new Set<string>();
+  for (const row of [...(ikmanByName.data ?? []), ...(ikmanIdRows.data ?? [])]) {
+    ikmanSeen.add(row.id);
+  }
 
   const rows = (names: string[], counts: number[]) =>
     names.map((name, i) => ({ name, count: counts[i] })).filter((r) => r.count > 0);
@@ -92,6 +117,7 @@ export async function loadUserDashboard(displayName: string): Promise<UserDashbo
     active: byStatus.find((r) => r.name === "Active")?.count ?? 0,
     addedThisMonth,
     addedLast30,
+    ikmanPending: ikmanSeen.size,
     byStatus,
     byType: rows(types, typeCounts).sort((a, b) => b.count - a.count),
     byOpportunity: rows(opportunities, oppCounts),

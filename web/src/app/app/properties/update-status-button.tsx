@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { updatePropertyStatus } from "@/app/app/actions";
 import { PopupDialog } from "@/components/popup-dialog";
+import { statusChangeLabel } from "@/lib/ikman-republish";
 
 export function UpdateStatusButton({
   refNo,
@@ -94,7 +95,7 @@ export function UpdateStatusButton({
             >
               {options.map((o) => (
                 <option key={o} value={o}>
-                  {o}
+                  {statusChangeLabel(o)}
                 </option>
               ))}
             </select>

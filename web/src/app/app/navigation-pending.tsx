@@ -110,7 +110,12 @@ function skeletonFor(url: URL) {
       />
     );
   }
-  if (path.startsWith("/app/activity") || path.startsWith("/app/admin-approvals")) {
+  if (
+    path.startsWith("/app/activity") ||
+    path.startsWith("/app/admin-approvals") ||
+    path.startsWith("/app/ikman-republish") ||
+    path.startsWith("/app/ikman-decisions")
+  ) {
     return <ActivitySkeleton />;
   }
   if (path.startsWith("/app/social-queue")) return <SocialQueueSkeleton />;

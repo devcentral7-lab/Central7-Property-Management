@@ -556,7 +556,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
   const social = d.socialDaily;
   const socialCols: { key: keyof SocialDailyRow; label: string }[] = [
     { key: "published", label: "Published" },
-    { key: "republished", label: "Republished" },
+    { key: "republished", label: "Social Media Refresh" },
     { key: "drop", label: "Drop" },
     { key: "lost", label: "Lost" },
     { key: "hold", label: "Hold" },
@@ -692,7 +692,7 @@ function DetailSections({ data }: { data: AdminAnalytics }) {
                     </th>
                   ))}
                   <th className={`${stickyTh} text-right`}>Remaining to Publish</th>
-                  <th className={`${stickyTh} pr-0 text-right`}>Remaining to Republish</th>
+                  <th className={`${stickyTh} pr-0 text-right`}>Remaining Social Refresh</th>
                 </tr>
               </thead>
               <tbody>
@@ -853,7 +853,7 @@ export function AdminDashboard({
             tiles={[
               { label: "Properties added", value: ov.properties_added, tone: "brand", href: "/app/properties" },
               { label: "Published by social media", value: ov.published_by_social, tone: "ink", href: "/app/social-queue?tab=published" },
-              { label: "Republished", value: ov.republished, tone: "ink" },
+              { label: "Social Media Refresh done", value: ov.republished, tone: "ink" },
               { label: "Closed", value: ov.closed, tone: "ink" },
               { label: "Dropped", value: ov.dropped, tone: "muted" },
               { label: "Lost", value: ov.lost, tone: "muted" },
@@ -866,7 +866,7 @@ export function AdminDashboard({
             cols="lg:grid-cols-4"
             tiles={[
               { label: "Publish on social media", value: ov.publish_on_social, tone: "attention", href: "/app/social-queue" },
-              { label: "Republish on social media", value: ov.republish_on_social, tone: "attention", href: "/app/social-queue" },
+              { label: "Social Media Refresh queue", value: ov.republish_on_social, tone: "attention", href: "/app/social-queue" },
               { label: "Drop properties to update on social media", value: ov.drop_to_update_social, tone: "attention", href: "/app/social-queue" },
               { label: "Lost properties to update on social media", value: ov.lost_to_update_social, tone: "attention", href: "/app/social-queue" },
             ]}
@@ -878,7 +878,17 @@ export function AdminDashboard({
             cols="lg:grid-cols-4"
             tiles={[
               { label: "Publish pending approval", value: ov.publish_pending_approval, tone: "attention", href: "/app/admin-approvals?tab=social" },
-              { label: "Republish pending approval", value: ov.republish_pending_approval, tone: "attention", href: "/app/admin-approvals?tab=social" },
+              { label: "Social Media Refresh pending approval", value: ov.republish_pending_approval, tone: "attention", href: "/app/admin-approvals?tab=social" },
+            ]}
+          />
+          <TileGroup
+            title="Ikman Republish"
+            hint="weekly expired ads"
+            icon="clock"
+            cols="lg:grid-cols-2"
+            tiles={[
+              { label: "Owner decisions pending", value: ov.ikman_pending_owner, tone: "attention", href: "/app/ikman-republish?tab=pending" },
+              { label: "Ready to republish on Ikman", value: ov.ikman_ready_admin, tone: "attention", href: "/app/ikman-republish?tab=ready" },
             ]}
           />
         </div>
@@ -947,7 +957,7 @@ export function AdminDashboard({
 
   const outcomes = [
     { name: "Added", value: ov.properties_added },
-    { name: "Republished", value: ov.republished },
+    { name: "Social Media Refresh", value: ov.republished },
     { name: "Closed", value: ov.closed },
     { name: "Dropped", value: ov.dropped },
     { name: "Lost", value: ov.lost },

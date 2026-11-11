@@ -17,6 +17,7 @@ export type SidebarNavItem = {
     | "folder"
     | "check"
     | "publish"
+    | "ikman"
     | "users"
     | "agents"
     | "building"
@@ -27,6 +28,9 @@ export type SidebarNavItem = {
     | "account";
   match?: "exact" | "prefix";
 };
+
+/** Stroke icons inherit the parent svg stroke; filled icons set their own fill. */
+const filledIcons = new Set<SidebarNavItem["icon"]>(["ikman"]);
 
 const icons: Record<SidebarNavItem["icon"], ReactNode> = {
   home: (
@@ -66,6 +70,14 @@ const icons: Record<SidebarNavItem["icon"], ReactNode> = {
       strokeLinejoin="round"
       d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M12 4v12m0-12 4 4m-4-4L8 8"
     />
+  ),
+  // Ikman.lk-style smile mark; uses currentColor so inactive = sidebar ink, active = white on brand.
+  ikman: (
+    <>
+      <circle cx="8.2" cy="8.1" r="2.35" />
+      <circle cx="15.8" cy="8.1" r="2.35" />
+      <path d="M5.1 13c0-.55.45-1 1-1h11.8c.55 0 1 .45 1 1 0 4.55-3.15 7.7-6.9 7.7S5.1 17.55 5.1 13Z" />
+    </>
   ),
   users: (
     <path
@@ -232,9 +244,9 @@ function NavPanel({
             >
               <svg
                 viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
+                fill={filledIcons.has(item.icon) ? "currentColor" : "none"}
+                stroke={filledIcons.has(item.icon) ? "none" : "currentColor"}
+                strokeWidth={filledIcons.has(item.icon) ? undefined : "1.8"}
                 className="h-5 w-5 shrink-0"
                 aria-hidden
               >

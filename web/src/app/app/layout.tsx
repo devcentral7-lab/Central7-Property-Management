@@ -71,6 +71,11 @@ export default async function AppLayout({
                 label: "Admin Approvals",
                 icon: "check",
               },
+              {
+                href: "/app/ikman-republish",
+                label: "Ikman Republish",
+                icon: "ikman",
+              },
               { href: "/app/activity", label: "Activity Log", icon: "activity" },
               { href: "/app/finance", label: "Finance", icon: "finance" },
             ] as SidebarNavItem[])
@@ -81,6 +86,15 @@ export default async function AppLayout({
                 href: "/app/social-queue",
                 label: "Social Media Queue",
                 icon: "queue",
+              },
+            ] as SidebarNavItem[])
+          : []),
+        ...(!isAdmin
+          ? ([
+              {
+                href: "/app/ikman-decisions",
+                label: "Ikman Decisions",
+                icon: "ikman",
               },
             ] as SidebarNavItem[])
           : []),

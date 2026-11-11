@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { LiveFilterForm } from "@/components/live-filter-form";
 import { Pager, pageFromParam } from "@/components/pager";
 import { PAGE_SIZE } from "@/lib/constants";
+import { statusChangeLabel } from "@/lib/ikman-republish";
 import {
   QueueItemCard,
   type PlatformDates,
@@ -166,7 +167,7 @@ export default async function SocialQueuePage({
             <option value="">All statuses</option>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {statusChangeLabel(s)}
               </option>
             ))}
           </select>
@@ -236,7 +237,7 @@ export default async function SocialQueuePage({
                           TAKE_DOWN.has(row.approved_action) ? "bg-white/70" : "bg-[var(--brand)]"
                         }`}
                       />
-                      {row.approved_action}
+                      {statusChangeLabel(row.approved_action)}
                     </span>
                   ) : null}
                   {property?.status ? <StatusBadge status={property.status} className="text-xs" /> : null}
