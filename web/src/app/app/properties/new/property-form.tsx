@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -180,7 +180,16 @@ function PropertyFormInner({
   );
   const [doNotPublish, setDoNotPublish] = useState(initialDoNotPublish);
   const [priceError, setPriceError] = useState(false);
+  const [aiFilled, setAiFilled] = useState<Record<string, boolean>>({});
   const pricingRef = useRef<HTMLDivElement>(null);
+  const aiHighlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (aiHighlightTimer.current) clearTimeout(aiHighlightTimer.current);
+    },
+    [],
+  );
 
   const propertyType = values.property_type;
   const isLand = propertyType === "Land";
@@ -191,8 +200,29 @@ function PropertyFormInner({
   const isPartner = values.contact_type === "Partner";
   const typeLabel = propertyType || "Property";
 
+  function clearAiHighlight(name: string) {
+    setAiFilled((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }
+
   function setField(name: string, value: string) {
+    clearAiHighlight(name);
     setValues((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function markAiFilled(names: string[]) {
+    const next = Object.fromEntries(names.filter(Boolean).map((n) => [n, true]));
+    setAiFilled(next);
+    if (aiHighlightTimer.current) clearTimeout(aiHighlightTimer.current);
+    aiHighlightTimer.current = setTimeout(() => setAiFilled({}), 30_000);
+  }
+
+  function fieldClass(name: string, extra = "") {
+    return `${inputBase} ${aiFilled[name] ? AI_FILLED : ""} ${extra}`.replace(/\s+/g, " ").trim();
   }
 
   function typeReset(nextType: string): PropertyFormValues {
@@ -224,6 +254,7 @@ function PropertyFormInner({
 
   function onPropertyTypeChange(nextType: string) {
     if (nextType === "Land") clearAmenityChecks();
+    clearAiHighlight("property_type");
     setValues((prev) => ({ ...prev, ...typeReset(nextType) }));
   }
 
@@ -262,12 +293,22 @@ function PropertyFormInner({
         });
       }
 
+      // Build highlight list outside setState — after `await`, React may defer the updater.
+      const highlighted = Object.entries(fields)
+        .filter(([k, v]) => Boolean(v) && k !== "amenities")
+        .map(([k]) => k);
+      const extras = parts.filter((p) => !isListed(p));
+      if (extras.length && (fields.property_type || values.property_type) !== "Land") {
+        highlighted.push("amenities");
+      }
+      if (!fields.comments && paragraph.trim()) highlighted.push("internal_comments");
+      if (parts.some((p) => isListed(p))) highlighted.push("amenity_checks");
+
       setValues((prev) => {
         const next = typeChanged ? { ...prev, ...typeReset(fields.property_type) } : { ...prev };
         for (const [k, v] of Object.entries(fields)) {
           if (v && k !== "amenities") next[k] = cleanField(k, v);
         }
-        const extras = parts.filter((p) => !isListed(p));
         if (extras.length && next.property_type !== "Land") {
           next.amenities = [...new Set([...splitList(next.amenities), ...extras])].join(", ");
         }
@@ -277,10 +318,11 @@ function PropertyFormInner({
         }
         return next;
       });
+      markAiFilled(highlighted);
       setAiError(false);
       setAiNotes(notes);
       setAiMessage(
-        `Filled ${keys.length} field${keys.length === 1 ? "" : "s"} from the paragraph. Review before saving.`,
+        `Filled ${keys.length} field${keys.length === 1 ? "" : "s"} from the paragraph. Highlighted fields were AI-filled.`,
       );
     });
   }
@@ -339,10 +381,11 @@ function PropertyFormInner({
   const priceLabels = ["Price", ...(isApartment ? [] : ["Price per Perch"]), ...(isLand ? [] : ["Price per Sqft"])];
   const hasTypeDetails = isHouseLike || isLand || isApartment || isCommercial;
 
-  function bind(name: string) {
+  function bind(name: string, extraClass = "") {
     return {
       name,
       value: values[name] ?? "",
+      className: fieldClass(name, extraClass),
       onChange: (
         e: React.ChangeEvent<
           HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
@@ -351,9 +394,9 @@ function PropertyFormInner({
     };
   }
 
-  function bindNumber(name: string) {
+  function bindNumber(name: string, extraClass = "") {
     return {
-      ...bind(name),
+      ...bind(name, extraClass),
       inputMode: INTEGER_FIELDS.has(name) ? ("numeric" as const) : ("decimal" as const),
       autoComplete: "off",
     };
@@ -448,7 +491,7 @@ function PropertyFormInner({
               </FieldHint>
             </div>
             <Field label="Opportunity" required>
-              <select required {...bind("opportunity_type")} className={inputBase}>
+              <select required {...bind("opportunity_type")}>
                 <option value="">Select Opportunity</option>
                 {options.opportunityTypes.map((t) => (
                   <option key={t} value={t}>
@@ -463,7 +506,7 @@ function PropertyFormInner({
                 required
                 value={values.property_type}
                 onChange={(e) => onPropertyTypeChange(e.target.value)}
-                className={inputBase}
+                className={fieldClass("property_type")}
               >
                 <option value="">Select Type</option>
                 {options.propertyTypes.map((t) => (
@@ -475,7 +518,7 @@ function PropertyFormInner({
             </Field>
             {isCommercial ? (
               <Field label="Property Sub-type">
-                <select {...bind("property_subtype")} className={inputBase}>
+                <select {...bind("property_subtype")}>
                   <option value="">Select Sub-Type</option>
                   {values.property_subtype &&
                   !(COMMERCIAL_SUBTYPES as readonly string[]).includes(
@@ -497,7 +540,7 @@ function PropertyFormInner({
             )}
             {furnishable || !propertyType ? (
               <Field label="Furnished">
-                <select {...bind("furnished")} className={inputBase}>
+                <select {...bind("furnished")}>
                   <option value="">Select Furnished Status</option>
                   {options.furnished.map((t) => (
                     <option key={t} value={t}>
@@ -509,7 +552,7 @@ function PropertyFormInner({
             ) : null}
             {mode === "edit" ? (
               <Field label="Status">
-                <select {...bind("status")} className={inputBase}>
+                <select {...bind("status")}>
                   {options.statuses.map((t) => (
                     <option key={t} value={t}>
                       {t}
@@ -525,18 +568,15 @@ function PropertyFormInner({
             <CitySelect
               value={values.city ?? ""}
               onChange={(city) => setField("city", city)}
-              className={inputBase}
+              className={fieldClass("city")}
             />
             <Field label="Address">
-              <input
-                {...bind("address")}
-                className={inputBase}
-                placeholder="Street, Area"
-              />
+              <input {...bind("address")} placeholder="Street, Area" />
             </Field>
             <LocationLinkField
               className="sm:col-span-2 lg:col-span-1"
               value={values.location_url}
+              highlighted={Boolean(aiFilled.location_url)}
               onChange={(v) => setField("location_url", v)}
             />
           </div>
@@ -545,7 +585,7 @@ function PropertyFormInner({
         <FormSection step={2} title="Contact Details">
           <div className={grid3}>
             <Field label="Contact Type" required>
-              <select required {...bind("contact_type")} className={inputBase}>
+              <select required {...bind("contact_type")}>
                 <option value="">Select Type</option>
                 {options.contactTypes.map((t) => (
                   <option key={t} value={t}>
@@ -555,12 +595,7 @@ function PropertyFormInner({
               </select>
             </Field>
             <Field label="Name of Contact" required>
-              <input
-                required
-                {...bind("contact_name")}
-                className={inputBase}
-                autoComplete="off"
-              />
+              <input required {...bind("contact_name")} autoComplete="off" />
             </Field>
             <Field label="Contact No 1" required>
               <input
@@ -568,7 +603,6 @@ function PropertyFormInner({
                 inputMode="tel"
                 required
                 {...bind("contact_phone_1")}
-                className={inputBase}
                 placeholder="07XXXXXXXX"
                 autoComplete="off"
               />
@@ -578,7 +612,6 @@ function PropertyFormInner({
                 type="tel"
                 inputMode="tel"
                 {...bind("contact_phone_2")}
-                className={inputBase}
                 placeholder="Optional"
                 autoComplete="off"
               />
@@ -587,7 +620,6 @@ function PropertyFormInner({
               <input
                 type="email"
                 {...bind("contact_email")}
-                className={inputBase}
                 placeholder="name@example.com"
                 autoComplete="off"
               />
@@ -598,7 +630,6 @@ function PropertyFormInner({
                   {...bind("agent_ref_no")}
                   maxLength={50}
                   placeholder="Partner's Own Reference (Optional)"
-                  className={inputBase}
                 />
               </Field>
             ) : null}
@@ -616,26 +647,34 @@ function PropertyFormInner({
             <div className={grid4}>
               <input type="hidden" name="purpose" value={values.purpose} />
               <Field label="Land Size">
-                <LandSizeInput value={values.land_size_perch} onChange={(v) => setField("land_size_perch", v)} />
+                <LandSizeInput
+                  value={values.land_size_perch}
+                  highlighted={Boolean(aiFilled.land_size_perch)}
+                  onChange={(v) => setField("land_size_perch", v)}
+                />
               </Field>
               <Field label="Floor Area">
-                <FloorAreaInput value={values.floor_area_sqft} onChange={(v) => setField("floor_area_sqft", v)} />
+                <FloorAreaInput
+                  value={values.floor_area_sqft}
+                  highlighted={Boolean(aiFilled.floor_area_sqft)}
+                  onChange={(v) => setField("floor_area_sqft", v)}
+                />
               </Field>
               <Field label="Bedrooms">
-                <input {...bindNumber("bedrooms")} className={inputBase} />
+                <input {...bindNumber("bedrooms")} />
               </Field>
               <Field label="Bathrooms">
-                <input {...bindNumber("bathrooms")} className={inputBase} />
+                <input {...bindNumber("bathrooms")} />
               </Field>
               <Field label="Number of Floors">
-                <input {...bindNumber("number_of_floors")} className={inputBase} />
+                <input {...bindNumber("number_of_floors")} />
               </Field>
               <Field label="Parking Spaces">
-                <input {...bindNumber("parking_spaces")} className={inputBase} />
+                <input {...bindNumber("parking_spaces")} />
               </Field>
               <Field label="Age of the House">
                 <Affix suffix="years">
-                  <input {...bindNumber("age_years")} className={`${inputBase} pr-16`} />
+                  <input {...bindNumber("age_years", "pr-16")} />
                 </Affix>
               </Field>
             </div>
@@ -644,14 +683,14 @@ function PropertyFormInner({
           {isLand ? (
             <div className={grid4}>
               <Field label="Land Size">
-                <LandSizeInput value={values.land_size_perch} onChange={(v) => setField("land_size_perch", v)} />
+                <LandSizeInput
+                  value={values.land_size_perch}
+                  highlighted={Boolean(aiFilled.land_size_perch)}
+                  onChange={(v) => setField("land_size_perch", v)}
+                />
               </Field>
               <Field label="Suitable for" className="sm:col-span-1 lg:col-span-3">
-                <input
-                  {...bind("suitable_for")}
-                  className={inputBase}
-                  placeholder="E.g. Residential, Commercial"
-                />
+                <input {...bind("suitable_for")} placeholder="E.g. Residential, Commercial" />
               </Field>
             </div>
           ) : null}
@@ -666,30 +705,30 @@ function PropertyFormInner({
                   options={complexes.map((c) => ({ value: c.id, label: c.name }))}
                   placeholder="Select Complex"
                   emptyLabel="No complexes found"
-                  className={inputBase}
+                  className={fieldClass("apartment_complex_id")}
                 />
               </Field>
               <Field label="Floor">
-                <input {...bindNumber("apartment_floor")} className={inputBase} />
+                <input {...bindNumber("apartment_floor")} />
               </Field>
               <Field label="Floor Area">
-                <FloorAreaInput value={values.floor_area_sqft} onChange={(v) => setField("floor_area_sqft", v)} />
+                <FloorAreaInput
+                  value={values.floor_area_sqft}
+                  highlighted={Boolean(aiFilled.floor_area_sqft)}
+                  onChange={(v) => setField("floor_area_sqft", v)}
+                />
               </Field>
               <Field label="Number of Rooms">
-                <input {...bindNumber("bedrooms")} className={inputBase} />
+                <input {...bindNumber("bedrooms")} />
               </Field>
               <Field label="Number of Bathrooms">
-                <input {...bindNumber("bathrooms")} className={inputBase} />
+                <input {...bindNumber("bathrooms")} />
               </Field>
               <Field label="Dedicated Parking Slots">
-                <input {...bindNumber("parking_spaces")} className={inputBase} />
+                <input {...bindNumber("parking_spaces")} />
               </Field>
               <Field label="View">
-                <input
-                  {...bind("view")}
-                  className={inputBase}
-                  placeholder="E.g. Sea, City"
-                />
+                <input {...bind("view")} placeholder="E.g. Sea, City" />
               </Field>
             </div>
           ) : null}
@@ -697,17 +736,17 @@ function PropertyFormInner({
           {isCommercial ? (
             <div className={grid4}>
               <Field label="Suitable for" className="sm:col-span-2">
-                <input
-                  {...bind("suitable_for")}
-                  className={inputBase}
-                  placeholder="E.g. Office, Retail, Warehouse"
-                />
+                <input {...bind("suitable_for")} placeholder="E.g. Office, Retail, Warehouse" />
               </Field>
               <Field label="Land Size">
-                <LandSizeInput value={values.land_size_perch} onChange={(v) => setField("land_size_perch", v)} />
+                <LandSizeInput
+                  value={values.land_size_perch}
+                  highlighted={Boolean(aiFilled.land_size_perch)}
+                  onChange={(v) => setField("land_size_perch", v)}
+                />
               </Field>
               <Field label="Built-up Area">
-                <input {...bindNumber("built_up_area")} className={inputBase} />
+                <input {...bindNumber("built_up_area")} />
               </Field>
             </div>
           ) : null}
@@ -753,7 +792,7 @@ function PropertyFormInner({
             className={`grid gap-x-4 gap-y-5 sm:grid-cols-2 ${isLand || isApartment ? "lg:grid-cols-3" : "xl:grid-cols-4"}`}
           >
             <Field label="Currency">
-              <select {...bind("currency")} className={inputBase}>
+              <select {...bind("currency")}>
                 {options.currencies.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -774,6 +813,7 @@ function PropertyFormInner({
                     name={name}
                     value={values[name] ?? ""}
                     currency={currency}
+                    highlighted={Boolean(aiFilled[name])}
                     onChange={(v) => {
                       setField(name, v);
                       if (v) setPriceError(false);
@@ -821,12 +861,14 @@ function PropertyFormInner({
                   name="amenity"
                   value={a}
                   checked={Boolean(amenityChecks[a])}
-                  onChange={(e) =>
+                  highlighted={Boolean(aiFilled.amenity_checks && amenityChecks[a])}
+                  onChange={(e) => {
+                    clearAiHighlight("amenity_checks");
                     setAmenityChecks((prev) => ({
                       ...prev,
                       [a]: e.target.checked,
-                    }))
-                  }
+                    }));
+                  }}
                 >
                   {a}
                 </CheckChip>
@@ -837,11 +879,7 @@ function PropertyFormInner({
                 label="Other Amenities"
                 hint="Separate extras with commas."
               >
-                <input
-                  {...bind("amenities")}
-                  className={inputBase}
-                  placeholder="Any Extras Not Listed Above"
-                />
+                <input {...bind("amenities")} placeholder="Any Extras Not Listed Above" />
               </Field>
             </div>
           </FormSection>
@@ -858,7 +896,7 @@ function PropertyFormInner({
           <FormSection
             step={isLand ? 5 : 6}
             className="flex-1"
-            title={mode === "create" ? "Additional Information & Publishing" : "Additional Information & Visibility"}
+            title="Additional Information & Publishing"
           >
             <div className="grid gap-5">
               <Field
@@ -866,9 +904,8 @@ function PropertyFormInner({
                 hint="These details may appear in published listings."
               >
                 <textarea
-                  {...bind("comments")}
+                  {...bind("comments", "resize-y")}
                   rows={8}
-                  className={`${inputBase} resize-y`}
                   placeholder="Access, Viewing Times, Special Terms…"
                 />
               </Field>
@@ -877,9 +914,8 @@ function PropertyFormInner({
                 hint="For internal use only. Never published."
               >
                 <textarea
-                  {...bind("internal_comments")}
+                  {...bind("internal_comments", "resize-y")}
                   rows={2}
-                  className={`${inputBase} resize-y`}
                   placeholder="Owner Notes, Negotiation, Follow-Ups…"
                 />
               </Field>
@@ -903,38 +939,38 @@ function PropertyFormInner({
               </label>
             </div>
 
-            {mode === "create" ? (
-              <div className="mt-5">
-                <FieldLabel>Publishing Platforms</FieldLabel>
-                <div
-                  className={`mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 ${
-                    doNotPublish ? "opacity-60" : ""
-                  }`}
-                >
-                  {options.platforms.map((p) => (
-                    <CheckChip
-                      key={p}
-                      name={`platform_${p}`}
-                      checked={Boolean(platforms[p])}
-                      disabled={doNotPublish}
-                      onChange={(e) =>
-                        setPlatforms((prev) => ({
-                          ...prev,
-                          [p]: e.target.checked,
-                        }))
-                      }
-                    >
-                      {p}
-                    </CheckChip>
-                  ))}
-                </div>
-                <FieldHint>
-                  {doNotPublish
-                    ? "This property will remain unpublished."
-                    : "Select at least one platform, or choose Do Not Publish."}
-                </FieldHint>
+            <div className="mt-5">
+              <FieldLabel>Publishing Platforms</FieldLabel>
+              <div
+                className={`mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 ${
+                  doNotPublish ? "opacity-60" : ""
+                }`}
+              >
+                {options.platforms.map((p) => (
+                  <CheckChip
+                    key={p}
+                    name={`platform_${p}`}
+                    checked={Boolean(platforms[p])}
+                    disabled={doNotPublish}
+                    onChange={(e) =>
+                      setPlatforms((prev) => ({
+                        ...prev,
+                        [p]: e.target.checked,
+                      }))
+                    }
+                  >
+                    {p}
+                  </CheckChip>
+                ))}
               </div>
-            ) : null}
+              <FieldHint>
+                {doNotPublish
+                  ? mode === "edit"
+                    ? "Saving will queue a take-down on social media for the previous platforms."
+                    : "This property will remain unpublished."
+                  : "Select at least one platform, or choose Do Not Publish."}
+              </FieldHint>
+            </div>
           </FormSection>
           </fieldset>
         </div>
@@ -967,6 +1003,8 @@ function PropertyFormInner({
 
 const inputBase =
   "block w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm text-[var(--ink)] transition placeholder:text-[var(--muted)]/60 hover:border-stone-300 focus:border-[var(--brand)] focus:outline-none focus:ring-2 focus:ring-[var(--brand)]/15 disabled:cursor-not-allowed disabled:bg-[var(--bg-accent)]/60 disabled:text-[var(--muted)] disabled:hover:border-[var(--line)]";
+const AI_FILLED =
+  "border-emerald-500 bg-emerald-50 shadow-[0_0_0_3px_rgba(16,185,129,0.35)]";
 const grid3 = "grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-3";
 const grid4 = "grid gap-x-4 gap-y-5 sm:grid-cols-2 lg:grid-cols-4";
 
@@ -1067,10 +1105,12 @@ function LocationLinkField({
   value,
   onChange,
   className = "",
+  highlighted = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  highlighted?: boolean;
 }) {
   const parsed = parseMapsLink(value);
   const error = parsed.ok ? null : parsed.error;
@@ -1093,7 +1133,7 @@ function LocationLinkField({
           onBlur={() => {
             if (parsed.ok && parsed.url && parsed.url !== value) onChange(parsed.url);
           }}
-          className={`${inputBase} ${error ? "border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[var(--danger)]/15" : ""}`}
+          className={`${inputBase} ${highlighted ? AI_FILLED : ""} ${error ? "border-[var(--danger)] focus:border-[var(--danger)] focus:ring-[var(--danger)]/15" : ""}`}
         />
       </span>
       {error ? (
@@ -1107,11 +1147,13 @@ function CurrencyInput({
   name,
   value,
   currency,
+  highlighted = false,
   onChange,
 }: {
   name: string;
   value: string;
   currency: string;
+  highlighted?: boolean;
   onChange: (raw: string) => void;
 }) {
   return (
@@ -1119,7 +1161,7 @@ function CurrencyInput({
       <MoneyInput
         name={name}
         value={value}
-        className={`${inputBase} pr-14 tabular-nums`}
+        className={`${inputBase} pr-14 tabular-nums ${highlighted ? AI_FILLED : ""}`}
         onValueChange={onChange}
       />
       <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-medium text-[var(--muted)]">
@@ -1129,13 +1171,21 @@ function CurrencyInput({
   );
 }
 
-function FloorAreaInput({ value, onChange }: { value: string | undefined; onChange: (raw: string) => void }) {
+function FloorAreaInput({
+  value,
+  highlighted = false,
+  onChange,
+}: {
+  value: string | undefined;
+  highlighted?: boolean;
+  onChange: (raw: string) => void;
+}) {
   return (
     <Affix suffix="sqft">
       <MoneyInput
         name="floor_area_sqft"
         value={value ?? ""}
-        className={`${inputBase} pr-14 tabular-nums`}
+        className={`${inputBase} pr-14 tabular-nums ${highlighted ? AI_FILLED : ""}`}
         autoComplete="off"
         onValueChange={onChange}
       />
@@ -1143,13 +1193,21 @@ function FloorAreaInput({ value, onChange }: { value: string | undefined; onChan
   );
 }
 
-function LandSizeInput({ value, onChange }: { value: string | undefined; onChange: (raw: string) => void }) {
+function LandSizeInput({
+  value,
+  highlighted = false,
+  onChange,
+}: {
+  value: string | undefined;
+  highlighted?: boolean;
+  onChange: (raw: string) => void;
+}) {
   return (
     <Affix suffix="perch">
       <MoneyInput
         name="land_size_perch"
         value={value ?? ""}
-        className={`${inputBase} pr-16 tabular-nums`}
+        className={`${inputBase} pr-16 tabular-nums ${highlighted ? AI_FILLED : ""}`}
         autoComplete="off"
         onValueChange={onChange}
       />
@@ -1176,12 +1234,20 @@ function Affix({
 
 function CheckChip({
   children,
+  highlighted = false,
   ...inputProps
 }: React.InputHTMLAttributes<HTMLInputElement> & {
   children: React.ReactNode;
+  highlighted?: boolean;
 }) {
   return (
-    <label className="flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm transition hover:border-stone-300 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand)]/5 has-[:disabled]:cursor-not-allowed">
+    <label
+      className={`flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition hover:border-stone-300 has-[:checked]:border-[var(--brand)] has-[:checked]:bg-[var(--brand)]/5 has-[:disabled]:cursor-not-allowed ${
+        highlighted
+          ? "border-emerald-500 bg-emerald-50 shadow-[0_0_0_3px_rgba(16,185,129,0.35)]"
+          : "border-[var(--line)] bg-white"
+      }`}
+    >
       <input
         type="checkbox"
         {...inputProps}

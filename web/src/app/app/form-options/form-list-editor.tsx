@@ -1,22 +1,43 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveFormList } from "./actions";
+import {
+  type AmenityCategory,
+  type AmenityOption,
+  defaultAmenityCategory,
+} from "@/lib/amenity-category";
 import type { FormListKey } from "@/lib/form-options";
+import { saveFormList } from "./actions";
 
 type Props = {
   listKey: FormListKey;
   title: string;
   initialItems: string[];
+  /** When set, each amenity row gets a Feature / Amenity category control. */
+  initialAmenityOptions?: AmenityOption[];
+  categorized?: boolean;
 };
 
 export function FormListEditor({
   listKey,
   title,
   initialItems,
+  initialAmenityOptions,
+  categorized = false,
 }: Props) {
   const [items, setItems] = useState(initialItems);
+  const [categories, setCategories] = useState<Record<string, AmenityCategory>>(() => {
+    const map: Record<string, AmenityCategory> = {};
+    for (const opt of initialAmenityOptions ?? []) {
+      map[opt.name] = opt.category;
+    }
+    for (const name of initialItems) {
+      if (!(name in map)) map[name] = defaultAmenityCategory(name);
+    }
+    return map;
+  });
   const [draft, setDraft] = useState("");
+  const [draftCategory, setDraftCategory] = useState<AmenityCategory>("amenity");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -30,13 +51,30 @@ export function FormListEditor({
       return;
     }
     setItems((prev) => [...prev, t]);
+    if (categorized) {
+      setCategories((prev) => ({
+        ...prev,
+        [t]: draftCategory || defaultAmenityCategory(t),
+      }));
+    }
     setDraft("");
+    setDraftCategory("amenity");
     setMessage(null);
     setError(false);
   }
 
   function removeAt(index: number) {
-    setItems((prev) => prev.filter((_, i) => i !== index));
+    setItems((prev) => {
+      const removed = prev[index];
+      if (removed) {
+        setCategories((cats) => {
+          const next = { ...cats };
+          delete next[removed];
+          return next;
+        });
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   function move(index: number, dir: -1 | 1) {
@@ -49,12 +87,22 @@ export function FormListEditor({
     });
   }
 
+  function setCategory(name: string, category: AmenityCategory) {
+    setCategories((prev) => ({ ...prev, [name]: category }));
+  }
+
   function save() {
     setMessage(null);
     setError(false);
     startTransition(async () => {
       try {
-        const result = await saveFormList(listKey, items);
+        const payload = categorized
+          ? items.map((name) => ({
+              name,
+              category: categories[name] ?? defaultAmenityCategory(name),
+            }))
+          : items;
+        const result = await saveFormList(listKey, payload);
         setError(!result.ok);
         setMessage(result.ok ? "Saved." : result.error);
       } catch {
@@ -69,6 +117,11 @@ export function FormListEditor({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold">{title}</h2>
+          {categorized ? (
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Feature = unit details on the PDF · Amenity = building facilities
+            </p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -87,6 +140,17 @@ export function FormListEditor({
             className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--line)] px-3 py-2"
           >
             <span className="min-w-0 flex-1 text-sm">{item}</span>
+            {categorized ? (
+              <select
+                value={categories[item] ?? defaultAmenityCategory(item)}
+                onChange={(e) => setCategory(item, e.target.value as AmenityCategory)}
+                className="rounded-lg border border-[var(--line)] bg-[var(--card)] px-2 py-1 text-xs font-medium"
+                aria-label={`Category for ${item}`}
+              >
+                <option value="feature">Feature</option>
+                <option value="amenity">Amenity</option>
+              </select>
+            ) : null}
             <button
               type="button"
               onClick={() => move(index, -1)}
@@ -132,6 +196,17 @@ export function FormListEditor({
           placeholder="Add option…"
           className="min-w-[12rem] flex-1 rounded-xl border border-[var(--line)] px-3 py-2 text-sm"
         />
+        {categorized ? (
+          <select
+            value={draftCategory}
+            onChange={(e) => setDraftCategory(e.target.value as AmenityCategory)}
+            className="rounded-xl border border-[var(--line)] bg-[var(--card)] px-3 py-2 text-sm"
+            aria-label="Category for new option"
+          >
+            <option value="feature">Feature</option>
+            <option value="amenity">Amenity</option>
+          </select>
+        ) : null}
         <button
           type="button"
           onClick={addItem}

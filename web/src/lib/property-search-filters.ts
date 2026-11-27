@@ -5,6 +5,8 @@ import { splitListParam } from "@/lib/list-param";
 
 export type SearchFilterValues = {
   q: string;
+  /** Comma-separated C7-##### refs for bulk lookup / Excel dump. */
+  refs: string;
   status: string;
   opportunity_type: string;
   property_type: string;
@@ -38,6 +40,7 @@ export type SearchFilterValues = {
 
 export const SEARCH_FILTER_KEYS = [
   "q",
+  "refs",
   "status",
   "opportunity_type",
   "property_type",
@@ -69,6 +72,34 @@ export const SEARCH_FILTER_KEYS = [
   "advanced",
 ] as const satisfies readonly (keyof SearchFilterValues)[];
 
+const REF_RE = /\bC7-?(\d+)\b/gi;
+const MAX_REFS = 300;
+
+/** Unique C7-##### refs from a paste (one per line, commas, or mixed text). */
+export function extractPropertyRefNos(raw: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const match of raw.matchAll(REF_RE)) {
+    const ref = `C7-${match[1]}`;
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    out.push(ref);
+    if (out.length >= MAX_REFS) break;
+  }
+  return out;
+}
+
+/** True when the paste is mainly a list of refs (not a full listing description). */
+export function looksLikeRefList(raw: string, refs: string[]): boolean {
+  if (!refs.length) return false;
+  if (refs.length >= 2) return true;
+  const remainder = raw
+    .replace(REF_RE, " ")
+    .replace(/[\s,;|/·.\-–—]+/g, "")
+    .trim();
+  return remainder.length < 8;
+}
+
 type Params = Record<string, string | string[] | undefined>;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -86,6 +117,7 @@ function numOrNull(v: string): number | null {
 export function searchFiltersFromParams(sp: Params): SearchFilterValues {
   return {
     q: one(sp.q),
+    refs: one(sp.refs),
     // No status param means a fresh search (default Active); an empty one means "All statuses".
     status: sp.status === undefined ? "Active" : one(sp.status),
     opportunity_type: one(sp.opportunity_type),
@@ -134,6 +166,7 @@ export function appendSearchFilters(params: URLSearchParams, f: SearchFilterValu
 
 const FILTER_LABELS: Partial<Record<keyof SearchFilterValues, string>> = {
   q: "Search",
+  refs: "Refs",
   status: "Status",
   opportunity_type: "Opportunity",
   property_type: "Type",
@@ -258,7 +291,10 @@ export function applySearchFilters<Q>(query: Q, f: SearchFilterValues): Q {
   if (budgetMax != null) q = q.lte("budget", budgetMax);
   if (parkingMin != null) q = q.gte("parking_spaces", parkingMin);
 
-  if (f.q) {
+  const refs = splitListParam(f.refs).map((r) => r.toUpperCase()).filter((r) => /^C7-\d+$/.test(r));
+  if (refs.length) {
+    q = q.in("ref_no", refs);
+  } else if (f.q) {
     const term = f.q.replace(/[%_,]/g, " ");
     q = q.or(
       `ref_no.ilike.%${term}%,contact_name.ilike.%${term}%,address.ilike.%${term}%,city.ilike.%${term}%,contact_phone_1.ilike.%${term}%,comments.ilike.%${term}%,internal_comments.ilike.%${term}%`,

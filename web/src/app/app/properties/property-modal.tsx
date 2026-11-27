@@ -155,7 +155,7 @@ function ViewBody({
               onClick={onEdit}
               className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
             >
-              Edit listing
+              Edit Listing
             </button>
           ) : null}
         </>
@@ -291,6 +291,7 @@ export function PropertyModalProvider({ children }: { children: ReactNode }) {
               complexes={state.data.complexes}
               options={state.data.options}
               initialDoNotPublish={state.data.initialDoNotPublish}
+              initialPlatforms={state.data.lastPlatforms}
               initialAmenities={state.data.initialAmenities}
               initialValues={state.data.initialValues}
               onSaved={() => {

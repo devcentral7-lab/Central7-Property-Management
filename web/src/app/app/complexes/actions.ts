@@ -113,11 +113,22 @@ function str(v: FormDataEntryValue | null): string {
 
 function intOrNull(raw: string, label: string, min: number, max: number): number | null {
   if (!raw) return null;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${label} must be a positive whole number.`);
+  }
   const n = Number(raw);
   if (!Number.isInteger(n) || n < min || n > max) {
     throw new Error(`${label} must be a whole number between ${min} and ${max}.`);
   }
   return n;
+}
+
+function digitsOrNull(raw: string, label: string): string | null {
+  if (!raw) return null;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${label} must contain digits only.`);
+  }
+  return raw;
 }
 
 function commaList(raw: string): string[] {
@@ -198,15 +209,13 @@ function parseFields(formData: FormData) {
     swimming_pools_count: intOrNull(str(formData.get("swimming_pools_count")), "Number of Swimming Pools", 0, 50),
     swimming_pools_floor: str(formData.get("swimming_pools_floor")) || null,
     gym_floor: str(formData.get("gym_floor")) || null,
-    generator: str(formData.get("generator")) || null,
     visitors_lobby: str(formData.get("visitors_lobby")) || null,
-    common_hall: str(formData.get("common_hall")) || null,
     drivers_washroom: str(formData.get("drivers_washroom")) || null,
     maids_washroom: str(formData.get("maids_washroom")) || null,
     contact_person_1: str(formData.get("contact_person_1")) || null,
     contact_person_2: str(formData.get("contact_person_2")) || null,
-    contact_management: str(formData.get("contact_management")) || null,
-    contact_security: str(formData.get("contact_security")) || null,
+    contact_management: digitsOrNull(str(formData.get("contact_management")), "Contact Number 1"),
+    contact_security: digitsOrNull(str(formData.get("contact_security")), "Contact Number 2"),
     parking_type: str(formData.get("parking_type")) || null,
     parking_floors: str(formData.get("parking_floors")) || null,
     parking_lift: str(formData.get("parking_lift")) || null,

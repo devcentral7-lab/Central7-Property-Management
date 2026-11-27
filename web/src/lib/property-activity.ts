@@ -1,4 +1,8 @@
 import { statusChangeLabel } from "@/lib/ikman-republish";
+import {
+  formatPropertyChanges,
+  type PropertyFieldChange,
+} from "@/lib/property-field-diff";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,6 +28,11 @@ function detailPlatform(details: unknown): string | null {
   return typeof platform === "string" && platform.trim() ? platform.trim() : null;
 }
 
+function statusActivityLabel(action: string): string {
+  if (action === "Publish") return "Queued for Publishing";
+  return statusChangeLabel(action);
+}
+
 function auditActionLabel(
   action: string,
   summary: string | null,
@@ -32,15 +41,15 @@ function auditActionLabel(
   const platform = detailPlatform(details);
   switch (action) {
     case "approve":
-      return "Social media approved";
+      return "Approved for Publishing";
     case "decline":
       return "Social media declined";
     case "platform_done":
-      return platform ? `Posted on ${platform}` : "Posted on platform";
+      return platform ? `Published on ${platform}` : "Published on platform";
     case "platform_undone":
       return platform ? `Unticked ${platform}` : "Platform unticked";
     case "publish":
-      return "Social media marked done";
+      return "Publishing Completed";
     case "revert_publish":
       return "Social media reopened";
     case "revert_approve":
@@ -72,6 +81,29 @@ function auditActionLabel(
   }
 }
 
+function parseStoredChanges(details: unknown): PropertyFieldChange[] {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return [];
+  const raw = (details as { changes?: unknown }).changes;
+  if (!Array.isArray(raw)) return [];
+  const out: PropertyFieldChange[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const label = typeof row.label === "string" ? row.label.trim() : "";
+    const from = typeof row.from === "string" ? row.from : displayFallback(row.from);
+    const to = typeof row.to === "string" ? row.to : displayFallback(row.to);
+    const field = typeof row.field === "string" ? row.field : label;
+    if (!label) continue;
+    out.push({ field, label, from, to });
+  }
+  return out;
+}
+
+function displayFallback(value: unknown): string {
+  if (value == null || value === "") return "—";
+  return String(value);
+}
+
 function auditComment(
   action: string,
   summary: string | null,
@@ -90,13 +122,18 @@ function auditComment(
       : [];
     if (approved.length) return `Platforms: ${approved.join(", ")}`;
   }
-  if (action === "publish" || action === "platform_done") {
+  // Title already names the platform — skip redundant tag.
+  if (action === "platform_done") return null;
+  if (action === "publish") {
     const platforms = Array.isArray(detail?.platforms)
       ? detail.platforms.map(String).filter(Boolean)
       : typeof detail?.platform === "string"
         ? [detail.platform]
         : [];
     if (platforms.length) return `Platforms: ${platforms.join(", ")}`;
+  }
+  if (action === "update") {
+    return formatPropertyChanges(parseStoredChanges(details));
   }
   if (action === "photo_upload" && detail?.count != null) {
     return `${detail.count} file(s)`;
@@ -106,6 +143,13 @@ function auditComment(
     return summary;
   }
   return null;
+}
+
+/** Lower = older when timestamps match (Listing created is the first record). */
+function timelineTieBreak(action: string): number {
+  if (action === "Listing created") return 0;
+  if (action === "Queued for Publishing") return 1;
+  return 2;
 }
 
 export async function loadPropertyActivity(refNo: string): Promise<PropertyActivityEvent[]> {
@@ -134,7 +178,7 @@ export async function loadPropertyActivity(refNo: string): Promise<PropertyActiv
     const handledBy = isDataChange ? (e.resolved_by as string | null) : null;
     return {
       id: `status-${e.id}`,
-      action: statusChangeLabel(String(e.action)),
+      action: statusActivityLabel(String(e.action)),
       actor_name: e.actor_name,
       handled_by: handledBy,
       handled_label: handledBy ? ("Done by" as const) : null,
@@ -168,9 +212,11 @@ export async function loadPropertyActivity(refNo: string): Promise<PropertyActiv
   }
 
   return [...statusRows, ...auditRows]
-    .sort(
-      (a, b) =>
-        new Date(b.occurred_at ?? 0).getTime() - new Date(a.occurred_at ?? 0).getTime(),
-    )
+    .sort((a, b) => {
+      const time =
+        new Date(b.occurred_at ?? 0).getTime() - new Date(a.occurred_at ?? 0).getTime();
+      if (time !== 0) return time;
+      return timelineTieBreak(b.action) - timelineTieBreak(a.action);
+    })
     .slice(0, TIMELINE_LIMIT);
 }

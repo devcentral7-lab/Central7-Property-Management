@@ -71,13 +71,13 @@ export function UpdateStatusButton({
         <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
           <path d="M4 10a6 6 0 0 1 10.2-4.3L16 7.5M16 4v3.5h-3.5M16 10a6 6 0 0 1-10.2 4.3L4 12.5M4 16v-3.5h3.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Update status
+        Change Request
       </button>
 
       <PopupDialog
         open={open}
         onClose={() => setOpen(false)}
-        title="Update Status"
+        title="Change Request"
         subtitle={refNo}
         busy={pending}
       >

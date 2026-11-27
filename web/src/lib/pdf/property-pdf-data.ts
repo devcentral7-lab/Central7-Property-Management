@@ -1,8 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  amenityCategoryLookup,
+  resolveAmenityCategory,
+  type AmenityCategory,
+} from "@/lib/amenity-category";
 import { COMPANY } from "@/lib/company";
 import { downloadPhoto, isDriveConfigured, listPropertyPhotos } from "@/lib/drive/photos";
 import { resizeToJpeg } from "@/lib/drive/resize";
 import { withSavedOrder } from "@/lib/drive/saved-order";
+import { loadFormOptions } from "@/lib/form-options";
 import { mergeAmenityLists } from "@/lib/property-details";
 import { typeSpecificKeys } from "@/lib/property-fields";
 import { createClient } from "@/lib/supabase/server";
@@ -14,7 +20,7 @@ export type PdfField = { label: string; value: string };
 
 export type GlanceIcon = "area" | "land" | "bed" | "bath" | "floors" | "parking";
 
-export type PdfAmenity = { name: string };
+export type PdfAmenity = { name: string; category: AmenityCategory };
 
 export type PdfPhoto = { data: Buffer; format: "jpg" | "png" };
 
@@ -112,7 +118,7 @@ export async function loadPropertyPdfData(
   if (error) throw new Error(error.message);
   if (!p) return null;
 
-  const [{ data: complex }, photos, { data: staffContact }] = await Promise.all([
+  const [{ data: complex }, photos, { data: staffContact }, formOptions] = await Promise.all([
     p.apartment_complex_id
       ? supabase
           .from("apartment_complexes")
@@ -128,6 +134,7 @@ export async function loadPropertyPdfData(
           .eq(p.created_by ? "id" : "display_name", p.created_by || p.created_by_name)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    loadFormOptions(),
   ]);
 
   const propertyType = String(p.property_type || "Property");
@@ -177,10 +184,19 @@ export async function loadPropertyPdfData(
   if (!isLand) add("Price per sq.ft", money(p.price_per_sqft, currency));
   if (copy === "client") add("Listing type", p.contact_type);
 
-  const amenities: PdfAmenity[] = mergeAmenityLists(
+  const categoryByName = amenityCategoryLookup(formOptions.amenityOptions);
+  const named = mergeAmenityLists(
     ((p.amenities || []) as string[]).map((a) => amenityName(String(a || ""))),
     ((complex?.amenities || []) as string[]).map((a) => amenityName(String(a || ""))),
-  ).map((name) => ({ name }));
+  ).map((name) => ({
+    name,
+    category: resolveAmenityCategory(name, categoryByName),
+  }));
+  // Features first so page-fit trimming drops building amenities before unit features.
+  const amenities: PdfAmenity[] = [
+    ...named.filter((a) => a.category === "feature"),
+    ...named.filter((a) => a.category === "amenity"),
+  ];
 
   const priceNote = rent
     ? null

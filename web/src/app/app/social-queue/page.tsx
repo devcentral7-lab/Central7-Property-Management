@@ -34,10 +34,11 @@ const STATUS_OPTIONS = [
   "Lost",
   "Hold",
   "Closed",
+  "Do Not Publish",
 ];
 
 /** Requests that take the listing off social media; styled apart from posting requests. */
-const TAKE_DOWN = new Set(["Drop", "Lost", "Hold", "Closed"]);
+const TAKE_DOWN = new Set(["Drop", "Lost", "Hold", "Closed", "Do Not Publish"]);
 
 function one(v: string | string[] | undefined) {
   return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
@@ -204,19 +205,24 @@ export default async function SocialQueuePage({
                 platforms={platforms}
                 dates={dates}
                 meta={
-                  <>
-                    {row.approved_by ? (
-                      <>
-                        Approved by <span className="font-semibold text-[var(--ink)]">{row.approved_by}</span>
+                  <span className="inline-flex flex-col items-start gap-0.5 text-left">
+                    {row.approved_at || row.approved_by ? (
+                      <span>
+                        Approved by -{" "}
+                        <span className="font-semibold text-[var(--ink)]">Keerthie or Sherden</span>
                         {row.approved_at ? ` · ${formatDateTime(row.approved_at)}` : ""}
-                      </>
+                      </span>
+                    ) : null}
+                    {row.approved_by ? (
+                      <span>
+                        Published by{" "}
+                        <span className="font-semibold text-[var(--ink)]">{row.approved_by}</span>
+                      </span>
                     ) : null}
                     {row.completed_at ? (
-                      <>
-                        {row.approved_by ? " · " : ""}Done {formatDateTime(row.completed_at)}
-                      </>
+                      <span>Done {formatDateTime(row.completed_at)}</span>
                     ) : null}
-                  </>
+                  </span>
                 }
               >
                 <div className="flex flex-wrap items-center gap-2">

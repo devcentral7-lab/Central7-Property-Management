@@ -116,7 +116,7 @@ export async function PropertyDetailContent({ refNo }: DetailProps) {
               href={`/app/properties/${property.ref_no}/edit`}
               className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold hover:bg-[var(--bg-accent)]"
             >
-              Edit listing
+              Edit Listing
             </Link>
           ) : null}
         </>

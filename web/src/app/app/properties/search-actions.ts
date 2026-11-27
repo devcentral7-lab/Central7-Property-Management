@@ -9,6 +9,10 @@ import {
   isGeminiConfigured,
 } from "@/lib/gemini/extract-property";
 import { paragraphFieldsToFilters, quickSearchFilters } from "@/lib/paragraph-search-filters";
+import {
+  extractPropertyRefNos,
+  looksLikeRefList,
+} from "@/lib/property-search-filters";
 import type { SearchFilterValues } from "./property-search-form";
 import { createClient } from "@/lib/supabase/server";
 
@@ -61,8 +65,19 @@ export async function searchPropertiesByParagraph(
     return { ok: false, error: "Sign in required." };
   }
   const text = paragraph.trim();
+  const refs = extractPropertyRefNos(text);
+  if (looksLikeRefList(text, refs)) {
+    return {
+      ok: true,
+      filters: {
+        refs: refs.join(","),
+        // Exact ref lookup should not be limited to Active.
+        status: "",
+      },
+    };
+  }
   if (text.length < 12) {
-    return { ok: false, error: "Paste a longer property description." };
+    return { ok: false, error: "Paste a longer property description, or a list of C7 reference numbers." };
   }
   if (!isGeminiConfigured()) {
     return { ok: false, error: "Gemini API key is not configured." };
@@ -72,7 +87,7 @@ export async function searchPropertiesByParagraph(
     const { fields } = await extractPropertyFieldsWithGemini(text, options, true, { cities, complexes });
     const filters = quickSearchFilters(paragraphFieldsToFilters(fields));
     if (!Object.keys(filters).length) {
-      return { ok: false, error: "No filter details found. Include a city, property type, opportunity, furnishing, or price." };
+      return { ok: false, error: "No filter details found. Include a city, property type, opportunity, furnishing, price, or paste C7 reference numbers." };
     }
     return { ok: true, filters };
   } catch (error) {
