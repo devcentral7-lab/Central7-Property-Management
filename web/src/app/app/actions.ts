@@ -18,6 +18,7 @@ import {
   extractPropertyFieldsWithGemini,
   isGeminiConfigured,
 } from "@/lib/gemini/extract-property";
+import { diffPropertyFields } from "@/lib/property-field-diff";
 
 export type ExtractPropertyResult =
   | { ok: true; fields: Record<string, string>; notes: string[]; configured: true }
@@ -343,7 +344,7 @@ export async function updateProperty(formData: FormData): Promise<ActionResult> 
 async function editProperty(formData: FormData) {
   const profile = await requireProfile();
   if (profile.role !== "Admin") {
-    throw new Error("Only Admins can edit listings. Use Update status → Data Change to request a change.");
+    throw new Error("Only Admins can edit listings. Use Change Request → Data Change to request a change.");
   }
   const supabase = await createClient();
   const refNo = str(formData.get("ref_no")).toUpperCase();
@@ -351,17 +352,109 @@ async function editProperty(formData: FormData) {
 
   const { data: existing, error: findErr } = await supabase
     .from("properties")
-    .select("id, ref_no")
+    .select("*")
     .eq("ref_no", refNo)
     .single();
   if (findErr || !existing) throw findErr ?? new Error("Property not found");
 
-  const { row } = await buildPropertyPayload(formData);
+  const { row, platforms } = await buildPropertyPayload(formData);
+  if (!row.do_not_publish && platforms.length === 0) {
+    throw new Error("Select at least one platform, or mark Do Not Publish.");
+  }
+
+  const fieldChanges = diffPropertyFields(
+    existing as Record<string, unknown>,
+    row as Record<string, unknown>,
+  );
+
   const { error } = await supabase
     .from("properties")
     .update(row)
     .eq("id", existing.id);
   if (error) throw error;
+
+  const wasDoNotPublish = Boolean(existing.do_not_publish);
+  const nowDoNotPublish = Boolean(row.do_not_publish);
+  const publishToggledOn = wasDoNotPublish && !nowDoNotPublish;
+  const publishToggledOff = !wasDoNotPublish && nowDoNotPublish;
+  const service = createAdminClient();
+
+  if (publishToggledOn) {
+    const { error: eventErr } = await supabase.from("property_status_events").insert({
+      property_id: existing.id,
+      ref_no: existing.ref_no,
+      actor_id: profile.id,
+      actor_name: profile.display_name,
+      action: "Publish",
+      comment: "Do Not Publish turned off",
+      requested_platforms: platforms,
+    });
+    if (eventErr) console.error("editProperty status event", eventErr.message);
+
+    const { error: queueErr } = await service.from("social_media_queue").upsert(
+      {
+        property_id: existing.id,
+        ref_no: existing.ref_no,
+        approved_action: "Publish",
+        approved_by: null,
+        approved_at: null,
+        requested_platforms: platforms,
+        platform_dates: {},
+        completed_at: null,
+      },
+      { onConflict: "ref_no" },
+    );
+    if (queueErr) throw queueErr;
+  } else if (publishToggledOff) {
+    let takeDownPlatforms = platforms;
+    if (!takeDownPlatforms.length) {
+      const { data: queueRow } = await service
+        .from("social_media_queue")
+        .select("requested_platforms")
+        .eq("ref_no", existing.ref_no)
+        .maybeSingle();
+      takeDownPlatforms = (queueRow?.requested_platforms ?? []) as string[];
+    }
+    if (!takeDownPlatforms.length) {
+      const { data: lastRequest } = await supabase
+        .from("property_status_events")
+        .select("requested_platforms")
+        .eq("ref_no", existing.ref_no)
+        .neq("requested_platforms", "{}")
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      takeDownPlatforms = (lastRequest?.requested_platforms ?? []) as string[];
+    }
+
+    if (takeDownPlatforms.length) {
+      const { error: eventErr } = await supabase.from("property_status_events").insert({
+        property_id: existing.id,
+        ref_no: existing.ref_no,
+        actor_id: profile.id,
+        actor_name: profile.display_name,
+        action: "Do Not Publish",
+        comment: "Do Not Publish turned on",
+        requested_platforms: takeDownPlatforms,
+      });
+      if (eventErr) console.error("editProperty status event", eventErr.message);
+
+      const { error: queueErr } = await service.from("social_media_queue").upsert(
+        {
+          property_id: existing.id,
+          ref_no: existing.ref_no,
+          approved_action: "Do Not Publish",
+          approved_by: null,
+          approved_at: null,
+          requested_platforms: takeDownPlatforms,
+          platform_dates: {},
+          completed_at: null,
+        },
+        { onConflict: "ref_no" },
+      );
+      if (queueErr) throw queueErr;
+    }
+  }
 
   await logAudit({
     category: "property",
@@ -376,12 +469,20 @@ async function editProperty(formData: FormData) {
       property_type: row.property_type,
       status: row.status,
       city: row.city,
+      do_not_publish: row.do_not_publish,
+      previous_do_not_publish: wasDoNotPublish,
+      platforms,
+      queued:
+        publishToggledOn ? "Publish" : publishToggledOff ? "Do Not Publish" : null,
+      changes: fieldChanges,
     },
   });
 
   revalidatePath(`/app/properties/${refNo}`);
   revalidatePath("/app/properties");
   revalidatePath("/app/activity");
+  revalidatePath("/app/social-queue");
+  revalidatePath("/app/admin-approvals");
 }
 
 export async function updatePropertyStatus(formData: FormData): Promise<ActionResult> {

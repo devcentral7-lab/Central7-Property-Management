@@ -79,6 +79,10 @@ export async function PropertyAddPanel({ isAdmin, section }: Props) {
               listKey={meta.key}
               title={meta.title}
               initialItems={options[meta.field]}
+              categorized={meta.categorized}
+              initialAmenityOptions={
+                meta.categorized ? options.amenityOptions : undefined
+              }
             />
           ))}
         </div>

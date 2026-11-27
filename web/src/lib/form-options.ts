@@ -1,4 +1,8 @@
 import {
+  type AmenityOption,
+  parseAmenityOptions,
+} from "@/lib/amenity-category";
+import {
   AMENITIES_LIST,
   CONTACT_TYPES,
   FURNISHED_LIST,
@@ -9,6 +13,8 @@ import {
   STATUS_LIST,
 } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/server";
+
+export type { AmenityCategory, AmenityOption } from "@/lib/amenity-category";
 
 /** Keys stored in app_settings for listing form dropdowns / checkboxes. */
 export const FORM_LIST_KEYS = [
@@ -26,7 +32,10 @@ export const FORM_LIST_KEYS = [
 export type FormListKey = (typeof FORM_LIST_KEYS)[number];
 
 export type FormOptions = {
+  /** Amenity names for checkboxes / matching (order preserved). */
   amenities: string[];
+  /** Same list with Feature vs Amenity category for PDFs / admin editor. */
+  amenityOptions: AmenityOption[];
   contactTypes: string[];
   opportunityTypes: string[];
   propertyTypes: string[];
@@ -37,12 +46,20 @@ export type FormOptions = {
   statusChangeOptions: string[];
 };
 
+export type FormListStringField = Exclude<keyof FormOptions, "amenityOptions">;
+
 export const FORM_LIST_META: {
   key: FormListKey;
   title: string;
-  field: keyof FormOptions;
+  field: FormListStringField;
+  categorized?: boolean;
 }[] = [
-  { key: "amenities_list", title: "Amenities", field: "amenities" },
+  {
+    key: "amenities_list",
+    title: "Amenities & Features",
+    field: "amenities",
+    categorized: true,
+  },
   { key: "contact_types", title: "Contact Types", field: "contactTypes" },
   {
     key: "opportunity_types",
@@ -69,9 +86,12 @@ function sortAlpha(arr: readonly string[] | string[]): string[] {
   return [...arr].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
+const FALLBACK_AMENITY_OPTIONS = parseAmenityOptions(null, sortAlpha(AMENITIES_LIST));
+
 /** Used only if the saved lists can't be read; normally Admins set each list's order. */
 const FALLBACK: FormOptions = {
-  amenities: sortAlpha(AMENITIES_LIST),
+  amenities: FALLBACK_AMENITY_OPTIONS.map((a) => a.name),
+  amenityOptions: FALLBACK_AMENITY_OPTIONS,
   contactTypes: [...CONTACT_TYPES],
   opportunityTypes: [...OPPORTUNITY_TYPES],
   propertyTypes: [...PROPERTY_TYPES],
@@ -85,7 +105,13 @@ const FALLBACK: FormOptions = {
 function asStringArray(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   const items = value
-    .map((v) => String(v ?? "").trim())
+    .map((v) => {
+      if (typeof v === "string") return v.trim();
+      if (v && typeof v === "object" && !Array.isArray(v) && "name" in v) {
+        return String((v as { name: unknown }).name ?? "").trim();
+      }
+      return "";
+    })
     .filter(Boolean);
   return items.length ? items : [];
 }
@@ -98,8 +124,14 @@ function fromRows(
     return asStringArray(map.get(key)) ?? fallback;
   };
 
+  const amenityOptions = parseAmenityOptions(
+    map.get("amenities_list"),
+    FALLBACK.amenities,
+  );
+
   return {
-    amenities: pick("amenities_list", FALLBACK.amenities),
+    amenities: amenityOptions.map((a) => a.name),
+    amenityOptions,
     contactTypes: pick("contact_types", FALLBACK.contactTypes),
     opportunityTypes: pick("opportunity_types", FALLBACK.opportunityTypes),
     propertyTypes: pick("property_types", FALLBACK.propertyTypes),

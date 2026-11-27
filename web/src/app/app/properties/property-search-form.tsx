@@ -87,8 +87,11 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
           setParaError(result.error);
           return;
         }
-        const params = new URLSearchParams({ status: result.filters.status ?? "Active" });
+        const params = new URLSearchParams();
+        if (result.filters.status !== undefined) params.set("status", result.filters.status);
+        else params.set("status", "Active");
         for (const [key, value] of Object.entries(result.filters)) {
+          if (key === "status") continue;
           if (value) params.set(key, value);
         }
         setShowAdvanced(null);
@@ -130,14 +133,19 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
           value={paragraph}
           onChange={(e) => setParagraph(e.target.value)}
           rows={3}
-          placeholder="Describe what you need, e.g. a 3-bedroom apartment in Colombo 02 for rent under USD 2,500."
+          placeholder="Describe what you need, or paste C7 refs one per line (C7-7983, C7-7990, …)."
           disabled={pending}
           className={`${inputClass} mt-2`}
         />
         {paraError ? (
           <p className="mt-2 text-sm text-[var(--danger)]">{paraError}</p>
         ) : null}
-        {filtersFilled ? (
+        {filters.refs ? (
+          <p className="mt-2 text-xs text-[var(--muted)]">
+            Showing {filters.refs.split(",").filter(Boolean).length} reference number(s). Use Export
+            Excel for the dump.
+          </p>
+        ) : filtersFilled ? (
           <p className="mt-2 text-xs text-[var(--muted)]">
             Filters filled from your description. Refine them below to update the results.
           </p>
@@ -155,6 +163,18 @@ export function PropertySearchForm({ options, filters, complexes, creators = [] 
         {showAdvanced ? <input type="hidden" name="advanced" value="1" /> : null}
 
         <div data-filter-group="basic" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {filters.refs ? (
+            <label className="col-span-2 text-sm font-semibold xl:col-span-4">
+              Reference numbers ({filters.refs.split(",").filter(Boolean).length})
+              <input
+                name="refs"
+                defaultValue={filters.refs}
+                className={`${inputClass} mt-1 font-mono text-xs`}
+                readOnly
+                title="Clear Filters removes this ref list"
+              />
+            </label>
+          ) : null}
           <label className="col-span-2 text-sm font-semibold">
             Keyword Search
             <input

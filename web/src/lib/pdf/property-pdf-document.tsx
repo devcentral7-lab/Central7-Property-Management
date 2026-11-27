@@ -521,20 +521,42 @@ function PropertyPdf({ data, info, logo }: { data: PropertyPdfData; info: OtherI
           </Section>
         ) : null}
 
-        {data.amenities.length ? (
-          <Section title="Features & amenities" t={t}>
-            <View style={s.amenityGrid}>
-              {data.amenities.map((a) => (
-                <View key={a.name} style={s.amenityWrap} wrap={false}>
-                  <View style={s.amenity}>
-                    <View style={s.dot} />
-                    <Text style={[s.amenityName, { flex: 1 }]}>{a.name}</Text>
+        {(() => {
+          const features = data.amenities.filter((a) => a.category === "feature");
+          const amenities = data.amenities.filter((a) => a.category === "amenity");
+          return (
+            <>
+              {features.length ? (
+                <Section title="Features" t={t}>
+                  <View style={s.amenityGrid}>
+                    {features.map((a) => (
+                      <View key={a.name} style={s.amenityWrap} wrap={false}>
+                        <View style={s.amenity}>
+                          <View style={s.dot} />
+                          <Text style={[s.amenityName, { flex: 1 }]}>{a.name}</Text>
+                        </View>
+                      </View>
+                    ))}
                   </View>
-                </View>
-              ))}
-            </View>
-          </Section>
-        ) : null}
+                </Section>
+              ) : null}
+              {amenities.length ? (
+                <Section title="Amenities" t={t}>
+                  <View style={s.amenityGrid}>
+                    {amenities.map((a) => (
+                      <View key={a.name} style={s.amenityWrap} wrap={false}>
+                        <View style={s.amenity}>
+                          <View style={s.dot} />
+                          <Text style={[s.amenityName, { flex: 1 }]}>{a.name}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </Section>
+              ) : null}
+            </>
+          );
+        })()}
 
         {info ? (
           <Section title={branded ? "Other information" : "About this property"} t={t}>

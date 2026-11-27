@@ -233,18 +233,42 @@ export function SocialQueueStatusBadge({
   );
 }
 
+/** Admin Approvals table: Publish On + Action cells with shared platform selection. */
+export function SocialApprovalTableCells({
+  id,
+  status,
+  platforms = [],
+}: {
+  id: string;
+  status: SocialQueueStatus;
+  platforms?: string[];
+}) {
+  return (
+    <SocialQueueActions
+      id={id}
+      status={status}
+      mode="activity"
+      platforms={platforms}
+      splitCells
+    />
+  );
+}
+
 /** Activity = pick platforms + approve. SMQ = publish / revert publish. */
 export function SocialQueueActions({
   id,
   status,
   mode,
   platforms = [],
+  /** Render as two <td>s (Publish On / Action) for the Admin Approvals table. */
+  splitCells = false,
 }: {
   id: string;
   status: SocialQueueStatus;
   mode: "activity" | "smq";
   /** Requested platforms; on approve, only the ones left selected are kept. */
   platforms?: string[];
+  splitCells?: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<string[]>(platforms);
@@ -284,36 +308,50 @@ export function SocialQueueActions({
   }
 
   if (mode === "activity") {
-    if (status !== "pending") return null;
+    if (status !== "pending") {
+      return splitCells ? (
+        <>
+          <td className="px-5 py-4" data-row-ignore>
+            <span className="text-xs text-[var(--muted)]">—</span>
+          </td>
+          <td className="px-5 py-4" data-row-ignore>
+            <span className="text-xs text-[var(--muted)]">—</span>
+          </td>
+        </>
+      ) : null;
+    }
     const noneSelected = platforms.length > 0 && selected.length === 0;
-    return (
-      <div className="space-y-2.5">
-        {platforms.length ? (
-          <div role="group" aria-label="Platforms to approve" className="flex flex-wrap gap-1">
-            {platforms.map((p) => {
-              const checked = selected.includes(p);
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  role="checkbox"
-                  aria-checked={checked}
-                  disabled={pending}
-                  onClick={() => toggle(p)}
-                  title={checked ? `Approve for ${p}` : `Not approved for ${p}`}
-                  className={`group/chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold transition disabled:opacity-60 ${
-                    checked
-                      ? "border-[var(--sidebar)] bg-[var(--sidebar)] text-white"
-                      : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--sidebar)]/40"
-                  }`}
-                >
-                  <TickCircle checked={checked} size="h-3.5 w-3.5" />
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+    const platformsBlock = platforms.length ? (
+      <div role="group" aria-label="Publish on" className="flex flex-wrap gap-1">
+        {platforms.map((p) => {
+          const checked = selected.includes(p);
+          return (
+            <button
+              key={p}
+              type="button"
+              role="checkbox"
+              aria-checked={checked}
+              disabled={pending}
+              onClick={() => toggle(p)}
+              title={checked ? `Approve for ${p}` : `Not approved for ${p}`}
+              className={`group/chip inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold transition disabled:opacity-60 ${
+                checked
+                  ? "border-[var(--sidebar)] bg-[var(--sidebar)] text-white"
+                  : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--sidebar)]/40"
+              }`}
+            >
+              <TickCircle checked={checked} size="h-3.5 w-3.5" />
+              {p}
+            </button>
+          );
+        })}
+      </div>
+    ) : (
+      <span className="text-xs text-[var(--muted)]">—</span>
+    );
+
+    const decideBlock = (
+      <div className="space-y-2">
         {declining ? (
           <div className="space-y-2">
             <textarea
@@ -377,6 +415,26 @@ export function SocialQueueActions({
         {error ? (
           <p className="text-xs font-medium text-[var(--danger)]">{error}</p>
         ) : null}
+      </div>
+    );
+
+    if (splitCells) {
+      return (
+        <>
+          <td className="px-5 py-4" data-row-ignore>
+            {platformsBlock}
+          </td>
+          <td className="min-w-40 px-5 py-4" data-row-ignore>
+            {decideBlock}
+          </td>
+        </>
+      );
+    }
+
+    return (
+      <div className="space-y-2.5">
+        {platformsBlock}
+        {decideBlock}
       </div>
     );
   }

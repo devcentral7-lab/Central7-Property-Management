@@ -38,7 +38,7 @@ export function ActivityButton({ refNo, events }: { refNo: string; events: Activ
           <circle cx="10" cy="10" r="7" />
           <path d="M10 6v4l2.5 2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Activity
+        History
         {events.length ? (
           <span className="rounded-full bg-[var(--bg-accent)] px-1.5 text-xs font-semibold text-[var(--muted)]">
             {events.length}
@@ -46,11 +46,15 @@ export function ActivityButton({ refNo, events }: { refNo: string; events: Activ
         ) : null}
       </button>
 
-      <PopupDialog open={open} onClose={() => setOpen(false)} title="Recent Activity" subtitle={refNo}>
+      <PopupDialog open={open} onClose={() => setOpen(false)} title="History" subtitle={refNo}>
         {events.length ? (
           <ol className="relative space-y-4 border-l border-[var(--line)] pl-5">
             {events.map((e, i) => {
               const when = formatWhen(e.occurred_at);
+              const detailLines = (e.comment ?? "")
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean);
               return (
                 <li key={e.id} className="relative">
                   <span
@@ -76,10 +80,17 @@ export function ActivityButton({ refNo, events }: { refNo: string; events: Activ
                       " · Waiting for an admin"
                     ) : null}
                   </p>
-                  {e.comment ? (
-                    <p className="mt-1.5 rounded-lg bg-[var(--bg)] px-3 py-2 text-sm text-[var(--ink)]">
-                      {e.comment}
-                    </p>
+                  {detailLines.length ? (
+                    <div className="mt-1.5 space-y-1.5">
+                      {detailLines.map((line, idx) => (
+                        <p
+                          key={`${e.id}-${idx}`}
+                          className="rounded-lg bg-[var(--bg)] px-3 py-2 text-sm text-[var(--ink)]"
+                        >
+                          {line}
+                        </p>
+                      ))}
+                    </div>
                   ) : null}
                 </li>
               );

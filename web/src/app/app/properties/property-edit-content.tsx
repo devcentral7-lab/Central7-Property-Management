@@ -24,16 +24,35 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
 
   if (profile.role !== "Admin") notFound();
 
-  const [{ data: complexes }, options] = await Promise.all([
-    supabase.from("apartment_complexes").select("id, name").order("name"),
-    loadFormOptions(),
-  ]);
+  const [{ data: complexes }, options, { data: lastPlatformEvent }, { data: queueRow }] =
+    await Promise.all([
+      supabase.from("apartment_complexes").select("id, name").order("name"),
+      loadFormOptions(),
+      supabase
+        .from("property_status_events")
+        .select("requested_platforms")
+        .eq("ref_no", refNo)
+        .neq("requested_platforms", "{}")
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("social_media_queue")
+        .select("requested_platforms")
+        .eq("ref_no", refNo)
+        .maybeSingle(),
+    ]);
 
   const attrs = (property.type_attributes || {}) as Record<string, unknown>;
   const amenities = (property.amenities || []) as string[];
   const known = new Set(options.amenities);
   const knownAmenities = amenities.filter((a) => known.has(a));
   const customAmenities = amenities.filter((a) => !known.has(a)).join(", ");
+  const initialPlatforms = (
+    (Array.isArray(queueRow?.requested_platforms) && queueRow.requested_platforms.length
+      ? queueRow.requested_platforms
+      : lastPlatformEvent?.requested_platforms) ?? []
+  ).map(String);
 
   return (
     <div>
@@ -47,6 +66,7 @@ export async function PropertyEditContent({ refNoRaw }: { refNoRaw: string }) {
           complexes={complexes ?? []}
           options={options}
           initialDoNotPublish={Boolean(property.do_not_publish)}
+          initialPlatforms={initialPlatforms}
           initialAmenities={knownAmenities}
           initialValues={{
             agent_ref_no: s(attrs.agent_ref_no),

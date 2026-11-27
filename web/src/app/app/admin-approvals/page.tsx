@@ -2,8 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import {
+  SocialApprovalTableCells,
   SocialQueueActions,
-  SocialQueueStatusBadge,
   type SocialQueueStatus,
 } from "@/app/app/social-queue/queue-actions";
 import { DataChangeActions } from "@/app/app/activity/data-change-actions";
@@ -115,25 +115,15 @@ function IntentPill({ intent }: { intent: string }) {
     : intent === "Hold"
       ? "border-amber-200 bg-amber-50 text-amber-800"
       : "border-rose-200 bg-rose-50 text-rose-800";
-  const label = intent === "Republish" ? "Social Media Refresh" : intent;
+  const label =
+    intent === "Republish"
+      ? "Social Media Refresh"
+      : intent === "Do Not Publish"
+        ? "Do Not Publish"
+        : intent;
   return (
     <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tone}`}>
       {label}
-    </span>
-  );
-}
-
-function TypeBadge({ category }: { category: string }) {
-  const social = category === "social";
-  return (
-    <span
-      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-        social
-          ? "bg-[var(--bg-accent)] text-[var(--ink)]"
-          : "bg-sky-50 text-sky-800"
-      }`}
-    >
-      {social ? "Social media" : "Data change"}
     </span>
   );
 }
@@ -161,7 +151,11 @@ function RequestSummary({ e }: { e: FeedRow }) {
   return (
     <div className="min-w-0 space-y-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <TypeBadge category={e.category} />
+        {e.category === "data_change" ? (
+          <span className="inline-flex rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800">
+            Data change
+          </span>
+        ) : null}
         {e.intent ? <IntentPill intent={e.intent} /> : null}
       </div>
       {e.summary ? (
@@ -174,11 +168,13 @@ function RequestSummary({ e }: { e: FeedRow }) {
   );
 }
 
-function ReviewCell({ e }: { e: FeedRow }) {
+function MobileReview({ e }: { e: FeedRow }) {
   if (e.queue_id && e.queue_status) {
     return (
       <div className="space-y-2" data-row-ignore>
-        <SocialQueueStatusBadge status={e.queue_status} compact />
+        <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+          Publish On · Action
+        </p>
         <SocialQueueActions
           id={e.queue_id}
           status={e.queue_status}
@@ -191,6 +187,9 @@ function ReviewCell({ e }: { e: FeedRow }) {
   if (e.data_change) {
     return (
       <div data-row-ignore>
+        <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-[var(--muted)]">
+          Action
+        </p>
         <DataChangeActions
           id={e.data_change.id}
           resolvedAt={e.data_change.resolved_at}
@@ -205,12 +204,27 @@ function ReviewCell({ e }: { e: FeedRow }) {
 }
 
 const TABS = [
-  { id: "all", label: "All" },
-  { id: "social", label: "Social media" },
-  { id: "data_change", label: "Data changes" },
+  { id: "new_ads", label: "New ads", actions: ["Publish", "New Ad Published"] },
+  { id: "republish", label: "Republish", actions: ["Republish"] },
+  { id: "drop", label: "Drop", actions: ["Drop"] },
+  { id: "lost", label: "Lost", actions: ["Lost"] },
+  { id: "closed", label: "Closed", actions: ["Closed"] },
+  { id: "data_change", label: "Data Change", actions: null },
+  { id: "all", label: "All", actions: null },
 ] as const;
 
-const DEFAULT_TAB = TABS[0].id;
+type TabId = (typeof TABS)[number]["id"];
+
+const DEFAULT_TAB: TabId = "all";
+
+const SOCIAL_TABS = TABS.flatMap((t) =>
+  t.actions ? [{ id: t.id, label: t.label, actions: [...t.actions] as string[] }] : [],
+);
+
+function tabActions(tab: string): string[] | null {
+  const match = SOCIAL_TABS.find((t) => t.id === tab);
+  return match ? match.actions : null;
+}
 
 function socialStatus(row: {
   approved_at: string | null;
@@ -231,7 +245,9 @@ export default async function AdminApprovalsPage({
 
   const sp = await searchParams;
   const requested = one(sp.tab).toLowerCase() || one(sp.category).toLowerCase();
-  const tab = TABS.some((t) => t.id === requested) ? requested : DEFAULT_TAB;
+  const tab: TabId = TABS.some((t) => t.id === requested)
+    ? (requested as TabId)
+    : DEFAULT_TAB;
   const q = one(sp.q).trim();
   const pendingOnly = one(sp.pending) === "1";
   const showPendingToggle = tab === "all" || tab === "data_change";
@@ -241,8 +257,9 @@ export default async function AdminApprovalsPage({
   const term = q.replace(/[%_,()"\\]/g, " ").trim();
   const like = (cols: string[]) => cols.map((c) => `${c}.ilike.%${term}%`).join(",");
   const supabase = await createClient();
+  const actionsForTab = tabActions(tab);
 
-  const pendingSocial = () => {
+  const pendingSocial = (actions?: string[] | null) => {
     let query = supabase
       .from("social_media_queue")
       .select(
@@ -252,8 +269,22 @@ export default async function AdminApprovalsPage({
       .is("approved_at", null)
       .is("completed_at", null)
       .neq("requested_platforms", "{}");
+    if (actions?.length === 1) query = query.eq("approved_action", actions[0]);
+    else if (actions && actions.length > 1) query = query.in("approved_action", actions);
     if (term) query = query.or(like(["ref_no", "approved_action"]));
     return query.order("updated_at", { ascending: false, nullsFirst: false });
+  };
+
+  const countPendingSocial = (actions?: string[] | null) => {
+    let query = supabase
+      .from("social_media_queue")
+      .select("id", { count: "exact", head: true })
+      .is("approved_at", null)
+      .is("completed_at", null)
+      .neq("requested_platforms", "{}");
+    if (actions?.length === 1) query = query.eq("approved_action", actions[0]);
+    else if (actions && actions.length > 1) query = query.in("approved_action", actions);
+    return query;
   };
 
   const dataChanges = () => {
@@ -285,22 +316,18 @@ export default async function AdminApprovalsPage({
         dataChange: d.data ?? [],
       };
     }
-    if (tab === "social") {
-      const s = await pendingSocial().range(from, to);
-      return { error: s.error?.message ?? null, total: s.count ?? 0, social: s.data ?? [] };
+    if (tab === "data_change") {
+      const d = await dataChanges().range(from, to);
+      return { error: d.error?.message ?? null, total: d.count ?? 0, dataChange: d.data ?? [] };
     }
-    const d = await dataChanges().range(from, to);
-    return { error: d.error?.message ?? null, total: d.count ?? 0, dataChange: d.data ?? [] };
+    const s = await pendingSocial(actionsForTab).range(from, to);
+    return { error: s.error?.message ?? null, total: s.count ?? 0, social: s.data ?? [] };
   }
 
-  const [loaded, pendingHead, openHead] = await Promise.all([
+  const [loaded, ...badgeHeads] = await Promise.all([
     loadTab(),
-    supabase
-      .from("social_media_queue")
-      .select("id", { count: "exact", head: true })
-      .is("approved_at", null)
-      .is("completed_at", null)
-      .neq("requested_platforms", "{}"),
+    ...SOCIAL_TABS.map((t) => countPendingSocial(t.actions)),
+    countPendingSocial(),
     supabase
       .from("property_status_events")
       .select("id", { count: "exact", head: true })
@@ -315,8 +342,14 @@ export default async function AdminApprovalsPage({
 
   const socialRows = loaded.social ?? [];
   const dataChangeRows = loaded.dataChange ?? [];
-  const pendingApprovals = pendingHead.count ?? 0;
-  const openDataChanges = openHead.count ?? 0;
+  const badgeByTab: Record<string, number> = {};
+  SOCIAL_TABS.forEach((t, i) => {
+    badgeByTab[t.id] = badgeHeads[i]?.count ?? 0;
+  });
+  const pendingSocialTotal = badgeHeads[SOCIAL_TABS.length]?.count ?? 0;
+  const openDataChanges = badgeHeads[SOCIAL_TABS.length + 1]?.count ?? 0;
+  badgeByTab.data_change = openDataChanges;
+  badgeByTab.all = pendingSocialTotal + openDataChanges;
   const total = loaded.total;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -481,12 +514,7 @@ export default async function AdminApprovalsPage({
           if (pendingOnly) params.set("pending", "1");
           const href = `/app/admin-approvals?${params}`;
           const active = tab === t.id;
-          const badge =
-            t.id === "all"
-              ? pendingApprovals + openDataChanges
-              : t.id === "social"
-                ? pendingApprovals
-                : openDataChanges;
+          const badge = badgeByTab[t.id] ?? 0;
           return (
             <Link
               key={t.id}
@@ -550,7 +578,7 @@ export default async function AdminApprovalsPage({
                 </span>
               </div>
               <div className="mt-3 border-t border-[var(--line)] pt-3">
-                <ReviewCell e={e} />
+                <MobileReview e={e} />
               </div>
             </EventRow>
           );
@@ -563,15 +591,18 @@ export default async function AdminApprovalsPage({
       </ul>
 
       <div className="mt-4 hidden overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--card)] shadow-[0_1px_2px_rgba(28,25,23,0.04)] md:block">
-        <table className="w-full min-w-[780px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead className="border-b border-[var(--line)] bg-[var(--bg-accent)]/60 text-[var(--ink)]">
             <tr>
-              <th className="w-28 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">When</th>
+              <th className="w-28 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">Date</th>
               <th className="px-5 py-3.5 text-xs font-bold uppercase tracking-wide">Request</th>
-              <th className="w-32 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">By</th>
-              <th className="w-28 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">Property</th>
-              <th className="min-w-56 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">
-                Review
+              <th className="w-32 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">User</th>
+              <th className="w-28 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">Ref No</th>
+              <th className="min-w-40 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">
+                Publish On
+              </th>
+              <th className="min-w-40 px-5 py-3.5 text-xs font-bold uppercase tracking-wide">
+                Action
               </th>
             </tr>
           </thead>
@@ -613,15 +644,38 @@ export default async function AdminApprovalsPage({
                       e.subject_label || "—"
                     )}
                   </td>
-                  <td className="px-5 py-4">
-                    <ReviewCell e={e} />
-                  </td>
+                  {e.queue_id && e.queue_status ? (
+                    <SocialApprovalTableCells
+                      id={e.queue_id}
+                      status={e.queue_status}
+                      platforms={e.queue_platforms}
+                    />
+                  ) : (
+                    <>
+                      <td className="px-5 py-4">
+                        <span className="text-xs text-[var(--muted)]">—</span>
+                      </td>
+                      <td className="px-5 py-4" data-row-ignore>
+                        {e.data_change ? (
+                          <DataChangeActions
+                            id={e.data_change.id}
+                            resolvedAt={e.data_change.resolved_at}
+                            resolvedBy={e.data_change.resolved_by}
+                            note={e.data_change.resolution_note}
+                            queueStatus={e.data_change.queue_status}
+                          />
+                        ) : (
+                          <span className="text-xs text-[var(--muted)]">—</span>
+                        )}
+                      </td>
+                    </>
+                  )}
                 </EventRow>
               );
             })}
             {!visible.length ? (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center text-sm text-[var(--muted)]">
+                <td colSpan={6} className="px-5 py-12 text-center text-sm text-[var(--muted)]">
                   No approvals waiting.
                 </td>
               </tr>
